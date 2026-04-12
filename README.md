@@ -1,2 +1,0 @@
-# ProgramSTB
-Program lucru
