@@ -157,6 +157,49 @@ header p{color:var(--muted);font-size:0.65rem;text-transform:uppercase;letter-sp
 .modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
 .btn-save{padding:16px 12px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-family:'DM Mono',monospace;font-size:0.78rem;font-weight:500;cursor:pointer;min-height:50px;}
 .btn-cancel{padding:16px 12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.78rem;cursor:pointer;min-height:50px;}
+
+/* ── WIDGET AZI ── */
+.today-widget{background:var(--card);border:1px solid rgba(240,192,64,0.4);border-radius:14px;margin-bottom:14px;overflow:hidden;position:relative;}
+.tw-header{background:linear-gradient(135deg,rgba(240,192,64,0.12),rgba(91,140,255,0.08));padding:12px 14px 10px;display:flex;align-items:center;justify-content:space-between;}
+.tw-title{font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;}
+.tw-data{font-size:0.62rem;color:var(--muted);}
+.tw-body{padding:10px 14px 14px;}
+.tw-ore{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#fff;line-height:1;letter-spacing:-0.02em;}
+.tw-ore.depou-ore{color:var(--depou);}
+.tw-sub{font-size:0.68rem;color:var(--accent);margin-top:4px;font-weight:500;}
+.tw-dep{font-size:0.62rem;color:var(--depou);margin-top:2px;}
+.tw-libre{font-size:1rem;color:var(--green);font-weight:500;}
+.tw-co{font-size:1rem;color:var(--red);font-weight:500;}
+.tw-sarb{font-size:1rem;color:var(--sarb);font-weight:500;}
+.tw-gol{font-size:0.78rem;color:var(--muted);font-style:italic;}
+.tw-edit{position:absolute;top:10px;right:10px;background:rgba(240,192,64,0.15);border:1px solid rgba(240,192,64,0.3);color:var(--accent);font-size:0.6rem;padding:4px 8px;border-radius:6px;cursor:pointer;font-family:'DM Mono',monospace;}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;gap:6px;margin-bottom:12px;}
+.tb-btn{flex:1;padding:8px 6px;border-radius:9px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:'DM Mono',monospace;font-size:0.62rem;cursor:pointer;text-align:center;white-space:nowrap;}
+.tb-btn:active{background:rgba(91,140,255,0.1);color:var(--blue);}
+.tb-btn.prim{border-color:rgba(91,140,255,0.4);color:var(--blue);background:rgba(91,140,255,0.07);}
+
+/* ── STATS PANEL ── */
+.stats-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none;}
+.stats-panel.open{display:block;}
+.stats-title{font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:800;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.stat-box{background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;}
+.stat-val{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;line-height:1;}
+.stat-lbl{font-size:0.56rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:3px;}
+
+/* ── EXPORT MODAL ── */
+.exp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:150;align-items:center;justify-content:center;padding:20px;}
+.exp-overlay.active{display:flex;}
+.exp-box{background:#1a1a26;border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:360px;}
+.exp-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent);margin-bottom:6px;}
+.exp-sub{font-size:0.62rem;color:var(--muted);margin-bottom:16px;line-height:1.6;}
+.exp-btns{display:flex;flex-direction:column;gap:8px;}
+.exp-btn{padding:13px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:'DM Mono',monospace;font-size:0.75rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;}
+.exp-btn:active{background:rgba(91,140,255,0.1);}
+.exp-btn .eico{font-size:1.2rem;}
+.exp-close{margin-top:12px;width:100%;padding:11px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.75rem;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -191,9 +234,32 @@ header p{color:var(--muted);font-size:0.65rem;text-transform:uppercase;letter-sp
   <p id="app-sub">Schimb 1 &amp; 2 · Editabil</p>
   <div class="depot-badge" onclick="showDepotScreen()">🔄 Schimbă depoul</div>
 </header>
+<div class="today-widget" id="today-widget"></div>
+<div class="toolbar">
+  <button class="tb-btn prim" onclick="jumpToToday()">📍 Azi</button>
+  <button class="tb-btn prim" onclick="jumpToWeek()">📅 Săptămâna</button>
+  <button class="tb-btn" onclick="toggleStats()">📊 Statistici</button>
+
+</div>
+<div class="stats-panel" id="stats-panel">
+  <div class="stats-title" id="stats-title">Statistici</div>
+  <div class="stats-grid" id="stats-grid"></div>
+</div>
 <div class="month-tabs" id="month-tabs"></div>
 <div class="legend" id="legend"></div>
 <div id="month-view"></div>
+</div>
+<div class="exp-overlay" id="exp-overlay">
+  <div class="exp-box">
+    <div class="exp-title">💾 Backup date</div>
+    <div class="exp-sub">Salvează sau restaurează programul tău. Util dacă ștergi cache-ul sau schimbi telefonul.</div>
+    <div class="exp-btns">
+      <button class="exp-btn" onclick="exportData()"><span class="eico">📤</span><div><div style="font-weight:500">Exportă (copiere text)</div><div style="font-size:0.58rem;color:var(--muted);margin-top:2px">Copiezi datele și le salvezi undeva</div></div></button>
+      <button class="exp-btn" onclick="importData()"><span class="eico">📥</span><div><div style="font-weight:500">Importă date</div><div style="font-size:0.58rem;color:var(--muted);margin-top:2px">Restaurează dintr-un backup</div></div></button>
+      <button class="exp-btn" onclick="resetData()" style="border-color:rgba(248,113,113,0.3);color:var(--red)"><span class="eico">🗑️</span><div><div style="font-weight:500">Șterge tot</div><div style="font-size:0.58rem;color:var(--muted);margin-top:2px">Resetează toate datele</div></div></button>
+    </div>
+    <button class="exp-close" onclick="hideExport()">Închide</button>
+  </div>
 </div>
 
 <!-- MODAL -->
@@ -432,7 +498,7 @@ function initApp(){
   let LA=0;
   LUNI.forEach((l,i)=>{if(l.a===TODAY.getFullYear()&&l.l===TODAY.getMonth()+1)LA=i;});
   window.LA=LA;
-  rTabs();rMonth();
+  rTabs();rMonth();renderTodayWidget();
 }
 
 // ===================== CALCUL ORE =====================
@@ -642,7 +708,7 @@ function openM(a,l,z){
 }
 
 function closeM(){document.getElementById('modal').classList.remove('active');}
-function setQ(t){ss(mA,mL,mZ,{t,r:null,s:mS});rMonth();rTabs();closeM();}
+function setQ(t){ss(mA,mL,mZ,{t,r:null,s:mS});rMonth();rTabs();renderTodayWidget();if(statsOpen)renderStats();closeM();}
 function sTip(t){mT=t;mR=null;mLinie=null;document.getElementById('tur-section').style.display='none';uTip();rLG();uPrev();}
 function sSch(s){mS=s;uSch();uPrev();}
 
@@ -738,6 +804,200 @@ function saveD(){
 }
 
 document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeM();});
+
+
+// ===================== WIDGET AZI =====================
+function renderTodayWidget(){
+  const w=document.getElementById('today-widget');
+  if(!w) return;
+  const a=TODAY.getFullYear(),l=TODAY.getMonth()+1,z=TODAY.getDate();
+  const lunaObj=LUNI.find(x=>x.a===a&&x.l===l);
+  if(!lunaObj){w.style.display='none';return;}
+  w.style.display='';
+  const s=gs(a,l,z);const sarb=getSarb(a,l,z);
+  const nZ=ZN[new Date(a,l-1,z).getDay()];
+  const sch=s.s||(DEPOT==='giurgiu'?1:2);
+  const dataStr=`${z} ${nZ} · ${lunaObj.n} ${a}`;
+  let bodyHtml='';
+  if(s.t==='liber') bodyHtml=`<div class="tw-libre">🟢 Zi liberă</div>`;
+  else if(s.t==='co') bodyHtml=`<div class="tw-co">🔴 Concediu</div>`;
+  else if(s.t==='sarb') bodyHtml=`<div class="tw-sarb">🎉 ${sarb||'Sărbătoare'}</div>`;
+  else if((s.t==='zl'||s.t==='we')&&s.r){
+    const db=getDB();const dbd=s.t==='we'?db.we:db.zl;const dd=dbd[s.r];
+    if(dd){
+      const isD=DEPOT==='giurgiu';
+      const oreD=sch===1?dd.s1:dd.s2;
+      const depou=(sch===1&&!isD)||( sch===2&&dd.s2&&dd.s2.d);
+      const isDepS1=sch===1;
+      bodyHtml=`
+        <div class="tw-ore${depou?' depou-ore':''}">${oreD.i} <span style="font-size:1rem;color:var(--muted)">→</span> ${oreD.r}</div>
+        <div class="tw-sub">${isD?fmtTur(s.r,dd.linie):fmtTurD(s.r)} · Sch ${sch}${!isD&&dd.s2&&!isDepS1&&dd.s2.c?' · '+dd.s2.c:''}</div>
+        ${depou?'<div class="tw-dep">🚌 Plecare din DEPOU</div>':''}`;
+    } else { bodyHtml=`<div class="tw-gol">Tur ${s.r} — date lipsă</div>`; }
+  } else {
+    bodyHtml=`<div class="tw-gol">Ziua necompletată — apasă ✏️</div>`;
+  }
+  w.innerHTML=`
+    <div class="tw-header">
+      <div class="tw-title">⏰ Astăzi</div>
+      <div class="tw-data">${dataStr}</div>
+    </div>
+    <div class="tw-body">${bodyHtml}</div>
+    <button class="tw-edit" onclick="openM(${a},${l},${z})">✏️ Modifică</button>`;
+}
+
+// ===================== TOOLBAR ACTIONS =====================
+function jumpToToday(){
+  const l=TODAY.getMonth();
+  const idx=LUNI.findIndex(x=>x.l===TODAY.getMonth()+1&&x.a===TODAY.getFullYear());
+  if(idx>=0){window.LA=idx;rTabs();rMonth();}
+  setTimeout(()=>{
+    const cards=document.querySelectorAll('.today-card');
+    if(cards.length>0) cards[0].scrollIntoView({behavior:'smooth',block:'center'});
+  },100);
+}
+
+function jumpToWeek(){
+  jumpToToday();
+  setTimeout(()=>{
+    const dayNum=TODAY.getDate();
+    // Find first day of current week (Monday)
+    const dow=TODAY.getDay();
+    const mondayDate=dayNum-(dow===0?6:dow-1);
+    const allCards=document.querySelectorAll('.day-card');
+    // Find card with day number = monday
+    for(const card of allCards){
+      const numEl=card.querySelector('.day-num');
+      if(numEl&&parseInt(numEl.textContent)===Math.max(1,mondayDate)){
+        card.scrollIntoView({behavior:'smooth',block:'start'});
+        break;
+      }
+    }
+  },150);
+}
+
+let statsOpen=false;
+function toggleStats(){
+  statsOpen=!statsOpen;
+  const p=document.getElementById('stats-panel');
+  if(statsOpen){renderStats();p.classList.add('open');}
+  else p.classList.remove('open');
+}
+
+function renderStats(){
+  const l=LUNI[window.LA];
+  let liber=0,co=0,depouC=0,totalMin=0,zileLucrate=0;
+  const db=getDB();
+  const peLinii={};
+
+  // Calculeaza total zile lucratoare in luna (luni-vineri + sambata/duminica lucrate)
+  let zlTotale=0;
+  for(let d=1;d<=l.z;d++){
+    const dow=new Date(l.a,l.l-1,d).getDay();
+    if(dow!==0&&dow!==6) zlTotale++; // doar zile lucratoare calendaristice
+  }
+
+  for(let d=1;d<=l.z;d++){
+    const s=gs(l.a,l.l,d);
+    if(s.t==='liber') liber++;
+    else if(s.t==='co') co++;
+    else if(s.t==='zl'||s.t==='we'){
+      zileLucrate++;
+      if(s.r){
+        const dbd=s.t==='we'?db.we:db.zl;
+        const dd=dbd[s.r];
+        if(dd){
+          const sch=s.s||(DEPOT==='giurgiu'?1:2);
+          // Depou
+          if(sch===1) depouC++;
+          else if(dd.s2&&dd.s2.d) depouC++;
+          // Ore
+          const ore=sch===1?calcOre(dd.s1.i,dd.s1.r):calcOre(dd.s2.i,dd.s2.r);
+          totalMin+=ore;
+          // Per linie
+          let linie='';
+          if(DEPOT==='giurgiu') linie='L'+(dd.linie||s.r.split('/')[1]);
+          else linie='L'+(s.r.split('/')[1]);
+          peLinii[linie]=(peLinii[linie]||0)+1;
+        }
+      }
+    }
+  }
+
+  document.getElementById('stats-title').textContent=`Statistici — ${l.n} ${l.a}`;
+  const g=document.getElementById('stats-grid');
+
+  // Sortam liniile numeric
+  const liniiSortate=Object.entries(peLinii).sort((a,b)=>Number(a[0].slice(1))-Number(b[0].slice(1)));
+
+  // Carduri principale
+  const main=[
+    {v:fmtOre(totalMin), l:'Ore lucrate',         c:'var(--green)'},
+    {v:zileLucrate,       l:'Zile lucrate',         c:'var(--blue)'},
+    {v:zlTotale,          l:'Zile lucr. calend.',   c:'var(--muted)'},
+    {v:liber,             l:'Zile libere',           c:'var(--green)'},
+    {v:co,                l:'Zile CO',               c:'var(--red)'},
+    {v:depouC,            l:'Plecări depou',         c:'var(--depou)'},
+  ];
+
+  let html=main.map(it=>`
+    <div class="stat-box">
+      <div class="stat-val" style="color:${it.c}">${it.v}</div>
+      <div class="stat-lbl">${it.l}</div>
+    </div>`).join('');
+
+  // Sectiune per linie
+  if(liniiSortate.length>0){
+    html+=`<div style="grid-column:1/-1;margin-top:8px;">
+      <div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:7px;">Zile pe linie</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+        ${liniiSortate.map(([lin,cnt])=>`
+          <div class="stat-box" style="text-align:center;">
+            <div class="stat-val" style="color:var(--accent)">${cnt}</div>
+            <div class="stat-lbl">${lin}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  g.innerHTML=html;
+}
+
+// ===================== EXPORT / IMPORT =====================
+function showExport(){document.getElementById('exp-overlay').classList.add('active');}
+function hideExport(){document.getElementById('exp-overlay').classList.remove('active');}
+
+function exportData(){
+  const d_d=localStorage.getItem('p2026_dudesti')||'{}';
+  const d_g=localStorage.getItem('p2026_giurgiu')||'{}';
+  const backup=JSON.stringify({dudesti:JSON.parse(d_d),giurgiu:JSON.parse(d_g),depot:DEPOT,ts:new Date().toISOString()});
+  // Copy to clipboard
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(backup).then(()=>alert('✅ Date copiate! Salvează textul într-o notă sau email.'));
+  } else {
+    prompt('Copiază acest text și salvează-l:',backup);
+  }
+}
+
+function importData(){
+  const txt=prompt('Lipește textul de backup:');
+  if(!txt) return;
+  try{
+    const d=JSON.parse(txt);
+    if(d.dudesti) localStorage.setItem('p2026_dudesti',JSON.stringify(d.dudesti));
+    if(d.giurgiu) localStorage.setItem('p2026_giurgiu',JSON.stringify(d.giurgiu));
+    try{MEM_D=JSON.parse(localStorage.getItem('p2026_dudesti')||'{}');MEM_G=JSON.parse(localStorage.getItem('p2026_giurgiu')||'{}')}catch(e){}
+    alert('✅ Date restaurate!');hideExport();rMonth();rTabs();renderTodayWidget();
+  } catch(e){ alert('❌ Text invalid. Încearcă din nou.'); }
+}
+
+function resetData(){
+  if(!confirm('Ștergi TOATE datele? Nu se poate recupera!')) return;
+  localStorage.removeItem('p2026_dudesti');localStorage.removeItem('p2026_giurgiu');
+  MEM_D={};MEM_G={};
+  hideExport();rMonth();rTabs();renderTodayWidget();
+  alert('✅ Date șterse.');
+}
 
 // ===================== INIT =====================
 try{
