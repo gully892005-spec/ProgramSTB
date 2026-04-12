@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d12">
+<link rel="manifest" href="manifest.json">
+<title>Program Lucru 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0d12;--card:#16161f;--card2:#1c1c28;--border:#2a2a3a;--accent:#f0c040;--blue:#5b8cff;--green:#4ade80;--red:#f87171;--orange:#fb923c;--purple:#c084fc;--depou:#fef08a;--sarb:#ff6b6b;--text:#e8e8f0;--muted:#5a5a75;--sub:#3a3a52;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;height:100%;}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;padding:12px;padding-bottom:max(60px,calc(env(safe-area-inset-bottom) + 20px));-webkit-overflow-scrolling:touch;}
+
+/* SELECTOR DEPOU */
+.depot-screen{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:20px;}
+.depot-title{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;color:var(--accent);text-align:center;}
+.depot-sub{font-size:0.68rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:0.1em;}
+.depot-cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px;}
+.depot-card{padding:18px 20px;border-radius:14px;border:1px solid var(--border);background:var(--card);cursor:pointer;display:flex;align-items:center;gap:14px;}
+.depot-card:active{background:var(--card2);}
+.depot-card.sel{border-color:var(--accent);background:rgba(240,192,64,0.08);}
+.depot-icon{font-size:2rem;}
+.depot-info{}
+.depot-name{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--text);}
+.depot-desc{font-size:0.6rem;color:var(--muted);margin-top:2px;}
+.depot-btn{width:100%;max-width:340px;padding:14px;border-radius:12px;border:none;background:var(--accent);color:#0d0d12;font-family:'DM Mono',monospace;font-size:0.85rem;font-weight:500;cursor:pointer;}
+.depot-change{font-size:0.6rem;color:var(--muted);cursor:pointer;text-decoration:underline;text-align:center;margin-top:4px;}
+
+header{text-align:center;padding:16px 0 10px;}
+header h1{font-family:'Syne',sans-serif;font-size:1.7rem;font-weight:800;color:var(--accent);letter-spacing:-0.02em;}
+header p{color:var(--muted);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;margin-top:2px;}
+.depot-badge{display:inline-block;margin-top:5px;padding:3px 10px;border-radius:20px;border:1px solid rgba(240,192,64,0.4);background:rgba(240,192,64,0.08);font-size:0.6rem;color:var(--accent);cursor:pointer;}
+
+.month-tabs{display:flex;gap:6px;overflow-x:auto;padding:0 0 12px;scrollbar-width:none;}
+.month-tabs::-webkit-scrollbar{display:none;}
+.month-tab{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:'DM Mono',monospace;font-size:0.68rem;cursor:pointer;white-space:nowrap;}
+.month-tab.active{background:var(--accent);color:#0d0d12;border-color:var(--accent);font-weight:500;}
+.month-tab.has-data{border-color:rgba(91,140,255,0.4);color:var(--blue);}
+
+.legend{display:flex;flex-wrap:wrap;gap:7px 12px;justify-content:center;margin-bottom:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border);}
+.li{display:flex;align-items:center;gap:5px;font-size:0.62rem;color:var(--muted);}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+.month-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.month-title{font-family:'Syne',sans-serif;font-size:1.25rem;font-weight:800;}
+.month-stats{font-size:0.62rem;color:var(--muted);}
+
+.day-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:7px;overflow:hidden;}
+.day-card.today-card{border-color:var(--accent);}
+.day-card.sarb-card{border-color:rgba(255,107,107,0.45);background:rgba(255,107,107,0.025);}
+.day-card.sarb-card .day-header{background:rgba(255,107,107,0.07);}
+.day-card.we-card{border-color:rgba(192,132,252,0.4);background:rgba(192,132,252,0.02);}
+.day-card.we-card .day-header{background:rgba(192,132,252,0.06);}
+.we-num{color:var(--purple);}
+
+.day-header{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--card2);}
+.day-left{display:flex;align-items:center;gap:9px;}
+.day-num{font-family:'Syne',sans-serif;font-size:1.35rem;font-weight:800;min-width:26px;line-height:1;}
+.today-num{color:var(--accent);}
+.sarb-num{color:var(--sarb);}
+.day-name{font-size:0.7rem;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;}
+.sarb-lbl{font-size:0.58rem;color:var(--sarb);margin-top:1px;}
+.day-type-lbl{font-size:0.56rem;color:var(--muted);margin-top:1px;}
+.right-col{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+.tur-badge{font-size:0.6rem;padding:3px 8px;border-radius:20px;font-weight:500;white-space:nowrap;}
+.tb-s1{background:rgba(251,146,60,0.15);color:var(--orange);border:1px solid rgba(251,146,60,0.35);}
+.tb-s2{background:rgba(91,140,255,0.15);color:var(--blue);border:1px solid rgba(91,140,255,0.3);}
+.tb-we1{background:rgba(251,146,60,0.12);color:var(--orange);border:1px solid rgba(251,146,60,0.3);}
+.tb-we2{background:rgba(192,132,252,0.15);color:var(--purple);border:1px solid rgba(192,132,252,0.3);}
+.tb-libre{background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+.tb-co{background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2);}
+.tb-sarb{background:rgba(255,107,107,0.12);color:var(--sarb);border:1px solid rgba(255,107,107,0.3);}
+.tb-gol{background:rgba(90,90,117,0.12);color:var(--muted);border:1px solid rgba(90,90,117,0.25);}
+.sch-badge{font-size:0.52rem;padding:2px 6px;border-radius:10px;}
+.sch1b{background:rgba(251,146,60,0.15);color:var(--orange);}
+.sch2b{background:rgba(91,140,255,0.12);color:var(--blue);}
+
+.shift-display{padding:8px 12px 10px;}
+.shift-block{border-radius:8px;padding:8px 12px;}
+.s1-block{background:rgba(254,240,138,0.05);border:1px solid rgba(254,240,138,0.45);}
+.s2-block{background:rgba(91,140,255,0.06);border:1px solid rgba(91,140,255,0.35);}
+.s2d-block{background:rgba(254,240,138,0.05);border:1px solid rgba(254,240,138,0.45);}
+.s-lbl{font-size:0.5rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
+.s1-block .s-lbl{color:var(--depou);}
+.s2-block .s-lbl{color:var(--blue);}
+.s2d-block .s-lbl{color:var(--depou);}
+.dep-tag{font-size:0.58rem;color:var(--depou);margin-bottom:3px;}
+.capac{font-size:0.68rem;color:var(--accent);font-weight:500;margin-bottom:3px;}
+.ore{display:flex;align-items:center;gap:4px;}
+.t{font-size:1.08rem;font-weight:500;color:#fff;}
+.sep{color:var(--muted);font-size:0.68rem;}
+.s1-block .t,.s2d-block .t{color:var(--depou);}
+
+/* Giurgiu - fara schimb, doar ore */
+.g-block{border-radius:8px;padding:8px 12px;background:rgba(91,140,255,0.06);border:1px solid rgba(91,140,255,0.35);}
+.g-block.g-dep{background:rgba(254,240,138,0.05);border:1px solid rgba(254,240,138,0.45);}
+.g-lbl{font-size:0.5rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;color:var(--blue);}
+.g-block.g-dep .g-lbl{color:var(--depou);}
+.g-ore{display:flex;align-items:center;gap:4px;}
+.g-t{font-size:1.08rem;font-weight:500;color:#fff;}
+.g-block.g-dep .g-t{color:var(--depou);}
+.g-sep{color:var(--muted);font-size:0.68rem;}
+.g-linie{font-size:0.62rem;color:var(--accent);font-weight:500;margin-bottom:3px;}
+
+.state-block{padding:8px 12px 10px;font-size:0.7rem;}
+.st-libre{color:var(--green);}
+.st-co{color:var(--red);}
+.st-sarb{color:var(--sarb);}
+.st-gol{color:var(--muted);font-style:italic;}
+
+.edit-btn{display:block;width:calc(100% - 24px);margin:0 12px 10px;background:rgba(90,90,117,0.1);border:1px dashed rgba(90,90,117,0.35);color:var(--muted);font-family:'DM Mono',monospace;font-size:0.63rem;padding:10px 6px;border-radius:7px;cursor:pointer;text-align:center;min-height:44px;}
+.edit-btn:active{background:rgba(91,140,255,0.1);color:var(--blue);}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;align-items:flex-end;justify-content:center;}
+.modal-overlay.active{display:flex;}
+.modal{background:#1a1a26;border:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px 16px 36px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.modal-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;color:var(--accent);margin-bottom:2px;}
+.modal-sub{font-size:0.6rem;color:var(--muted);margin-bottom:14px;}
+.m-lbl{font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;display:block;margin:12px 0 6px;}
+.m-div{height:1px;background:var(--border);margin:8px 0 12px;}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.q-btn{padding:9px 4px;border-radius:9px;border:1px solid var(--border);background:var(--card2);font-family:'DM Mono',monospace;font-size:0.68rem;cursor:pointer;text-align:center;}
+.q-libre{border-color:rgba(74,222,128,0.35);color:var(--green);}
+.q-co{border-color:rgba(248,113,113,0.35);color:var(--red);}
+.q-sarb{border-color:rgba(255,107,107,0.35);color:var(--sarb);}
+.tip-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.tip-btn{padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:'DM Mono',monospace;font-size:0.67rem;cursor:pointer;text-align:center;}
+.tip-btn.act{border-color:var(--accent);color:var(--accent);background:rgba(240,192,64,0.08);}
+
+/* Giurgiu modal - schimb selector */
+.sch-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.sch-btn{padding:10px 6px;border-radius:8px;border:1px solid var(--border);background:var(--card2);font-family:'DM Mono',monospace;font-size:0.7rem;cursor:pointer;text-align:center;color:var(--muted);line-height:1.5;}
+.sch-btn .hint{font-size:0.55rem;color:var(--muted);}
+.sch-btn.act1{border-color:var(--orange);color:var(--orange);background:rgba(251,146,60,0.08);}
+.sch-btn.act2{border-color:var(--blue);color:var(--blue);background:rgba(91,140,255,0.08);}
+
+.tur-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:220px;overflow-y:auto;padding:2px;}
+.tur-btn{padding:8px 3px;border-radius:7px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:'DM Mono',monospace;font-size:0.67rem;cursor:pointer;text-align:center;}
+.tur-btn.dt{border-color:rgba(254,240,138,0.3);}
+.tur-btn.sel{border-color:var(--accent);color:var(--accent);background:rgba(240,192,64,0.1);}
+
+.preview{background:#111118;border:1px solid var(--sub);border-radius:9px;padding:12px;margin:12px 0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center;}
+.pv-ore{color:#fff;font-size:1.1rem;font-weight:500;}
+.pv-dep{color:var(--depou);font-size:0.58rem;}
+.pv-linie{color:var(--accent);font-size:0.72rem;font-weight:500;}
+.pv-capac{color:var(--accent);font-size:0.8rem;font-weight:500;}
+.pv-dep-main{color:var(--depou);font-size:0.72rem;font-weight:500;}
+
+.modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+.btn-save{padding:16px 12px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-family:'DM Mono',monospace;font-size:0.78rem;font-weight:500;cursor:pointer;min-height:50px;}
+.btn-cancel{padding:16px 12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.78rem;cursor:pointer;min-height:50px;}
+</style>
+</head>
+<body>
+
+<!-- SELECTOR DEPOU -->
+<div class="depot-screen" id="depot-screen">
+  <div class="depot-title">🚌 Program 2026</div>
+  <div class="depot-sub">Alege depoul tău</div>
+  <div class="depot-cards">
+    <div class="depot-card" id="dc-dudesti" onclick="selDepot('dudesti')">
+      <div class="depot-icon">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Dudești</div>
+        <div class="depot-desc">Linii: Romprim · Băneasa · Pantelimon · Unirii</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-giurgiu" onclick="selDepot('giurgiu')">
+      <div class="depot-icon">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Giurgiu</div>
+        <div class="depot-desc">Linii: 1 · 7 · 25</div>
+      </div>
+    </div>
+  </div>
+  <button class="depot-btn" onclick="confirmDepot()">Continuă →</button>
+</div>
+
+<!-- APLICATIE PRINCIPALA -->
+<div id="app" style="display:none">
+<header>
+  <h1 id="app-title">Program 2026</h1>
+  <p id="app-sub">Schimb 1 &amp; 2 · Editabil</p>
+  <div class="depot-badge" onclick="showDepotScreen()">🔄 Schimbă depoul</div>
+</header>
+<div class="month-tabs" id="month-tabs"></div>
+<div class="legend" id="legend"></div>
+<div id="month-view"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title" id="mtitle"></div>
+    <div class="modal-sub" id="msub"></div>
+    <span class="m-lbl">Acțiuni rapide</span>
+    <div class="quick-grid">
+      <button class="q-btn q-libre" onclick="setQ('liber')">🟢 Liber</button>
+      <button class="q-btn q-co" onclick="setQ('co')">🔴 CO</button>
+      <button class="q-btn q-sarb" onclick="setQ('sarb')">🎉 Sărbătoare</button>
+    </div>
+    <div class="m-div"></div>
+    <span class="m-lbl" id="tip-lbl">Indicatori</span>
+    <div class="tip-btns" id="tip-btns-wrap">
+      <button class="tip-btn" id="tzl" onclick="sTip('zl')">📅 Zi lucrătoare</button>
+      <button class="tip-btn" id="twe" onclick="sTip('we')">🗓️ Sâmbătă/Duminică</button>
+    </div>
+    <!-- Schimb - doar Dudești -->
+    <div id="sch-section">
+      <span class="m-lbl">Schimb</span>
+      <div class="sch-btns">
+        <button class="sch-btn" id="s1btn" onclick="sSch(1)">1 — Dimineață<br><span class="hint">Plecare din depou</span></button>
+        <button class="sch-btn" id="s2btn" onclick="sSch(2)">2 — După-amiază<br><span class="hint">Schimb de tură</span></button>
+      </div>
+    </div>
+    <span class="m-lbl">Tur / Linie</span>
+    <div class="tur-grid" id="turgrid"></div>
+    <div class="preview" id="preview"><span style="color:var(--muted);font-size:0.66rem">Alege tur</span></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeM()">Anulează</button>
+      <button class="btn-save" onclick="saveD()">✓ Salvează</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== DATE DUDEȘTI =====================
+const DB_DUDESTI = {
+  zl:{
+    "9/1":  {s1:{i:"05:52",r:"14:52"},s2:{c:"Romprim",i:"14:52",r:"23:31",d:false}},
+    "10/1": {s1:{i:"04:25",r:"12:37"},s2:{c:"Romprim",i:"14:31",r:"21:25",d:true}},
+    "13/1": {s1:{i:"04:42",r:"12:55"},s2:{c:"Romprim",i:"14:52",r:"23:45",d:true}},
+    "19/1": {s1:{i:"04:45",r:"13:40"},s2:{c:"Romprim",i:"13:40",r:"20:51",d:false}},
+    "21/1": {s1:{i:"04:52",r:"13:52"},s2:{c:"Romprim",i:"13:52",r:"21:01",d:false}},
+    "2/5":  {s1:{i:"03:50",r:"11:46"},s2:{c:"Aeroport Băneasa",i:"15:00",r:"23:24",d:true}},
+    "5/5":  {s1:{i:"04:05",r:"12:04"},s2:{c:"Aeroport Băneasa",i:"15:17",r:"23:51",d:true}},
+    "9/5":  {s1:{i:"04:30",r:"12:28"},s2:{c:"Aeroport Băneasa",i:"15:41",r:"00:05",d:true}},
+    "10/5": {s1:{i:"06:36",r:"13:57"},s2:{c:"Pantelimon",i:"13:57",r:"20:59",d:false}},
+    "18/5": {s1:{i:"05:06",r:"12:44"},s2:{c:"Pantelimon",i:"12:44",r:"20:55",d:false}},
+    "2/7":  {s1:{i:"06:20",r:"14:18"},s2:{c:"Piața Unirii",i:"14:18",r:"23:15",d:false}},
+    "4/7":  {s1:{i:"04:17",r:"11:05"},s2:{c:"Piața Unirii",i:"15:29",r:"23:30",d:true}},
+    "5/7":  {s1:{i:"06:39",r:"14:36"},s2:{c:"Piața Unirii",i:"14:36",r:"21:27",d:false}},
+    "7/7":  {s1:{i:"04:34",r:"11:23"},s2:{c:"Piața Unirii",i:"15:50",r:"23:45",d:true}},
+    "8/7":  {s1:{i:"07:00",r:"14:55"},s2:{c:"Piața Unirii",i:"14:55",r:"21:46",d:false}},
+    "9/7":  {s1:{i:"05:50",r:"13:49"},s2:{c:"Piața Unirii",i:"13:49",r:"20:42",d:false}},
+    "10/7": {s1:{i:"04:50",r:"11:43"},s2:{c:"Piața Unirii",i:"14:54",r:"23:00",d:true}},
+    "11/7": {s1:{i:"06:07",r:"13:58"},s2:{c:"Piața Unirii",i:"13:58",r:"22:05",d:false}},
+    "1/10": {s1:{i:"04:12",r:"11:32"},s2:{c:"Romprim",i:"15:02",r:"22:39",d:false}},
+    "2/10": {s1:{i:"06:22",r:"13:19"},s2:{c:"Romprim",i:"13:19",r:"21:59",d:false}},
+    "4/10": {s1:{i:"04:27",r:"11:50"},s2:{c:"Romprim",i:"15:20",r:"23:57",d:true}},
+    "10/10":{s1:{i:"04:57",r:"12:25"},s2:{c:"Banu Manta",i:"14:33",r:"23:22",d:true}},
+    "12/10":{s1:{i:"05:12",r:"12:11"},s2:{c:"Romprim",i:"12:11",r:"20:43",d:false}},
+    "13/10":{s1:{i:"06:08",r:"14:30"},s2:{c:"Romprim",i:"14:30",r:"23:30",d:true}},
+    "15/10":{s1:{i:"06:19",r:"14:39"},s2:{c:"Romprim",i:"14:39",r:"23:39",d:true}}
+  },
+  we:{
+    "15/1": {s1:{i:"06:05",r:"15:05"},s2:{c:"Banu Manta",i:"15:05",r:"23:39",d:true}},
+    "4/5":  {s1:{i:"04:10",r:"13:05"},s2:{c:"Pantelimon",i:"13:05",r:"21:41",d:false}},
+    "5/5":  {s1:{i:"06:14",r:"15:11"},s2:{c:"Pantelimon",i:"15:11",r:"23:48",d:false}},
+    "7/5":  {s1:{i:"06:33",r:"15:31"},s2:{c:"Pantelimon",i:"15:31",r:"00:08",d:false}},
+    "9/5":  {s1:{i:"06:51",r:"15:51"},s2:{c:"Pantelimon",i:"15:51",r:"23:43",d:false}},
+    "1/7":  {s1:{i:"04:02",r:"12:19"},s2:{c:"Piața Unirii",i:"12:19",r:"20:21",d:false}},
+    "2/7":  {s1:{i:"06:24",r:"14:41"},s2:{c:"Piața Unirii",i:"14:41",r:"23:41",d:false}},
+    "3/7":  {s1:{i:"04:24",r:"12:41"},s2:{c:"Piața Unirii",i:"12:41",r:"20:41",d:false}},
+    "4/7":  {s1:{i:"06:47",r:"15:01"},s2:{c:"Piața Unirii",i:"15:01",r:"23:01",d:false}},
+    "5/7":  {s1:{i:"04:46",r:"13:03"},s2:{c:"Piața Unirii",i:"13:03",r:"21:04",d:false}},
+    "6/7":  {s1:{i:"07:09",r:"15:23"},s2:{c:"Piața Unirii",i:"15:23",r:"23:21",d:false}},
+    "1/10": {s1:{i:"04:22",r:"12:50"},s2:{c:"Romprim",i:"12:50",r:"21:21",d:false}},
+    "5/10": {s1:{i:"04:52",r:"13:22"},s2:{c:"Romprim",i:"13:22",r:"21:50",d:false}},
+    "6/27": {s1:{i:"06:43",r:"14:56"},s2:{c:"Faur",i:"14:56",r:"23:17",d:false}}
+  }
+};
+
+// ===================== DATE GIURGIU =====================
+// Format: "tur/linie" -> {s1:{i,r}, s2:{i,r,d}, linie}
+// d=true inseamna iesire din depou la schimbul 2
+const DB_GIURGIU = {
+  zl:{
+    // Linia 1
+    "3/1":  {linie:"1",s1:{i:"05:23",r:"14:18"},s2:{i:"14:18",r:"22:58",d:false}},
+    "5/1":  {linie:"1",s1:{i:"05:37",r:"14:27"},s2:{i:"14:27",r:"21:43",d:false}},
+    "7/1":  {linie:"1",s1:{i:"05:43",r:"14:43"},s2:{i:"14:43",r:"21:56",d:false}},
+    "11/1": {linie:"1",s1:{i:"06:07",r:"15:03"},s2:{i:"15:03",r:"22:19",d:false}},
+    "12/1": {linie:"1",s1:{i:"04:15",r:"13:03"},s2:{i:"13:03",r:"21:43",d:false}},
+    "14/1": {linie:"1",s1:{i:"04:25",r:"13:12"},s2:{i:"13:12",r:"21:54",d:false}},
+    "15/1": {linie:"1",s1:{i:"06:31",r:"15:29"},s2:{i:"15:29",r:"00:08",d:false}},
+    "16/1": {linie:"1",s1:{i:"04:33",r:"13:27"},s2:{i:"13:27",r:"22:06",d:false}},
+    "17/1": {linie:"1",s1:{i:"04:40",r:"11:57"},s2:{i:"15:19",r:"22:51",d:true}},
+    "20/1": {linie:"1",s1:{i:"06:57",r:"15:57"},s2:{i:"15:57",r:"00:23",d:false}},
+    "22/1": {linie:"1",s1:{i:"05:02",r:"12:22"},s2:{i:"15:45",r:"23:15",d:true}},
+    "23/1": {linie:"1",s1:{i:"05:09",r:"14:00"},s2:{i:"14:00",r:"22:42",d:false}},
+    // Linia 7
+    "1/7":  {linie:"7",s1:{i:"04:47",r:"12:13"},s2:{i:"12:13",r:"20:13",d:false}},
+    "3/7":  {linie:"7",s1:{i:"06:02",r:"13:48"},s2:{i:"13:48",r:"20:26",d:false}},
+    "6/7":  {linie:"7",s1:{i:"06:22",r:"14:06"},s2:{i:"14:06",r:"20:45",d:false}},
+    // Linia 25
+    "5/25": {linie:"25",s1:{i:"05:54",r:"13:43"},s2:{i:"13:43",r:"22:03",d:false}},
+    "9/25": {linie:"25",s1:{i:"06:17",r:"14:08"},s2:{i:"14:08",r:"22:23",d:false}},
+    "11/25":{linie:"25",s1:{i:"06:29",r:"14:18"},s2:{i:"14:18",r:"20:00",d:false}},
+    "12/25":{linie:"25",s1:{i:"04:07",r:"11:55"},s2:{i:"14:25",r:"22:41",d:true}},
+    "14/25":{linie:"25",s1:{i:"06:46",r:"14:37"},s2:{i:"14:37",r:"22:52",d:false}},
+    "16/25":{linie:"25",s1:{i:"04:20",r:"12:19"},s2:{i:"14:50",r:"23:03",d:true}},
+    "18/25":{linie:"25",s1:{i:"04:34",r:"12:31"},s2:{i:"15:02",r:"23:13",d:true}},
+    "20/25":{linie:"25",s1:{i:"04:46",r:"12:43"},s2:{i:"15:14",r:"23:28",d:true}},
+    "21/25":{linie:"25",s1:{i:"04:56",r:"12:42"},s2:{i:"12:42",r:"20:58",d:false}},
+    "23/25":{linie:"25",s1:{i:"05:08",r:"10:23"},s2:{i:"15:32",r:"23:43",d:true}},
+    "25/25":{linie:"25",s1:{i:"05:19",r:"13:05"},s2:{i:"13:05",r:"21:22",d:false}},
+    "28/25":{linie:"25",s1:{i:"05:28",r:"13:19"},s2:{i:"13:19",r:"21:40",d:false}}
+  },
+  we:{
+    // Linia 1 sambata=duminica
+    "1/1":  {linie:"1",s1:{i:"04:05",r:"12:19"},s2:{i:"12:19",r:"20:48",d:false}},
+    "3/1":  {linie:"1",s1:{i:"06:13",r:"14:33"},s2:{i:"14:33",r:"22:56",d:false}},
+    "4/1":  {linie:"1",s1:{i:"04:25",r:"12:43"},s2:{i:"12:43",r:"21:10",d:false}},
+    "6/1":  {linie:"1",s1:{i:"04:40",r:"12:59"},s2:{i:"12:59",r:"21:25",d:false}},
+    "7/1":  {linie:"1",s1:{i:"06:43",r:"15:03"},s2:{i:"15:03",r:"23:21",d:false}},
+    "8/1":  {linie:"1",s1:{i:"04:55",r:"13:14"},s2:{i:"13:14",r:"21:39",d:false}},
+    "9/1":  {linie:"1",s1:{i:"06:58",r:"15:17"},s2:{i:"15:17",r:"23:36",d:false}},
+    "11/1": {linie:"1",s1:{i:"07:12",r:"15:32"},s2:{i:"15:32",r:"23:51",d:false}},
+    "12/1": {linie:"1",s1:{i:"05:23",r:"13:42"},s2:{i:"13:42",r:"22:08",d:false}},
+    "13/1": {linie:"1",s1:{i:"07:25",r:"15:47"},s2:{i:"15:47",r:"00:06",d:false}},
+    "14/1": {linie:"1",s1:{i:"04:05",r:"11:58"},s2:{i:"11:58",r:"20:28",d:false}},
+    "16/1": {linie:"1",s1:{i:"05:50",r:"14:10"},s2:{i:"14:10",r:"22:36",d:false}},
+    // Linia 25 sambata=duminica
+    "1/25": {linie:"25",s1:{i:"04:22",r:"13:17"},s2:{i:"13:17",r:"22:16",d:false}},
+    "3/25": {linie:"25",s1:{i:"04:42",r:"13:36"},s2:{i:"13:36",r:"22:35",d:false}},
+    "5/25": {linie:"25",s1:{i:"05:02",r:"13:54"},s2:{i:"13:54",r:"22:54",d:false}},
+    "8/25": {linie:"25",s1:{i:"05:25",r:"14:20"},s2:{i:"14:20",r:"23:20",d:false}},
+    "10/25":{linie:"25",s1:{i:"05:42",r:"14:39"},s2:{i:"14:39",r:"23:37",d:false}},
+    "13/25":{linie:"25",s1:{i:"06:08",r:"15:04"},s2:{i:"15:04",r:"23:57",d:false}}
+  }
+};
+
+const SARB={
+  "2026-1-1":"Anul Nou","2026-1-2":"Anul Nou",
+  "2026-4-10":"Vinerea Mare","2026-4-12":"Paște","2026-4-13":"Paște",
+  "2026-5-1":"Ziua Muncii","2026-5-3":"Duminica Tomii",
+  "2026-6-1":"Ziua Copilului","2026-6-11":"Înălțarea",
+  "2026-6-21":"Rusalii","2026-6-22":"Rusalii",
+  "2026-8-15":"Sf. Maria","2026-11-30":"Sf. Andrei",
+  "2026-12-1":"Ziua Națională","2026-12-25":"Crăciun","2026-12-26":"Crăciun"
+};
+
+const LUNI=[
+  {i:0,n:"Aprilie",a:2026,l:4,z:30},{i:1,n:"Mai",a:2026,l:5,z:31},
+  {i:2,n:"Iunie",a:2026,l:6,z:30},{i:3,n:"Iulie",a:2026,l:7,z:31},
+  {i:4,n:"August",a:2026,l:8,z:31},{i:5,n:"Sept.",a:2026,l:9,z:30},
+  {i:6,n:"Oct.",a:2026,l:10,z:31},{i:7,n:"Nov.",a:2026,l:11,z:30},
+  {i:8,n:"Dec.",a:2026,l:12,z:31}
+];
+
+const ZN=["Duminică","Luni","Marți","Miercuri","Joi","Vineri","Sâmbătă"];
+const TODAY=new Date();
+
+// ===================== STOCARE =====================
+let DEPOT=''; // 'dudesti' sau 'giurgiu'
+let MEM_D={},MEM_G={};
+try{const d=localStorage.getItem('p2026_dudesti');if(d)MEM_D=JSON.parse(d)||{};}catch(e){}
+try{const g=localStorage.getItem('p2026_giurgiu');if(g)MEM_G=JSON.parse(g)||{};}catch(e){}
+
+function getMEM(){return DEPOT==='giurgiu'?MEM_G:MEM_D;}
+function getDB(){return DEPOT==='giurgiu'?DB_GIURGIU:DB_DUDESTI;}
+function getSK(){return DEPOT==='giurgiu'?'p2026_giurgiu':'p2026_dudesti';}
+function _save(){try{localStorage.setItem(getSK(),JSON.stringify(getMEM()));}catch(e){}}
+
+function nz(a,l,z){return ZN[new Date(a,l-1,z).getDay()];}
+function isWE(a,l,z){const d=new Date(a,l-1,z).getDay();return d===0||d===6;}
+function isTD(a,l,z){return TODAY.getFullYear()===a&&TODAY.getMonth()===l-1&&TODAY.getDate()===z;}
+function gs(a,l,z){const k=`${a}-${l}-${z}`;return getMEM()[k]||{t:'gol',r:null,s:2};}
+function ss(a,l,z,v){getMEM()[`${a}-${l}-${z}`]=v;_save();}
+function getSarb(a,l,z){return SARB[`${a}-${l}-${z}`]||null;}
+
+// ===================== DEPOT SELECTOR =====================
+let selectedDepot='';
+function selDepot(d){
+  selectedDepot=d;
+  document.getElementById('dc-dudesti').classList.toggle('sel',d==='dudesti');
+  document.getElementById('dc-giurgiu').classList.toggle('sel',d==='giurgiu');
+}
+function confirmDepot(){
+  if(!selectedDepot){alert('Alege un depou!');return;}
+  DEPOT=selectedDepot;
+  try{localStorage.setItem('p2026_depot',DEPOT);}catch(e){}
+  document.getElementById('depot-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  initApp();
+}
+function showDepotScreen(){
+  selectedDepot=DEPOT;
+  document.getElementById('dc-'+DEPOT).classList.add('sel');
+  document.getElementById('depot-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+}
+
+function initApp(){
+  // Titlu si legenda
+  const isG=DEPOT==='giurgiu';
+  document.getElementById('app-title').textContent='Program 2026';
+  document.getElementById('app-sub').textContent=(isG?'Depoul Giurgiu':'Depoul Dudești')+' · Editabil';
+  // Legenda
+  const leg=document.getElementById('legend');
+  if(isG){
+    leg.innerHTML=`
+      <div class="li"><div class="dot" style="background:var(--accent)"></div>Tur completat</div>
+      <div class="li"><div class="dot" style="background:var(--depou)"></div>Depou</div>
+      <div class="li"><div class="dot" style="background:var(--purple)"></div>Weekend</div>
+      <div class="li"><div class="dot" style="background:var(--green)"></div>Liber</div>
+      <div class="li"><div class="dot" style="background:var(--red)"></div>CO</div>
+      <div class="li"><div class="dot" style="background:var(--sarb)"></div>Sărbătoare</div>`;
+  } else {
+    leg.innerHTML=`
+      <div class="li"><div class="dot" style="background:var(--orange)"></div>Sch 1</div>
+      <div class="li"><div class="dot" style="background:var(--blue)"></div>Sch 2</div>
+      <div class="li"><div class="dot" style="background:var(--depou)"></div>Depou</div>
+      <div class="li"><div class="dot" style="background:var(--purple)"></div>Weekend</div>
+      <div class="li"><div class="dot" style="background:var(--green)"></div>Liber</div>
+      <div class="li"><div class="dot" style="background:var(--red)"></div>CO</div>
+      <div class="li"><div class="dot" style="background:var(--sarb)"></div>Sărbătoare</div>`;
+  }
+  let LA=0;
+  LUNI.forEach((l,i)=>{if(l.a===TODAY.getFullYear()&&l.l===TODAY.getMonth()+1)LA=i;});
+  window.LA=LA;
+  rTabs();rMonth();
+}
+
+// ===================== CALCUL ORE =====================
+// Format tur key: Giurgiu "3/1" linie="1" -> "T3 L1"
+function fmtTur(k,linie){
+  const tur=k.split('/')[0];
+  return `T${tur} L${linie}`;
+}
+// Format tur key: Dudesti "7/7" -> "T7 L7" / "9/1" -> "T9 L1"
+function fmtTurD(k){
+  const parts=k.split('/');
+  if(parts.length===2) return `T${parts[0]} L${parts[1]}`;
+  return k;
+}
+
+function calcOre(i,r){
+  const [ih,im]=i.split(':').map(Number);
+  const [rh,rm]=r.split(':').map(Number);
+  let s=ih*60+im,e=rh*60+rm;
+  if(e<=s)e+=24*60;
+  return e-s;
+}
+function fmtOre(min){
+  const h=Math.floor(min/60),m=min%60;
+  return m>0?`${h}h ${m}m`:`${h}h`;
+}
+
+// ===================== TABS =====================
+function rTabs(){
+  const tabs=document.getElementById('month-tabs');tabs.innerHTML='';
+  LUNI.forEach((l,i)=>{
+    let hd=false;
+    const mem=getMEM();
+    try{hd=Object.keys(mem).some(k=>k.startsWith(`${l.a}-${l.l}-`));}catch(e){}
+    const b=document.createElement('button');
+    b.className='month-tab'+(i===window.LA?' active':'')+(hd?' has-data':'');
+    b.textContent=l.n;
+    b.onclick=()=>{window.LA=i;rTabs();rMonth();};
+    tabs.appendChild(b);
+  });
+}
+
+// ===================== LUNA =====================
+function rMonth(){
+  const l=LUNI[window.LA];const v=document.getElementById('month-view');v.innerHTML='';
+  let lc=0,totalMin=0;
+  const db=getDB();
+  for(let d=1;d<=l.z;d++){
+    const s=gs(l.a,l.l,d);
+    if(s.t==='zl'||s.t==='we'){
+      lc++;
+      if(s.r){
+        const dbd=s.t==='we'?db.we:db.zl;
+        const dd=dbd[s.r];
+        if(dd){
+          if(DEPOT==='giurgiu'){
+            // Giurgiu: sch1 ore + sch2 ore
+            const sch=s.s||1;
+            const ore=sch===1?calcOre(dd.s1.i,dd.s1.r):calcOre(dd.s2.i,dd.s2.r);
+            totalMin+=ore;
+          } else {
+            const sch=s.s||2;
+            const ore=sch===1?calcOre(dd.s1.i,dd.s1.r):calcOre(dd.s2.i,dd.s2.r);
+            totalMin+=ore;
+          }
+        }
+      }
+    }
+  }
+  const h=document.createElement('div');h.className='month-header';
+  const oreStr=totalMin>0?` · <span style="color:var(--green)">${fmtOre(totalMin)} lucrate</span>`:'';
+  h.innerHTML=`<div class="month-title">${l.n} ${l.a}</div><div class="month-stats">${lc} zile lucrate${oreStr}</div>`;
+  v.appendChild(h);
+  for(let d=1;d<=l.z;d++)v.appendChild(rDay(l.a,l.l,d));
+  if(totalMin>0){
+    const footer=document.createElement('div');
+    footer.style.cssText='margin:14px 0 8px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;justify-content:space-between;align-items:center;';
+    footer.innerHTML=`<div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em">Total ore lucrate</div><div style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--green)">${fmtOre(totalMin)}</div>`;
+    v.appendChild(footer);
+  }
+}
+
+// ===================== ZI =====================
+function rDay(a,luna,z){
+  const s=gs(a,luna,z);const sarb=getSarb(a,luna,z);
+  const td=isTD(a,luna,z);const nZ=nz(a,luna,z);const sch=s.s||(DEPOT==='giurgiu'?1:2);
+  const weDay=isWE(a,luna,z);
+  const card=document.createElement('div');
+  card.className='day-card'+(td?' today-card':'')+(sarb&&s.t==='gol'?' sarb-card':weDay&&!sarb?' we-card':'');
+
+  let bc='tb-gol',bt='—';
+  if(s.t==='liber'){bc='tb-libre';bt='Liber';}
+  else if(s.t==='co'){bc='tb-co';bt='CO';}
+  else if(s.t==='sarb'){bc='tb-sarb';bt='Sărbătoare';}
+  else if(s.t==='zl'||s.t==='we'){
+    if(DEPOT==='giurgiu'){
+      if(s.r){const db=getDB();const dbd=s.t==='we'?db.we:db.zl;const dd=dbd[s.r];bc='tb-s1';bt=dd?fmtTur(s.r,dd.linie):(s.r);}
+    } else {
+      bc=s.t==='zl'?(sch===1?'tb-s1':'tb-s2'):(sch===1?'tb-we1':'tb-we2');bt=s.r?fmtTurD(s.r):'?';
+    }
+  }
+
+  const sb=(DEPOT!=='giurgiu'&&(s.t==='zl'||s.t==='we'))?`<span class="sch-badge ${sch===1?'sch1b':'sch2b'}">Sch${sch}</span>`:'';
+  const tl=s.t==='zl'?'zi lucrătoare':s.t==='we'?'weekend':s.t==='co'?'concediu':s.t==='sarb'?'sărbătoare':s.t==='liber'?'liber':'necompletat';
+
+  let html=`<div class="day-header">
+    <div class="day-left">
+      <div class="day-num${td?' today-num':''}${sarb?' sarb-num':weDay?' we-num':''}">${z}</div>
+      <div>
+        <div class="day-name">${nZ}${td?' ★':''}</div>
+        ${sarb?`<div class="sarb-lbl">🎉 ${sarb}</div>`:''}
+        <div class="day-type-lbl">${s.r?(DEPOT==='giurgiu'?fmtTurD(s.r):fmtTurD(s.r))+' · ':''}${tl}</div>
+      </div>
+    </div>
+    <div class="right-col"><span class="tur-badge ${bc}">${bt}</span>${sb}</div>
+  </div>`;
+
+  if(s.t==='sarb'){html+=`<div class="state-block st-sarb">🎉 Sărbătoare legală${sarb?' — '+sarb:''}</div>`;}
+  else if(s.t==='co'){html+=`<div class="state-block st-co">🔴 Concediu de odihnă</div>`;}
+  else if(s.t==='liber'){html+=`<div class="state-block st-libre">🟢 Zi liberă</div>`;}
+  else if((s.t==='zl'||s.t==='we')&&s.r){
+    const db=getDB();const dbd=s.t==='we'?db.we:db.zl;const dd=dbd[s.r];
+    if(dd){
+      if(DEPOT==='giurgiu'){
+        // Giurgiu: afisam doar orele, fara schimb
+        const schG=s.s||1;
+        const isDep=schG===2&&dd.s2.d || schG===1&&false;
+        const oreD=schG===1?dd.s1:dd.s2;
+        const depou=schG===2&&dd.s2.d;
+        html+=`<div class="shift-display"><div class="g-block${depou?' g-dep':''}">
+          <div class="g-linie">🚌 ${fmtTur(s.r,dd.linie)}</div>
+          <div class="g-lbl">${schG===1?'▶ Schimbul 1 — Dimineață':'▶ Schimbul 2 — După-amiază'}${depou?' · Plecare din DEPOU':''}</div>
+          <div class="g-ore"><span class="g-t">${oreD.i}</span><span class="g-sep">→</span><span class="g-t">${oreD.r}</span></div>
+        </div></div>`;
+      } else {
+        if(sch===1){
+          html+=`<div class="shift-display"><div class="shift-block s1-block">
+            <div class="s-lbl">▶ Schimbul 1 — Dimineață</div>
+            <div class="dep-tag">🚌 Plecare din DEPOU</div>
+            <div class="ore"><span class="t">${dd.s1.i}</span><span class="sep">→</span><span class="t">${dd.s1.r}</span></div>
+          </div></div>`;
+        } else {
+          const dc=dd.s2.d?' s2d-block':' s2-block';
+          html+=`<div class="shift-display"><div class="shift-block${dc}">
+            <div class="s-lbl">▶ Schimbul 2 — După-amiază</div>
+            ${dd.s2.d?'<div class="dep-tag">🚌 Plecare din DEPOU</div>':''}
+            <div class="capac">${dd.s2.c}</div>
+            <div class="ore"><span class="t">${dd.s2.i}</span><span class="sep">→</span><span class="t">${dd.s2.r}</span></div>
+          </div></div>`;
+        }
+      }
+    } else {html+=`<div class="state-block" style="color:var(--orange)">⚠️ Date lipsă: ${s.r}</div>`;}
+  } else {
+    html+=`<div class="state-block st-gol">${sarb?'🎉 Sărbătoare — apasă pentru completare':'Apasă pentru a completa'}</div>`;
+  }
+
+  html+=`<button class="edit-btn" onclick="openM(${a},${luna},${z})">✏️ Modifică</button>`;
+  card.innerHTML=html;return card;
+}
+
+// ===================== MODAL =====================
+let mA,mL,mZ,mT='zl',mS=1,mR=null;
+
+function openM(a,l,z){
+  mA=a;mL=l;mZ=z;
+  const s=gs(a,l,z);
+  const weekend=isWE(a,l,z);
+  if(s.t==='we'||s.t==='zl'){mT=s.t;}else{mT=weekend?'we':'zl';}
+  mS=s.s||(DEPOT==='giurgiu'?1:2);
+  mR=s.r||null;
+  const sarb=getSarb(a,l,z);
+  document.getElementById('mtitle').textContent=`${z} ${nz(a,l,z)}`;
+  document.getElementById('msub').textContent=(sarb?'🎉 '+sarb+' · ':'')+LUNI.find(x=>x.l===l&&x.a===a)?.n+' '+a;
+
+  // Tip zi buttons
+  if(weekend){
+    document.getElementById('tzl').style.display='none';
+    document.getElementById('twe').style.display='';
+    document.getElementById('tip-lbl').textContent='Indicatori (weekend)';
+  } else {
+    document.getElementById('tzl').style.display='';
+    document.getElementById('twe').style.display='';
+    document.getElementById('tip-lbl').textContent='Indicatori — alege tipul zilei';
+  }
+
+  // Schimb section - Giurgiu are schimb dar fara capac/depou info
+  const schSec=document.getElementById('sch-section');
+  schSec.style.display='block';
+  if(DEPOT==='giurgiu'){
+    document.getElementById('s1btn').textContent='';
+    document.getElementById('s1btn').innerHTML='1 — Dimineață<br><span class="hint">Sch 1</span>';
+    document.getElementById('s2btn').innerHTML='2 — După-amiază<br><span class="hint">Sch 2</span>';
+  } else {
+    document.getElementById('s1btn').innerHTML='1 — Dimineață<br><span class="hint">Plecare din depou</span>';
+    document.getElementById('s2btn').innerHTML='2 — După-amiază<br><span class="hint">Schimb de tură</span>';
+  }
+
+  document.getElementById('modal').classList.add('active');
+  uTip();uSch();rTG();uPrev();
+}
+
+function closeM(){document.getElementById('modal').classList.remove('active');}
+function setQ(t){ss(mA,mL,mZ,{t,r:null,s:mS});rMonth();rTabs();closeM();}
+function sTip(t){mT=t;mR=null;uTip();rTG();uPrev();}
+function sSch(s){mS=s;uSch();uPrev();}
+
+function uTip(){
+  document.getElementById('tzl').className='tip-btn'+(mT==='zl'?' act':'');
+  document.getElementById('twe').className='tip-btn'+(mT==='we'?' act':'');
+}
+function uSch(){
+  document.getElementById('s1btn').className='sch-btn'+(mS===1?' act1':'');
+  document.getElementById('s2btn').className='sch-btn'+(mS===2?' act2':'');
+}
+
+function rTG(){
+  const g=document.getElementById('turgrid');g.innerHTML='';
+  const db=getDB();
+  const dbd=mT==='we'?db.we:db.zl;
+  Object.entries(dbd).forEach(([k,v])=>{
+    const b=document.createElement('button');
+    const isDep=v.s2&&v.s2.d;
+    let cls='tur-btn'+(isDep?' dt':'');
+    if(mR===k)cls+=' sel';
+    // Label: pentru Giurgiu aratam Linia+Tur, pentru Dudesti doar turul
+    b.textContent=DEPOT==='giurgiu'?fmtTur(k,v.linie):fmtTurD(k);
+    b.className=cls;
+    b.onclick=()=>{mR=k;rTG();uPrev();};
+    g.appendChild(b);
+  });
+}
+
+function uPrev(){
+  const box=document.getElementById('preview');
+  if(!mR){box.innerHTML='<span style="color:var(--muted);font-size:0.66rem">Alege tur</span>';return;}
+  const db=getDB();const dbd=mT==='we'?db.we:db.zl;const d=dbd[mR];
+  if(!d){box.innerHTML='<span style="color:var(--orange)">Date lipsă</span>';return;}
+
+  if(DEPOT==='giurgiu'){
+    const oreD=mS===1?d.s1:d.s2;
+    const depou=mS===2&&d.s2.d;
+    box.innerHTML=`<span class="pv-linie">🚌 ${fmtTur(mR,d.linie)}</span>${depou?'<span class="pv-dep">Plecare din DEPOU</span>':''}<span class="pv-ore" style="${depou?'color:var(--depou)':''}">${oreD.i} → ${oreD.r}</span>`;
+  } else {
+    if(mS===1){
+      box.innerHTML=`<span class="pv-dep-main">🚌 Plecare din DEPOU</span><span class="pv-ore" style="color:var(--depou)">${d.s1.i} → ${d.s1.r}</span>`;
+    } else {
+      box.innerHTML=`<span class="pv-capac">${d.s2.c}</span>${d.s2.d?'<span class="pv-dep">🚌 Plecare din DEPOU</span>':''}<span class="pv-ore">${d.s2.i} → ${d.s2.r}</span>`;
+    }
+  }
+}
+
+function saveD(){
+  if(!mR){closeM();return;}
+  ss(mA,mL,mZ,{t:mT,r:mR,s:mS});rMonth();rTabs();closeM();
+}
+
+document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeM();});
+
+// ===================== INIT =====================
+try{
+  const saved=localStorage.getItem('p2026_depot');
+  if(saved){
+    DEPOT=saved;
+    selectedDepot=saved;
+    document.getElementById('depot-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    initApp();
+  }
+}catch(e){}
+</script>
+</body>
+</html>
