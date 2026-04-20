@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Program STB 2026 — Aplicație pentru vatmani</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #070c18;
+  --card: #0f1828;
+  --card2: #141f30;
+  --border: #1a2d45;
+  --accent: #22d3a5;
+  --accent2: #0d9488;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --orange: #fb923c;
+  --green: #4ade80;
+  --red: #f87171;
+  --yellow: #fbbf24;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --muted: #334155;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body: 'Plus Jakarta Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgba(34,211,165,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 20%, rgba(96,165,250,0.06) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 80%, rgba(167,139,250,0.04) 0%, transparent 50%);
+}
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 20px 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, rgba(34,211,165,0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.tram-svg {
+  width: min(320px, 88vw);
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 40px rgba(34,211,165,0.25));
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.hero-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(34,211,165,0.1);
+  border: 1px solid rgba(34,211,165,0.25);
+  padding: 5px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 12vw, 6.5rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #22d3a5 0%, #60a5fa 50%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 10px;
+}
+
+.hero-sub {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 4vw, 1.8rem);
+  color: var(--text2);
+  letter-spacing: 0.08em;
+  margin-bottom: 24px;
+}
+
+.hero-desc {
+  font-size: clamp(0.85rem, 2.5vw, 1rem);
+  color: var(--text2);
+  max-width: 520px;
+  line-height: 1.7;
+  margin-bottom: 36px;
+}
+
+.hero-cta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-primary {
+  padding: 14px 28px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #22d3a5, #0d9488);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 24px rgba(34,211,165,0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(34,211,165,0.4); }
+
+.btn-secondary {
+  padding: 14px 28px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text2);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── SCROLL INDICATOR ── */
+.scroll-hint {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  animation: bounce 2s ease-in-out infinite;
+}
+@keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(6px)} }
+
+/* ── SECTIONS ── */
+section {
+  padding: 80px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.section-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.section-desc {
+  font-size: 0.95rem;
+  color: var(--text2);
+  line-height: 1.8;
+  max-width: 580px;
+  margin-bottom: 48px;
+}
+
+/* ── DEPOURI GRID ── */
+.depouri-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.depou-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 18px;
+  transition: border-color 0.2s, transform 0.2s;
+  cursor: default;
+}
+.depou-card:hover { border-color: rgba(34,211,165,0.4); transform: translateY(-3px); }
+
+.depou-card.active { border-color: rgba(34,211,165,0.5); background: rgba(34,211,165,0.06); }
+.depou-card.soon { opacity: 0.55; }
+
+.depou-icon { font-size: 1.8rem; margin-bottom: 8px; }
+.depou-name { font-size: 0.85rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.depou-linii { font-size: 0.6rem; color: var(--text2); }
+.depou-badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-top: 8px;
+}
+.badge-activ { background: rgba(34,211,165,0.12); color: var(--accent); border: 1px solid rgba(34,211,165,0.25); }
+.badge-curand { background: rgba(148,163,184,0.1); color: var(--text2); border: 1px solid var(--border); }
+
+/* ── FEATURES ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.feature-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px 22px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.feature-card:hover { border-color: rgba(96,165,250,0.35); transform: translateY(-3px); }
+
+.feature-ico { font-size: 2rem; margin-bottom: 14px; }
+.feature-title { font-size: 0.9rem; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.feature-desc { font-size: 0.72rem; color: var(--text2); line-height: 1.7; }
+
+/* ── HOW TO USE STEPS ── */
+.steps { display: flex; flex-direction: column; gap: 0; }
+
+.step {
+  display: flex;
+  gap: 20px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.step:last-child { border-bottom: none; }
+
+.step-num {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  color: rgba(34,211,165,0.15);
+  line-height: 1;
+  flex-shrink: 0;
+  width: 60px;
+  text-align: right;
+  padding-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+.step-content { flex: 1; }
+.step-title { font-size: 1rem; font-weight: 800; color: var(--accent); margin-bottom: 8px; }
+.step-desc { font-size: 0.78rem; color: var(--text2); line-height: 1.7; }
+
+.step-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.62rem;
+  color: var(--blue);
+  background: rgba(96,165,250,0.08);
+  border: 1px solid rgba(96,165,250,0.2);
+  border-radius: 8px;
+  padding: 5px 10px;
+  margin-top: 10px;
+}
+
+/* ── INSTALL GUIDE ── */
+.install-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 560px) { .install-grid { grid-template-columns: 1fr; } }
+
+.install-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px 20px;
+}
+
+.install-platform {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.install-platform-icon { font-size: 1.6rem; }
+.install-platform-name { font-size: 0.85rem; font-weight: 800; color: var(--text); }
+
+.install-steps { display: flex; flex-direction: column; gap: 10px; }
+
+.install-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.install-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(34,211,165,0.15);
+  border: 1px solid rgba(34,211,165,0.3);
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.install-step-text { font-size: 0.7rem; color: var(--text2); line-height: 1.5; }
+
+/* ── PRIVACY BOX ── */
+.privacy-box {
+  background: rgba(34,211,165,0.06);
+  border: 1px solid rgba(34,211,165,0.2);
+  border-radius: 16px;
+  padding: 24px 20px;
+  margin-top: 20px;
+}
+.privacy-title { font-size: 0.85rem; font-weight: 800; color: var(--accent); margin-bottom: 12px; }
+.privacy-list { display: flex; flex-direction: column; gap: 8px; }
+.privacy-item { display: flex; align-items: center; gap: 10px; font-size: 0.72rem; color: var(--text2); }
+.privacy-item span { font-size: 1rem; }
+
+/* ── LINK SECTION ── */
+.link-section {
+  text-align: center;
+  padding: 60px 20px 80px;
+  border-top: 1px solid var(--border);
+}
+.link-url {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 4vw, 1.6rem);
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  background: rgba(34,211,165,0.08);
+  border: 1px solid rgba(34,211,165,0.25);
+  border-radius: 14px;
+  padding: 16px 28px;
+  display: inline-block;
+  margin: 20px 0;
+  word-break: break-all;
+}
+
+/* ── DIVIDER ── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── STATS BADGES ── */
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 48px;
+}
+.stat-badge {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  text-align: center;
+}
+.stat-val {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-lbl { font-size: 0.55rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 640px) {
+  section { padding: 60px 16px; }
+  .depouri-grid { grid-template-columns: 1fr 1fr; }
+  .features-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+
+  <!-- Tramvai SVG animat -->
+  <svg class="tram-svg" viewBox="0 0 340 130" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#22d3a5" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="#0d9488"/>
+      </linearGradient>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+        <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <!-- Corp tramvai -->
+    <rect x="8" y="18" width="324" height="80" rx="14" fill="url(#bodyGrad)"/>
+    <rect x="8" y="18" width="324" height="80" rx="14" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+    <!-- Bandă albă mijloc -->
+    <rect x="8" y="50" width="324" height="18" fill="rgba(255,255,255,0.92)"/>
+    <!-- Geamuri -->
+    <rect x="22" y="26" width="44" height="22" rx="4" fill="rgba(186,230,253,0.85)"/>
+    <rect x="76" y="26" width="44" height="22" rx="4" fill="rgba(186,230,253,0.85)"/>
+    <rect x="130" y="26" width="44" height="22" rx="4" fill="rgba(186,230,253,0.85)"/>
+    <rect x="184" y="26" width="44" height="22" rx="4" fill="rgba(186,230,253,0.85)"/>
+    <rect x="238" y="26" width="44" height="22" rx="4" fill="rgba(186,230,253,0.85)"/>
+    <!-- STB pe bandă -->
+    <text x="170" y="64" font-family="Arial Black,sans-serif" font-size="12" font-weight="900" fill="#22d3a5" text-anchor="middle">STB</text>
+    <!-- IMPERIO text -->
+    <text x="170" y="44" font-family="Arial,sans-serif" font-size="7.5" fill="rgba(255,255,255,0.9)" text-anchor="middle" letter-spacing="2">IMPERIO METROPOLITAN</text>
+    <!-- Faruri -->
+    <circle cx="38" cy="90" r="8" fill="#fef9c3" stroke="#fbbf24" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="302" cy="90" r="8" fill="#fef9c3" stroke="#fbbf24" stroke-width="1.5" filter="url(#glow)"/>
+    <!-- Roți -->
+    <rect x="28" y="96" width="284" height="8" rx="3" fill="#1a2840"/>
+    <circle cx="70" cy="106" r="9" fill="#1e2d3d" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <circle cx="70" cy="106" r="3.5" fill="rgba(255,255,255,0.2)"/>
+    <circle cx="170" cy="106" r="9" fill="#1e2d3d" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <circle cx="170" cy="106" r="3.5" fill="rgba(255,255,255,0.2)"/>
+    <circle cx="270" cy="106" r="9" fill="#1e2d3d" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <circle cx="270" cy="106" r="3.5" fill="rgba(255,255,255,0.2)"/>
+    <!-- Pantograf -->
+    <line x1="90" y1="18" x2="110" y2="4" stroke="rgba(148,163,184,0.6)" stroke-width="1.5"/>
+    <line x1="110" y1="4" x2="220" y2="4" stroke="rgba(148,163,184,0.8)" stroke-width="2"/>
+    <line x1="220" y1="4" x2="240" y2="18" stroke="rgba(148,163,184,0.6)" stroke-width="1.5"/>
+    <line x1="110" y1="4" x2="110" y2="0" stroke="rgba(148,163,184,0.5)" stroke-width="1"/>
+    <line x1="220" y1="4" x2="220" y2="0" stroke="rgba(148,163,184,0.5)" stroke-width="1"/>
+    <!-- Număr vagon -->
+    <text x="292" y="93" font-family="monospace" font-size="8" fill="#fef9c3" text-anchor="middle">3865</text>
+  </svg>
+
+  <div class="hero-tag">📱 Aplicație gratuită pentru vatmani STB</div>
+  <h1 class="hero-title">Program STB<br>2026+</h1>
+  <p class="hero-sub">Depoul tău. Programul tău.</p>
+  <p class="hero-desc">
+    O aplicație mobilă gratuită care îți arată programul de lucru zilnic, 
+    calculează orele lunare, gestionează CO și liberele — direct pe telefon, 
+    funcționează și fără internet.
+  </p>
+
+  <div class="hero-cta">
+    <a href="https://gully892005-spec.github.io/ProgramSTB/" class="btn-primary" target="_blank">
+      🚃 Deschide aplicația
+    </a>
+    <a href="#cum-functioneaza" class="btn-secondary">
+      📖 Cum funcționează
+    </a>
+  </div>
+
+  <div class="scroll-hint">
+    <span>Derulează</span>
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  </div>
+</div>
+
+<!-- ═══════════════ DEPOURI ═══════════════ -->
+<div class="divider"></div>
+<section>
+  <div class="section-label">🚃 Acoperire</div>
+  <h2 class="section-title">Depouri disponibile</h2>
+  <p class="section-desc">
+    Aplicația acoperă depouri STB București. Cele active au indicatori de ore complet introduși. 
+    Depourile marcate „În curând" sunt pregătite tehnic — orele se adaugă pe măsură ce devin disponibile.
+  </p>
+
+  <div class="depouri-grid">
+    <div class="depou-card active">
+      <div class="depou-icon">🚃</div>
+      <div class="depou-name">Depoul Dudești</div>
+      <div class="depou-linii">Linii: 1 · 5 · 7 · 10 · 27</div>
+      <div class="depou-badge badge-activ">✅ Activ</div>
+    </div>
+    <div class="depou-card active">
+      <div class="depou-icon">🚃</div>
+      <div class="depou-name">Depoul Giurgiu</div>
+      <div class="depou-linii">Linii: 1 · 7 · 25</div>
+      <div class="depou-badge badge-activ">✅ Activ</div>
+    </div>
+    <div class="depou-card active">
+      <div class="depou-icon">🚋</div>
+      <div class="depou-name">Depoul Victoria</div>
+      <div class="depou-linii">Linii: 5 · 10 · 11 · 47</div>
+      <div class="depou-badge badge-activ">✅ Activ</div>
+    </div>
+    <div class="depou-card soon">
+      <div class="depou-icon">🚃</div>
+      <div class="depou-name">Depoul Titan</div>
+      <div class="depou-linii">Structură pregătită</div>
+      <div class="depou-badge badge-curand">⏳ În curând</div>
+    </div>
+    <div class="depou-card soon">
+      <div class="depou-icon">🚃</div>
+      <div class="depou-name">Depoul Alexandria</div>
+      <div class="depou-linii">Structură pregătită</div>
+      <div class="depou-badge badge-curand">⏳ În curând</div>
+    </div>
+    <div class="depou-card soon">
+      <div class="depou-icon">🚃</div>
+      <div class="depou-name">Depoul Colentina</div>
+      <div class="depou-linii">Structură pregătită</div>
+      <div class="depou-badge badge-curand">⏳ În curând</div>
+    </div>
+    <div class="depou-card soon">
+      <div class="depou-icon">🚃</div>
+      <div class="depou-name">Depoul Militari</div>
+      <div class="depou-linii">Structură pregătită</div>
+      <div class="depou-badge badge-curand">⏳ În curând</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ FEATURES ═══════════════ -->
+<div class="divider"></div>
+<section>
+  <div class="section-label">⚡ Funcționalități</div>
+  <h2 class="section-title">Ce poți face</h2>
+  <p class="section-desc">
+    Totul ce ai nevoie pentru a-ți gestiona programul de lucru într-un singur loc.
+  </p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-ico">📅</div>
+      <div class="feature-title">Calendar lunar complet</div>
+      <div class="feature-desc">Vizualizează întreaga lună dintr-o privire. Fiecare zi e colorată: portocaliu schimb 1, albastru schimb 2, verde liber, roșu CO, violet weekend.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">⏰</div>
+      <div class="feature-title">Program zilnic detaliat</div>
+      <div class="feature-desc">Alegi linia și turul iar aplicația afișează automat ora de plecare din depou sau de preluare pe linie, capătul de linie și durata serviciului.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">📊</div>
+      <div class="feature-title">Statistici lunare</div>
+      <div class="feature-desc">Total ore lucrate, media zilnică, zile schimb 1 vs schimb 2, ieșiri din depou, cele mai frecvente linii. Totul calculat automat.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">⏱️</div>
+      <div class="feature-title">Ore suplimentare</div>
+      <div class="feature-desc">Dacă ai depășit programul, adaugi minutele suplimentare direct la zi. Se calculează separat și se adaugă la totalul lunii.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">✂️</div>
+      <div class="feature-title">Fracții de tură</div>
+      <div class="feature-desc">Ai lucrat o parte dintr-o tură? Completezi linia, turul, ora start și ora end — aplicația calculează automat orele fracției.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">✏️</div>
+      <div class="feature-title">Introducere manuală</div>
+      <div class="feature-desc">Pentru depouri fără indicatori sau situații speciale, poți introduce manual: linie, tur, ore start/stop și plecare din depou.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">🔴</div>
+      <div class="feature-title">CO și zile libere</div>
+      <div class="feature-desc">Marchezi zilele de concediu, libere sau sărbători legale. Aplicația știe automat sărbătorile legale din 2026.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">💾</div>
+      <div class="feature-title">Backup & restaurare</div>
+      <div class="feature-desc">Exporti toate datele ca text și le salvezi în notes sau email. La schimbarea telefonului, restaurezi în 10 secunde.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-ico">📴</div>
+      <div class="feature-title">Funcționează offline</div>
+      <div class="feature-desc">Odată instalată, aplicația funcționează complet fără internet. Datele tale sunt salvate local pe telefon.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ CUM FUNCȚIONEAZĂ ═══════════════ -->
+<div class="divider"></div>
+<section id="cum-functioneaza">
+  <div class="section-label">📖 Ghid de utilizare</div>
+  <h2 class="section-title">Cum funcționează</h2>
+  <p class="section-desc">Simplu de folosit, chiar dacă nu ești obișnuit cu aplicații.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-content">
+        <div class="step-title">Alege depoul tău</div>
+        <div class="step-desc">La prima deschidere, selectezi depoul la care lucrezi: Dudești, Giurgiu sau Victoria. Poți schimba oricând din header. Dacă depoul tău nu apare încă, alege cel mai apropiat — poți introduce datele manual.</div>
+        <div class="step-tip">💡 Alegerea se ține minte automat la fiecare deschidere</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-content">
+        <div class="step-title">Completează zilele de lucru</div>
+        <div class="step-desc">Apasă pe orice zi din calendar sau din lista săptămânală. Alegi tipul zilei (lucrătoare sau weekend), schimbul (1 dimineață / 2 după-amiază), linia și turul. Aplicația afișează automat orele din indicator.</div>
+        <div class="step-tip">⚡ Tastezi linia o dată și apar toate turele disponibile</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-content">
+        <div class="step-title">Marchează liberele și CO</div>
+        <div class="step-desc">Apasă pe zi și alegi rapid: 🟢 Liber sau 🔴 CO. Sărbătorile legale sunt marcate automat — nu trebuie să le adaugi tu.</div>
+        <div class="step-tip">🎉 Paștele, Crăciunul și toate sărbătorile 2026 sunt deja în aplicație</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">04</div>
+      <div class="step-content">
+        <div class="step-title">Verifică statisticile lunare</div>
+        <div class="step-desc">Mergi la tab-ul Lună și apasă butonul „Vezi statistici detaliate". Vei vedea: total ore lucrate, media zilnică, distribuția pe schimburi, liniile pe care ai lucrat cel mai mult și câte ieșiri din depou ai avut.</div>
+        <div class="step-tip">📊 Statisticile se actualizează instant la orice modificare</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">05</div>
+      <div class="step-content">
+        <div class="step-title">Salvează un backup</div>
+        <div class="step-desc">Apasă butonul 💾 Backup din colțul dreapta sus. Copiezi textul generat și îl salvezi într-o notă sau îl trimiți pe email. La schimbarea telefonului, dai Importă și lipești textul — datele se restaurează complet în câteva secunde.</div>
+        <div class="step-tip">🔒 Datele tale nu merg nicăieri — rămân pe telefonul tău</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ INSTALARE ═══════════════ -->
+<div class="divider"></div>
+<section>
+  <div class="section-label">📲 Instalare</div>
+  <h2 class="section-title">Instalează pe telefon</h2>
+  <p class="section-desc">
+    Nu e nevoie de App Store sau Play Store. Se instalează direct din browser în câțiva pași simpli și funcționează ca orice altă aplicație.
+  </p>
+
+  <div class="install-grid">
+    <div class="install-card">
+      <div class="install-platform">
+        <span class="install-platform-icon">🤖</span>
+        <span class="install-platform-name">Android (Chrome)</span>
+      </div>
+      <div class="install-steps">
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-text">Deschide linkul în <strong>Chrome</strong></div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-text">Apasă butonul verde <strong>„📲 Instalează"</strong> din colțul dreapta sus al aplicației</div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-text">Confirmă „Adaugă pe ecranul principal"</div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">4</div>
+          <div class="install-step-text">Aplicația apare pe ecranul principal ca orice app</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="install-card">
+      <div class="install-platform">
+        <span class="install-platform-icon">🍎</span>
+        <span class="install-platform-name">iPhone / iPad (Safari)</span>
+      </div>
+      <div class="install-steps">
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-text">Deschide linkul în <strong>Safari</strong> (nu Chrome!)</div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-text">Apasă butonul <strong>„📲 Instalează"</strong> din aplicație</div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-text">Apasă butonul <strong>□↑ Share</strong> din bara Safari de jos</div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">4</div>
+          <div class="install-step-text">Alege <strong>„Adaugă pe ecranul principal"</strong> și confirmă</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="privacy-box">
+    <div class="privacy-title">🔒 Date și confidențialitate</div>
+    <div class="privacy-list">
+      <div class="privacy-item"><span>✅</span> Datele tale (program, ture, CO) sunt salvate <strong>doar pe telefonul tău</strong></div>
+      <div class="privacy-item"><span>✅</span> Aplicația colectează anonim: platforma (iOS/Android) și data accesării — cu acordul tău</div>
+      <div class="privacy-item"><span>✅</span> Nu se colectează: nume, număr de telefon, locație sau conținutul programului tău</div>
+      <div class="privacy-item"><span>✅</span> Statisticile anonime ajută dezvoltatorul să vadă dacă aplicația e utilă și să o îmbunătățească</div>
+      <div class="privacy-item"><span>✅</span> Poți refuza colectarea datelor anonime — aplicația funcționează identic</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ LINK FINAL ═══════════════ -->
+<div class="divider"></div>
+<div class="link-section">
+  <div class="section-label" style="margin-bottom:16px">🔗 Link aplicație</div>
+  <p style="font-size:0.85rem;color:var(--text2);margin-bottom:8px;">Accesează sau distribuie aplicația la orice coleg vatman:</p>
+  <div class="link-url">gully892005-spec.github.io/ProgramSTB</div>
+  <p style="font-size:0.72rem;color:var(--muted);margin-top:12px;margin-bottom:28px;">Funcționează pe orice telefon cu browser modern · Gratuit · Fără cont</p>
+  <a href="https://gully892005-spec.github.io/ProgramSTB/" class="btn-primary" target="_blank" style="font-size:1rem;padding:16px 36px;">
+    🚃 Deschide aplicația
+  </a>
+  <p style="font-size:0.62rem;color:var(--muted);margin-top:40px;">
+    Aplicație realizată pentru vatmanii STB București · 2026
+  </p>
+</div>
+
+</body>
+</html>
