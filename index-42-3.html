@@ -1,0 +1,2789 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0f1a">
+<link rel="manifest" href="/ProgramSTB/manifest.json">
+<title>Program Lucru 2026</title>
+
+<!-- ═══════════════════════════════════════════
+     GOOGLE ANALYTICS 4 — G-V7Z1X668FR
+     Tracking automat: vizite, sesiuni, platformă
+     Tracking custom: instalări, depou, completări
+═══════════════════════════════════════════ -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-V7Z1X668FR"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-V7Z1X668FR', {
+    send_page_view: true,
+    page_title: 'Program STB 2026',
+    page_location: window.location.href
+  });
+
+  // Helper pentru evenimente custom
+  function gaEvent(name, params){
+    try{ if(typeof gtag==='function') gtag('event', name, params||{}); }catch(e){}
+  }
+
+  // Detectează dacă e PWA instalată sau browser normal
+  function getPlatform(){
+    const ua = navigator.userAgent;
+    const isInstalled = window.matchMedia('(display-mode: standalone)').matches
+                     || window.navigator.standalone === true;
+    const isIOS = /iPhone|iPad|iPod/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    if(isInstalled) return isIOS ? 'PWA_iOS' : isAndroid ? 'PWA_Android' : 'PWA_Desktop';
+    return isIOS ? 'Browser_iOS' : isAndroid ? 'Browser_Android' : 'Browser_Desktop';
+  }
+
+  // Trimite platforma la primul load
+  window.addEventListener('load', function(){
+    const platform = getPlatform();
+    const isInstalled = platform.startsWith('PWA');
+
+    // Eveniment principal: deschidere aplicație
+    gaEvent('app_open', {
+      platform: platform,
+      is_installed: isInstalled,
+      event_category: 'engagement'
+    });
+
+    // Dacă e PWA instalată — eveniment separat pentru instalări active
+    if(isInstalled){
+      gaEvent('pwa_session', {
+        platform: platform,
+        event_category: 'pwa'
+      });
+    }
+  });
+</script>
+<!-- ═══════════════════════════════════════════ -->
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Clash+Display:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0f1a;
+  --card:#111827;
+  --card2:#151f30;
+  --border:#1e2d47;
+  --border2:#253550;
+  --accent:#22d3a5;
+  --blue:#60a5fa;
+  --green:#4ade80;
+  --red:#f87171;
+  --orange:#fb923c;
+  --purple:#a78bfa;
+  --depou:#fbbf24;
+  --sarb:#f87171;
+  --text:#e2e8f0;
+  --text2:#94a3b8;
+  --muted:#334155;
+  --sub:#1e2d47;
+  --stb-green:#22d3a5;
+  --stb-white:#f8fafc;
+  --font-display:'Bebas Neue',sans-serif;
+  --font-body:'Plus Jakarta Sans',sans-serif;
+  --r-sm:10px;--r-md:14px;--r-lg:18px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;height:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:15px;padding:0 0 80px;-webkit-overflow-scrolling:touch;background-image:radial-gradient(ellipse at 15% 0%,rgba(34,211,165,0.07) 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,rgba(96,165,250,0.05) 0%,transparent 50%),radial-gradient(ellipse at 50% 50%,rgba(167,139,250,0.03) 0%,transparent 70%);}
+
+
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px) scale(0.95);}to{opacity:1;transform:none;}}
+
+/* ── DEPOT SCREEN ── */
+.depot-screen{position:fixed;inset:0;background:linear-gradient(160deg,#070b14 0%,#0d1a2e 40%,#091420 70%,#070b14 100%);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 24px 32px;gap:12px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.depot-title{font-family:var(--font-display);font-size:1.8rem;font-weight:400;color:var(--accent);text-align:center;letter-spacing:0.06em;}
+.depot-sub{font-size:0.68rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:0.12em;font-family:var(--font-body);font-weight:700;}
+.depot-cards{display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px;}
+.depot-card{padding:13px 16px;border-radius:14px;border:1px solid var(--border2);background:var(--card);cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color 0.15s,background 0.15s;}
+.depot-card.sel{border-color:var(--accent);background:rgba(76,175,80,0.08);}
+.depot-icon{font-size:1.5rem;}
+.depot-name{font-family:var(--font-body);font-size:1rem;font-weight:800;color:var(--text);}
+.depot-desc{font-size:0.6rem;color:var(--muted);margin-top:2px;font-weight:500;}
+.depot-btn{width:100%;max-width:340px;padding:14px;border-radius:12px;border:none;background:var(--stb-green);color:#fff;font-family:var(--font-body);font-size:0.85rem;font-weight:800;cursor:pointer;letter-spacing:0.05em;position:sticky;bottom:0;margin-top:8px;box-shadow:0 -8px 20px rgba(7,11,20,0.8);}
+
+/* ── HEADER ── */
+.app-header{padding:14px 14px 8px;display:flex;align-items:center;justify-content:space-between;}
+.app-header-left{display:flex;flex-direction:column;}
+.app-title{font-family:var(--font-display);font-size:2rem;font-weight:400;background:linear-gradient(135deg,#22d3a5,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.05em;line-height:1;}
+.app-depot{font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-top:2px;cursor:pointer;font-family:var(--font-body);font-weight:600;}
+.header-btns{display:flex;gap:6px;}
+.hbtn{padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--text2);font-family:var(--font-body);font-size:0.62rem;font-weight:600;cursor:pointer;}
+.hbtn:active{color:var(--blue);}
+.hbtn-install{background:rgba(34,211,165,0.12);border-color:rgba(34,211,165,0.4);color:var(--accent);animation:pulse-install 2s infinite;}
+@keyframes pulse-install{0%,100%{box-shadow:0 0 0 0 rgba(34,211,165,0.3);}50%{box-shadow:0 0 0 4px rgba(34,211,165,0);}}
+
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(11,15,26,0.97);backdrop-filter:blur(16px);border-top:1px solid rgba(34,211,165,0.12);display:flex;z-index:50;padding-bottom:env(safe-area-inset-bottom);}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font-body);font-size:0.55rem;font-weight:700;gap:3px;letter-spacing:0.04em;text-transform:uppercase;-webkit-tap-highlight-color:transparent;}
+.nav-btn.active{color:var(--accent);}
+.nav-btn .nav-ico{font-size:1.3rem;line-height:1;}
+.nav-btn.active .nav-ico{filter:drop-shadow(0 0 8px rgba(34,211,165,0.8));}
+
+
+/* ── MONTH TABS ── */
+.month-tabs{display:flex;gap:6px;overflow-x:auto;padding:0 14px 10px;scrollbar-width:none;}
+.month-tabs::-webkit-scrollbar{display:none;}
+.month-tab{flex-shrink:0;padding:6px 16px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-family:var(--font-body);font-size:0.68rem;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:0.03em;}
+.month-tab.active{background:linear-gradient(135deg,#22d3a5,#0d9488);color:#fff;border-color:#22d3a5;box-shadow:0 2px 12px rgba(34,211,165,0.25);}
+.month-tab.has-data{border-color:rgba(79,195,247,0.4);color:var(--blue);}
+
+
+/* ── VIEW CONTAINER ── */
+.view-container{padding:0 12px;}
+
+/* ════════════════════════════════
+   VIEW 1: AZI + SĂPTĂMÂNĂ
+════════════════════════════════ */
+.today-big{background:var(--card);border:1px solid rgba(34,211,165,0.4);border-radius:16px;margin-bottom:14px;overflow:hidden;}
+.tb-head{background:linear-gradient(135deg,rgba(34,211,165,0.12),rgba(96,165,250,0.06));padding:12px 16px 10px;display:flex;justify-content:space-between;align-items:center;}
+.tb-label{font-family:var(--font-display);font-size:0.7rem;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;}
+.tb-date{font-size:0.62rem;color:var(--muted);}
+.tb-body{padding:14px 16px 16px;}
+.tb-ore{font-family:var(--font-display);font-size:2.6rem;font-weight:800;color:#fff;line-height:1;letter-spacing:-0.02em;}
+.tb-ore.dep{color:var(--depou);}
+.tb-info{font-size:0.85rem;color:var(--accent);margin-top:6px;font-weight:700;}
+.tb-dep{font-size:0.62rem;color:var(--depou);margin-top:2px;}
+.tb-status{font-size:1.1rem;font-weight:500;margin-top:4px;}
+.tb-gol{font-size:0.8rem;color:var(--muted);font-style:italic;}
+.tb-edit{display:block;width:100%;margin-top:12px;padding:9px;border-radius:9px;background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);color:var(--accent);font-family:var(--font-body);font-size:0.65rem;cursor:pointer;text-align:center;}
+
+.week-title{font-family:var(--font-display);font-size:0.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+.week-grid{display:flex;flex-direction:column;gap:5px;}
+.week-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;}
+.week-row.wr-today{border-color:var(--accent);}
+.week-row.wr-sarb{border-color:rgba(255,107,107,0.4);background:rgba(255,107,107,0.02);}
+.week-row.wr-we{border-color:rgba(192,132,252,0.35);background:rgba(192,132,252,0.02);}
+.wr-num{font-family:var(--font-display);font-size:1.1rem;font-weight:800;min-width:22px;line-height:1;}
+.wr-num.wn-today{color:var(--accent);}
+.wr-num.wn-sarb{color:var(--sarb);}
+.wr-num.wn-we{color:var(--purple);}
+.wr-day{font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;min-width:36px;}
+.wr-info{flex:1;font-size:0.68rem;color:var(--text);}
+.wr-info.wi-gol{color:var(--muted);font-style:italic;}
+.wr-badge{font-size:0.58rem;padding:2px 7px;border-radius:12px;white-space:nowrap;}
+
+/* ════════════════════════════════
+   VIEW 2: CALENDAR GRID — REDESIGN
+════════════════════════════════ */
+.cal-legend{display:flex;flex-wrap:wrap;gap:5px 10px;margin-bottom:10px;padding:8px 12px;background:var(--card);border-radius:12px;border:1px solid var(--border);}
+.cal-li{display:flex;align-items:center;gap:5px;font-size:0.6rem;color:var(--text2);font-family:var(--font-body);font-weight:500;}
+.cal-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+.cal-month-title{font-family:var(--font-display);font-size:2.2rem;font-weight:400;letter-spacing:0.05em;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;line-height:1;}
+.cal-month-ore{font-family:var(--font-body);font-size:0.7rem;font-weight:700;color:var(--green);background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.2);padding:4px 10px;border-radius:20px;letter-spacing:0.03em;}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:5px;}
+.cal-dow-lbl{text-align:center;font-size:0.68rem;color:var(--text2);text-transform:uppercase;padding:4px 0;font-family:var(--font-body);font-weight:800;letter-spacing:0.06em;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-cell{min-height:64px;aspect-ratio:auto;border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:6px 3px 5px;cursor:pointer;position:relative;border:1px solid transparent;transition:transform 0.12s,box-shadow 0.12s;}
+.cal-cell:active{transform:scale(0.92);}
+.cal-cell.cc-empty{cursor:default;background:transparent;border:none;}
+.cal-cell.cc-today{border-color:var(--accent)!important;box-shadow:0 0 0 1px var(--accent),0 4px 16px rgba(76,175,80,0.25)!important;}
+.cal-cell .cc-num{font-family:var(--font-display);font-size:1.2rem;font-weight:400;letter-spacing:0.02em;line-height:1;margin-bottom:3px;}
+.cal-cell .cc-tur{font-size:0.6rem;text-align:center;line-height:1.3;font-weight:800;color:inherit;letter-spacing:0.01em;font-family:var(--font-body);}
+.cal-cell .cc-dot{width:5px;height:5px;border-radius:50%;margin-top:2px;}
+/* Culori celule — mai vii */
+.cc-gol{background:rgba(255,255,255,0.025);border-color:rgba(255,255,255,0.06)!important;}
+.cc-gol .cc-num{color:var(--muted);}
+.cc-s1{background:linear-gradient(160deg,rgba(251,146,60,0.28),rgba(251,146,60,0.1));border-color:rgba(251,146,60,0.5)!important;}
+.cc-s1 .cc-num{color:#fb923c;}
+.cc-s2{background:linear-gradient(160deg,rgba(96,165,250,0.28),rgba(96,165,250,0.1));border-color:rgba(96,165,250,0.5)!important;}
+.cc-s2 .cc-num{color:#60a5fa;}
+.cc-liber{background:linear-gradient(160deg,rgba(74,222,128,0.22),rgba(74,222,128,0.08));border-color:rgba(74,222,128,0.45)!important;}
+.cc-liber .cc-num{color:#4ade80;}
+.cc-co{background:linear-gradient(160deg,rgba(248,113,113,0.22),rgba(248,113,113,0.08));border-color:rgba(248,113,113,0.45)!important;}
+.cc-co .cc-num{color:var(--red);}
+.cc-sarb{background:linear-gradient(160deg,rgba(255,107,107,0.22),rgba(255,107,107,0.08));border-color:rgba(255,107,107,0.45)!important;}
+.cc-sarb .cc-num{color:var(--sarb);}
+.cc-we{background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.28)!important;}
+.cc-we .cc-num{color:#a78bfa;}
+.cc-fractie{background:linear-gradient(160deg,rgba(79,195,247,0.18),rgba(79,195,247,0.06));border-color:rgba(79,195,247,0.35)!important;}
+.cc-fractie .cc-num{color:var(--blue);}
+/* Today pill indicator */
+.cal-cell.cc-today .cc-num::after{content:'';display:block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin:2px auto 0;box-shadow:0 0 6px var(--accent);}
+/* Tur number color per type */
+.cc-s1 .cc-tur{color:rgba(251,146,60,0.9);}
+.cc-s2 .cc-tur{color:rgba(96,165,250,0.9);}
+.cc-fractie .cc-tur{color:rgba(96,165,250,0.9);}
+.cc-sarb .cc-tur{color:rgba(248,113,113,0.85);}
+.cc-we .cc-tur{color:rgba(167,139,250,0.8);}
+
+/* ════════════════════════════════
+   VIEW 3: LISTĂ
+════════════════════════════════ */
+.list-month-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.list-month-title{font-family:var(--font-display);font-size:1.1rem;font-weight:800;}
+.list-stats{font-size:0.62rem;color:var(--muted);}
+.list-row{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:5px;overflow:hidden;cursor:pointer;}
+.list-row.lr-today{border-color:var(--accent);}
+.list-row.lr-sarb{border-color:rgba(255,107,107,0.4);}
+.list-row.lr-we{border-color:rgba(192,132,252,0.35);}
+.list-main{display:flex;align-items:center;padding:8px 12px;gap:10px;min-height:44px;}
+.lr-num{font-family:var(--font-display);font-size:1.1rem;font-weight:800;min-width:24px;line-height:1;}
+.ln-today{color:var(--accent);}
+.ln-sarb{color:var(--sarb);}
+.ln-we{color:var(--purple);}
+.lr-day{font-size:0.6rem;color:var(--muted);text-transform:uppercase;min-width:34px;}
+.lr-mid{flex:1;}
+.lr-tur{font-size:0.7rem;color:var(--text);font-weight:500;}
+.lr-ore{font-size:0.65rem;color:var(--accent);margin-top:1px;}
+.lr-gol{font-size:0.65rem;color:var(--muted);font-style:italic;}
+.lr-badge{font-size:0.56rem;padding:2px 7px;border-radius:12px;white-space:nowrap;}
+.tb-s1{background:rgba(251,146,60,0.12);color:var(--orange);border:1px solid rgba(251,146,60,0.3);}
+.tb-s2{background:rgba(96,165,250,0.12);color:var(--blue);border:1px solid rgba(91,140,255,0.25);}
+.tb-libre{background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+.tb-co{background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2);}
+.tb-sarb{background:rgba(255,107,107,0.12);color:var(--sarb);border:1px solid rgba(255,107,107,0.25);}
+.tb-gol2{background:rgba(90,90,117,0.1);color:var(--muted);border:1px solid rgba(90,90,117,0.2);}
+.list-expanded{padding:0 12px 10px;border-top:1px solid var(--border);background:rgba(255,255,255,0.02);}
+.le-shift{border-radius:8px;padding:8px 12px;margin-top:8px;}
+.le-s1{background:rgba(254,240,138,0.05);border:1px solid rgba(254,240,138,0.4);}
+.le-s2{background:rgba(91,140,255,0.05);border:1px solid rgba(91,140,255,0.3);}
+.le-s2d{background:rgba(254,240,138,0.05);border:1px solid rgba(254,240,138,0.4);}
+.le-g{background:rgba(91,140,255,0.05);border:1px solid rgba(91,140,255,0.3);}
+.le-gdep{background:rgba(254,240,138,0.05);border:1px solid rgba(254,240,138,0.4);}
+.le-lbl{font-size:0.48rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;color:var(--blue);}
+.le-s1 .le-lbl,.le-s2d .le-lbl,.le-gdep .le-lbl{color:var(--depou);}
+.le-dep{font-size:0.58rem;color:var(--depou);margin-bottom:2px;}
+.le-capac{font-size:0.62rem;color:var(--accent);margin-bottom:2px;}
+.le-ore{font-size:1rem;font-weight:500;color:#fff;}
+.le-s1 .le-ore,.le-s2d .le-ore,.le-gdep .le-ore{color:var(--depou);}
+.le-edit{display:block;width:100%;margin-top:8px;padding:8px;border-radius:8px;background:rgba(90,90,117,0.1);border:1px dashed rgba(90,90,117,0.3);color:var(--muted);font-family:var(--font-body);font-size:0.62rem;cursor:pointer;text-align:center;}
+.list-footer{margin:10px 0 4px;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;justify-content:space-between;align-items:center;}
+
+/* ── STATS INLINE ── */
+.stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;}
+.sb-box{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:10px 10px;text-align:center;}
+.sb-val{font-family:var(--font-display);font-size:1.4rem;font-weight:400;line-height:1;letter-spacing:0.03em;}
+.sb-lbl{font-size:0.48rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:3px;font-family:var(--font-body);font-weight:700;}
+
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;align-items:flex-end;justify-content:center;}
+.modal-overlay.active{display:flex;}
+.modal{background:#0f1626;border:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px 16px 36px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.modal-title{font-family:var(--font-display);font-size:1.1rem;font-weight:800;color:var(--accent);margin-bottom:2px;}
+.modal-sub{font-size:0.6rem;color:var(--muted);margin-bottom:14px;}
+.m-lbl{font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;display:block;margin:12px 0 6px;}
+.m-div{height:1px;background:var(--border);margin:8px 0 12px;}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.q-btn{padding:9px 4px;border-radius:9px;border:1px solid var(--border);background:var(--card2);font-family:var(--font-body);font-size:0.68rem;cursor:pointer;text-align:center;min-height:44px;}
+.q-libre{border-color:rgba(74,222,128,0.35);color:var(--green);}
+.q-co{border-color:rgba(248,113,113,0.35);color:var(--red);}
+.q-sarb{border-color:rgba(255,107,107,0.35);color:var(--sarb);}
+.q-fractie{border-color:rgba(33,150,243,0.45);color:var(--blue);background:rgba(33,150,243,0.06);}
+.tip-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+/* ── FRACȚIE MODAL ── */
+.fractie-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;align-items:flex-end;justify-content:center;}
+.fractie-overlay.active{display:flex;}
+.fractie-box{background:#0f1626;border:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.fractie-title{font-family:var(--font-display);font-size:1rem;font-weight:800;color:var(--blue);margin-bottom:4px;}
+.fractie-sub{font-size:0.6rem;color:var(--muted);margin-bottom:8px;}
+.fr-section-lbl{font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px;}
+.fr-row{display:flex;flex-direction:column;gap:4px;}
+.fr-lbl{font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;}
+.fr-input{background:#111118;border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-body);font-size:0.9rem;padding:12px 12px;width:100%;outline:none;min-height:48px;}
+.fr-input:focus{border-color:var(--blue);}
+.fr-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fr-time-quick{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.fr-tq{padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:var(--font-body);font-size:0.62rem;cursor:pointer;white-space:nowrap;min-height:32px;}
+.fr-tq:active,.fr-tq.sel{border-color:var(--blue);color:var(--blue);background:rgba(33,150,243,0.08);}
+.fractie-preview{background:#111118;border:1px solid var(--sub);border-radius:9px;padding:10px 14px;margin:14px 0 6px;min-height:52px;display:flex;flex-direction:column;gap:3px;}
+.fractie-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+.tip-btn{padding:10px 8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:var(--font-body);font-size:0.67rem;cursor:pointer;text-align:center;min-height:44px;}
+.tip-btn.act{border-color:var(--accent);color:var(--accent);background:rgba(240,192,64,0.08);}
+.sch-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.sch-btn{padding:10px 6px;border-radius:8px;border:1px solid var(--border);background:var(--card2);font-family:var(--font-body);font-size:0.7rem;cursor:pointer;text-align:center;color:var(--muted);line-height:1.5;min-height:50px;}
+.sch-btn .hint{font-size:0.55rem;color:var(--muted);}
+.sch-btn.act1{border-color:var(--orange);color:var(--orange);background:rgba(251,146,60,0.08);}
+.sch-btn.act2{border-color:var(--blue);color:var(--blue);background:rgba(91,140,255,0.08);}
+.linie-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.linie-btn{padding:14px 4px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:var(--font-body);font-size:0.88rem;font-weight:700;cursor:pointer;text-align:center;min-height:50px;}
+.linie-btn.sel{border-color:var(--accent);color:var(--accent);background:rgba(240,192,64,0.1);}
+.tur-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;max-height:200px;overflow-y:auto;padding:2px;}
+.tur-btn{padding:11px 3px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:var(--font-body);font-size:0.75rem;font-weight:600;cursor:pointer;text-align:center;min-height:46px;}
+.tur-btn.dt{border-color:rgba(254,240,138,0.3);}
+.tur-btn.sel{border-color:var(--accent);color:var(--accent);background:rgba(240,192,64,0.1);}
+.preview{background:#111118;border:1px solid var(--sub);border-radius:9px;padding:12px;margin:12px 0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center;}
+.pv-ore{color:#fff;font-size:1.1rem;font-weight:500;}
+.pv-dep{color:var(--depou);font-size:0.58rem;}
+.pv-linie{color:var(--accent);font-size:0.72rem;font-weight:500;}
+.pv-capac{color:var(--accent);font-size:0.8rem;font-weight:500;}
+.pv-dep-main{color:var(--depou);font-size:0.72rem;font-weight:500;}
+.modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+.btn-save{padding:16px 12px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-family:var(--font-body);font-size:0.78rem;font-weight:500;cursor:pointer;min-height:50px;}
+.btn-cancel{padding:16px 12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-body);font-size:0.78rem;cursor:pointer;min-height:50px;}
+.btn-delete{display:block;width:100%;margin-top:8px;padding:13px;border-radius:10px;border:1px solid rgba(248,113,113,0.35);background:rgba(248,113,113,0.06);color:var(--red);font-family:var(--font-body);font-size:0.75rem;cursor:pointer;text-align:center;min-height:44px;}
+
+/* ── EXPORT MODAL ── */
+.exp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:150;align-items:center;justify-content:center;padding:20px;}
+.exp-overlay.active{display:flex;}
+.exp-box{background:#0f1626;border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:360px;}
+.exp-title{font-family:var(--font-display);font-size:1rem;font-weight:800;color:var(--accent);margin-bottom:6px;}
+.exp-sub{font-size:0.62rem;color:var(--muted);margin-bottom:16px;line-height:1.6;}
+.exp-btns{display:flex;flex-direction:column;gap:8px;}
+.exp-btn{padding:13px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:var(--font-body);font-size:0.75rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;min-height:50px;}
+.exp-btn .eico{font-size:1.2rem;}
+.exp-close{margin-top:12px;width:100%;padding:13px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-body);font-size:0.75rem;cursor:pointer;min-height:50px;}
+/* ── BAR CHART ÎMBUNĂTĂȚIT ── */
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px 8px;margin-bottom:12px;}
+.chart-title{font-family:var(--font-display);font-size:0.7rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.chart-bars{display:flex;align-items:flex-end;gap:3px;height:80px;}
+.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;}
+.chart-bar{width:100%;border-radius:3px 3px 0 0;background:var(--stb-green);min-height:2px;transition:height 0.3s;}
+.chart-bar.cb-today{background:var(--accent);box-shadow:0 0 6px rgba(76,175,80,0.5);}
+.chart-bar.cb-empty{background:var(--border);}
+.chart-bar.cb-liber{background:rgba(74,222,128,0.35);}
+.chart-bar.cb-co{background:rgba(248,113,113,0.35);}
+.chart-bar.cb-fractie{background:rgba(33,150,243,0.5);}
+.chart-lbl{font-size:0.44rem;color:var(--muted);text-align:center;line-height:1.2;}
+.chart-val{font-size:0.44rem;color:var(--muted);text-align:center;}
+/* buton stats */
+.stats-btn{width:100%;padding:11px;border-radius:10px;border:1px solid rgba(171,71,188,0.35);background:rgba(171,71,188,0.07);color:#ce93d8;font-family:var(--font-body);font-size:0.7rem;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:6px;min-height:42px;}
+.stats-btn:active{background:rgba(171,71,188,0.18);}
+/* modal statistici */
+.stats-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:110;align-items:flex-end;justify-content:center;}
+.stats-overlay.active{display:flex;}
+.stats-modal{background:#0f1626;border:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.sm-title{font-family:var(--font-display);font-size:1.1rem;font-weight:800;color:#ce93d8;margin-bottom:2px;}
+.sm-sub{font-size:0.6rem;color:var(--muted);margin-bottom:16px;}
+.sm-section{font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;border-bottom:1px solid var(--border);padding-bottom:5px;margin:16px 0 10px;}
+.sm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+.sm-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px;}
+.sm-box{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center;}
+.sm-val{font-family:var(--font-display);font-size:1.3rem;font-weight:800;line-height:1;}
+.sm-lbl{font-size:0.48rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-top:3px;}
+.sm-linie-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card2);border-radius:8px;margin-bottom:5px;border:1px solid var(--border);}
+.sm-linie-name{font-size:0.75rem;color:var(--accent);font-weight:500;}
+.sm-linie-val{font-size:0.65rem;color:var(--text);}
+.sm-linie-bar{height:4px;border-radius:2px;background:var(--stb-green);margin-top:4px;}
+.sm-prog-wrap{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;}
+.sm-prog-label{display:flex;justify-content:space-between;font-size:0.62rem;margin-bottom:5px;}
+.sm-prog-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;}
+.sm-prog-fill{height:100%;border-radius:3px;transition:width 0.4s;}
+.sm-note{font-size:0.58rem;color:var(--muted);text-align:center;margin-top:8px;line-height:1.6;}
+
+/* ── ORE SAPTAMANA ── */
+.week-ore-bar{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.wob-label{font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;}
+.wob-val{font-family:var(--font-display);font-size:1.1rem;font-weight:800;color:var(--green);}
+.wob-sub{font-size:0.55rem;color:var(--muted);margin-top:1px;}
+
+/* ── ORE SUPLIMENTARE ── */
+.ore-supl-row{display:flex;align-items:center;gap:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:10px 12px;margin-top:8px;}
+.ore-supl-ico{font-size:1.2rem;flex-shrink:0;}
+.ore-supl-lbl{font-size:0.62rem;color:var(--depou);font-weight:700;flex:1;}
+.ore-supl-inp{width:64px;padding:6px 8px;border-radius:8px;border:1px solid rgba(251,191,36,0.4);background:rgba(251,191,36,0.08);color:var(--depou);font-family:var(--font-body);font-size:0.85rem;font-weight:700;text-align:center;}
+.ore-supl-unit{font-size:0.6rem;color:var(--muted);}
+
+/* ── MANUAL MODE (depouri fără indicatori) ── */
+.manual-section{background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:12px;padding:12px 14px;margin-top:10px;}
+.manual-title{font-size:0.6rem;color:var(--blue);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:10px;}
+.manual-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.manual-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;}
+.manual-field{display:flex;flex-direction:column;gap:4px;}
+.manual-lbl{font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;}
+.manual-inp{padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--card2);color:var(--text);font-family:var(--font-body);font-size:0.85rem;font-weight:600;text-align:center;width:100%;}
+.manual-inp:focus{outline:none;border-color:var(--blue);}
+.manual-prev{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);border-radius:8px;padding:8px 12px;margin-top:6px;font-size:0.72rem;color:var(--blue);text-align:center;min-height:36px;display:flex;align-items:center;justify-content:center;}
+
+/* ── ORE MANUALE (tura existentă + ore custom) ── */
+.ore-manual-toggle{width:100%;padding:8px;border-radius:8px;border:1px dashed rgba(96,165,250,0.3);background:transparent;color:var(--blue);font-family:var(--font-body);font-size:0.6rem;cursor:pointer;margin-top:8px;letter-spacing:0.04em;}
+.ore-manual-section{display:none;background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:10px 12px;margin-top:6px;}
+.ore-manual-section.open{display:block;}
+
+/* ── MESAJ AVERTIZARE OFICIAL ── */
+.warning-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.97);z-index:600;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px 20px;font-family:'Plus Jakarta Sans',sans-serif;}
+.warning-box{background:#0f1828;border:2px solid rgba(251,191,36,0.5);border-radius:20px;
+  padding:24px 20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;}
+.warning-icon{font-size:3rem;text-align:center;margin-bottom:12px;}
+.warning-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:#fbbf24;
+  letter-spacing:0.06em;text-align:center;margin-bottom:16px;line-height:1.1;}
+.warning-body{font-size:0.72rem;color:#94a3b8;line-height:1.7;margin-bottom:16px;}
+.warning-body strong{color:#e2e8f0;}
+.warning-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
+  background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);
+  border-radius:10px;margin-bottom:8px;font-size:0.7rem;color:#94a3b8;line-height:1.5;}
+.warning-item-ico{font-size:1.1rem;flex-shrink:0;margin-top:1px;}
+.warning-check-row{display:flex;align-items:flex-start;gap:10px;padding:12px;
+  background:rgba(34,211,165,0.06);border:1px solid rgba(34,211,165,0.2);
+  border-radius:12px;margin:16px 0 14px;cursor:pointer;}
+.warning-check-row input[type=checkbox]{width:18px;height:18px;flex-shrink:0;
+  accent-color:#22d3a5;margin-top:1px;cursor:pointer;}
+.warning-check-lbl{font-size:0.68rem;color:#e2e8f0;line-height:1.5;cursor:pointer;}
+.warning-btn{width:100%;padding:14px;border-radius:12px;border:none;
+  background:#334155;color:#64748b;font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:0.85rem;font-weight:800;cursor:not-allowed;transition:all 0.2s;letter-spacing:0.02em;}
+.warning-btn.enabled{background:linear-gradient(135deg,#22d3a5,#0d9488);
+  color:#fff;cursor:pointer;box-shadow:0 4px 16px rgba(34,211,165,0.3);}
+</style>
+</head>
+<body>
+
+<!-- MESAJ AVERTIZARE — apare la fiecare deschidere -->
+<div class="warning-overlay" id="warning-overlay">
+  <div class="warning-box">
+    <div class="warning-icon">⚠️</div>
+    <div class="warning-title">Aplicație neoficială STB</div>
+
+    <div class="warning-item">
+      <span class="warning-item-ico">🏢</span>
+      <span>Această aplicație <strong>nu este realizată, avizată sau afiliată oficial</strong> cu STB S.A. sau cu orice altă instituție publică.</span>
+    </div>
+    <div class="warning-item">
+      <span class="warning-item-ico">📋</span>
+      <span>Indicatorii de ore din aplicație pot fi <strong>modificați de STB</strong> fără notificare prealabilă. Actualizările în aplicație pot apărea cu <strong>întârzieri de câteva zile.</strong></span>
+    </div>
+    <div class="warning-item">
+      <span class="warning-item-ico">✅</span>
+      <span>Verifică întotdeauna <strong>sursa oficială STB</strong> sau avizierul depoulul tău pentru programul de lucru valabil.</span>
+    </div>
+    <div class="warning-item">
+      <span class="warning-item-ico">📱</span>
+      <span>Aplicația este un instrument <strong>auxiliar de organizare personală</strong> și nu înlocuiește documentele oficiale.</span>
+    </div>
+
+    <label class="warning-check-row" onclick="toggleWarningCheck()">
+      <input type="checkbox" id="warning-checkbox" onchange="toggleWarningBtn()">
+      <span class="warning-check-lbl">Am înțeles că această aplicație este neoficială și voi verifica întotdeauna sursa oficială STB pentru programul meu de lucru.</span>
+    </label>
+
+    <button class="warning-btn" id="warning-btn" disabled onclick="closeWarning()">
+      Continuă către aplicație →
+    </button>
+  </div>
+</div>
+
+<!-- DEPOT SCREEN -->
+<div class="depot-screen" id="depot-screen">
+  <!-- SVG tramvai Imperio stilizat -->
+  <svg viewBox="0 0 320 120" style="width:min(180px,55vw);max-width:90%;margin-bottom:0" xmlns="http://www.w3.org/2000/svg">
+    <!-- corp tramvai -->
+    <rect x="10" y="20" width="300" height="75" rx="12" fill="#3da84a"/>
+    <rect x="10" y="20" width="300" height="75" rx="12" fill="none" stroke="#2a7a32" stroke-width="2"/>
+    <!-- banda alba -->
+    <rect x="10" y="50" width="300" height="18" fill="#f5f5f5"/>
+    <!-- geamuri -->
+    <rect x="25" y="28" width="38" height="20" rx="3" fill="#b3e5fc" opacity="0.8"/>
+    <rect x="75" y="28" width="38" height="20" rx="3" fill="#b3e5fc" opacity="0.8"/>
+    <rect x="125" y="28" width="38" height="20" rx="3" fill="#b3e5fc" opacity="0.8"/>
+    <rect x="175" y="28" width="38" height="20" rx="3" fill="#b3e5fc" opacity="0.8"/>
+    <rect x="225" y="28" width="38" height="20" rx="3" fill="#b3e5fc" opacity="0.8"/>
+    <!-- faruri -->
+    <circle cx="40" cy="85" r="7" fill="#fff9c4" stroke="#f0c040" stroke-width="1.5"/>
+    <circle cx="280" cy="85" r="7" fill="#fff9c4" stroke="#f0c040" stroke-width="1.5"/>
+    <!-- roti -->
+    <rect x="30" y="92" width="260" height="8" rx="2" fill="#1b2e1b"/>
+    <circle cx="65" cy="99" r="8" fill="#222" stroke="#555" stroke-width="1.5"/>
+    <circle cx="65" cy="99" r="3" fill="#888"/>
+    <circle cx="175" cy="99" r="8" fill="#222" stroke="#555" stroke-width="1.5"/>
+    <circle cx="175" cy="99" r="3" fill="#888"/>
+    <circle cx="255" cy="99" r="8" fill="#222" stroke="#555" stroke-width="1.5"/>
+    <circle cx="255" cy="99" r="3" fill="#888"/>
+    <!-- logo STB pe banda alba -->
+    <text x="145" y="63" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="#3da84a" text-anchor="middle">STB</text>
+    <!-- Imperio text -->
+    <text x="160" y="45" font-family="Arial,sans-serif" font-size="7" fill="#fff" text-anchor="middle" opacity="0.9">IMPERIO METROPOLITAN</text>
+    <!-- numar vagon -->
+    <text x="270" y="88" font-family="monospace" font-size="8" fill="#fff9c4" text-anchor="middle">3865</text>
+    <!-- pantograf -->
+    <line x1="80" y1="20" x2="100" y2="5" stroke="#888" stroke-width="1.5"/>
+    <line x1="100" y1="5" x2="200" y2="5" stroke="#aaa" stroke-width="1.5"/>
+    <line x1="200" y1="5" x2="220" y2="20" stroke="#888" stroke-width="1.5"/>
+    <line x1="100" y1="5" x2="100" y2="0" stroke="#aaa" stroke-width="1"/>
+    <line x1="200" y1="5" x2="200" y2="0" stroke="#aaa" stroke-width="1"/>
+  </svg>
+  <div class="depot-title" style="font-size:1.5rem;margin-top:0">Program STB 2026+</div>
+  <div class="depot-sub">Alege depoul tău</div>
+  <div class="depot-cards">
+    <div class="depot-card" id="dc-dudesti" onclick="selDepot('dudesti')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Dudești</div>
+        <div class="depot-desc">Linii: 1 · 5 · 7 · 10 · 27</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-giurgiu" onclick="selDepot('giurgiu')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Giurgiu</div>
+        <div class="depot-desc">Linii: 1 · 7 · 25</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-victoria" onclick="selDepot('victoria')">
+      <div class="depot-icon" style="font-size:1.6rem">🚋</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Victoria</div>
+        <div class="depot-desc">Linii: 5 · 10 · 11 · 47</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-titan" onclick="selDepot('titan')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Titan</div>
+        <div class="depot-desc" id="desc-titan">Linii: în curând</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-alexandria" onclick="selDepot('alexandria')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Alexandria</div>
+        <div class="depot-desc" id="desc-alexandria">Linii: în curând</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-colentina" onclick="selDepot('colentina')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Colentina</div>
+        <div class="depot-desc" id="desc-colentina">Linii: în curând</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-militari" onclick="selDepot('militari')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Militari</div>
+        <div class="depot-desc" id="desc-militari">Linii: în curând</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-budesti" onclick="selDepot('budesti')">
+      <div class="depot-icon" style="font-size:1.6rem">🚃</div>
+      <div class="depot-info">
+        <div class="depot-name">Depoul Budești Noi</div>
+        <div class="depot-desc" id="desc-budesti">Linii: în curând</div>
+      </div>
+    </div>
+    <div class="depot-card" id="dc-autobuze" onclick="selDepot('autobuze')">
+      <div class="depot-icon" style="font-size:1.6rem">🚌🚎</div>
+      <div class="depot-info">
+        <div class="depot-name">Autobuze / Troleibuze</div>
+        <div class="depot-desc">STB · Completare manuală</div>
+      </div>
+    </div>
+  </div>
+  <button class="depot-btn" onclick="confirmDepot()">Continuă →</button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div class="app-header">
+    <div class="app-header-left">
+      <div class="app-title" id="app-title-admin" ontouchstart="startAdminHold()" ontouchend="cancelAdminHold()" onmousedown="startAdminHold()" onmouseup="cancelAdminHold()" style="cursor:default;user-select:none;">Program 2026</div>
+      <div class="app-depot" id="app-depot" onclick="showDepotScreen()">🔄 Schimbă depoul</div>
+    </div>
+    <div class="header-btns">
+      <button class="hbtn hbtn-install" id="install-btn" onclick="installPWA()" style="display:none">📲 Instalează</button>
+      <button class="hbtn" onclick="showExport()">💾 Backup</button>
+    </div>
+  </div>
+  <div class="month-tabs" id="month-tabs"></div>
+  <div class="view-container" id="view-container"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav" id="bottom-nav" style="display:none">
+  <button class="nav-btn active" id="nav-azi" onclick="setView('azi')">
+    <span class="nav-ico">📆</span>Săptămână
+  </button>
+  <button class="nav-btn" id="nav-calendar" onclick="setView('calendar')">
+    <span class="nav-ico">📅</span>Lună
+  </button>
+  <button class="nav-btn" id="nav-lista" onclick="setView('lista')">
+    <span class="nav-ico">📄</span>Zi
+  </button>
+  <button class="nav-btn" onclick="showContact()">
+    <span class="nav-ico">💬</span>Suport
+  </button>
+</nav>
+
+<!-- EXPORT -->
+<div class="exp-overlay" id="exp-overlay">
+  <div class="exp-box">
+    <div class="exp-title">💾 Backup date</div>
+    <div class="exp-sub">Salvează sau restaurează programul. Util dacă schimbi telefonul sau ștergi cache-ul.</div>
+    <div class="exp-btns">
+      <button class="exp-btn" onclick="exportData()"><span class="eico">📤</span><div><div style="font-weight:500">Exportă (copiază text)</div><div style="font-size:0.58rem;color:var(--muted);margin-top:2px">Salvează-l într-o notă sau email</div></div></button>
+      <button class="exp-btn" onclick="importData()"><span class="eico">📥</span><div><div style="font-weight:500">Importă date</div><div style="font-size:0.58rem;color:var(--muted);margin-top:2px">Restaurează dintr-un backup</div></div></button>
+      <button class="exp-btn" onclick="resetData()" style="border-color:rgba(248,113,113,0.3);color:var(--red)"><span class="eico">🗑️</span><div><div style="font-weight:500">Șterge tot</div><div style="font-size:0.58rem;color:var(--muted);margin-top:2px">Resetează toate datele</div></div></button>
+    </div>
+    <button class="exp-close" onclick="hideExport()">Închide</button>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title" id="mtitle"></div>
+    <div class="modal-sub" id="msub"></div>
+    <span class="m-lbl">Acțiuni rapide</span>
+    <div class="quick-grid">
+      <button class="q-btn q-libre" onclick="setQ('liber')">🟢 Liber</button>
+      <button class="q-btn q-co" onclick="setQ('co')">🔴 CO</button>
+      <button class="q-btn q-fractie" onclick="openFractie()">✂️ Fracție</button>
+    </div>
+    <div class="m-div"></div>
+    <span class="m-lbl" id="tip-lbl">Indicatori</span>
+    <div class="tip-btns" id="tip-btns-wrap">
+      <button class="tip-btn" id="tzl" onclick="sTip('zl')">📅 Zi lucrătoare</button>
+      <button class="tip-btn" id="twe" onclick="sTip('we')">🗓️ Sâmbătă/Duminică</button>
+    </div>
+    <div id="sch-section">
+      <span class="m-lbl">Schimb</span>
+      <div class="sch-btns">
+        <button class="sch-btn" id="s1btn" onclick="sSch(1)">1 — Dimineață<br><span class="hint">Plecare din depou</span></button>
+        <button class="sch-btn" id="s2btn" onclick="sSch(2)">2 — După-amiază<br><span class="hint">Schimb de tură</span></button>
+      </div>
+    </div>
+    <span class="m-lbl" id="lbl-linie">Linia</span>
+    <div class="linie-grid" id="liniegrid"></div>
+    <div id="tur-section" style="display:none">
+      <span class="m-lbl" id="lbl-tur">Tur</span>
+      <div class="tur-grid" id="turgrid"></div>
+    </div>
+    <div class="preview" id="preview"><span style="color:var(--muted);font-size:0.66rem">Alege linia și turul</span></div>
+
+    <!-- ORE MANUALE opționale (override ore din indicator) -->
+    <button class="ore-manual-toggle" id="ore-manual-toggle" onclick="toggleOreManuale()">✏️ Modifică orele manual (opțional)</button>
+    <div class="ore-manual-section" id="ore-manual-section">
+      <div class="manual-row2">
+        <div class="manual-field">
+          <span class="manual-lbl">Ora start</span>
+          <input class="manual-inp" id="om-start" type="text" placeholder="05:30" maxlength="5" inputmode="numeric" oninput="fmtTimeInput(this);uPrevManual()">
+        </div>
+        <div class="manual-field">
+          <span class="manual-lbl">Ora sfârșit</span>
+          <input class="manual-inp" id="om-end" type="text" placeholder="13:45" maxlength="5" inputmode="numeric" oninput="fmtTimeInput(this);uPrevManual()">
+        </div>
+      </div>
+      <div id="om-prev" class="manual-prev" style="color:var(--muted);font-size:0.62rem;">Introdu orele pentru a vedea durata</div>
+    </div>
+
+    <!-- ORE SUPLIMENTARE -->
+    <div class="ore-supl-row" id="ore-supl-row" style="display:none">
+      <span class="ore-supl-ico">⏱️</span>
+      <span class="ore-supl-lbl">Ore suplimentare</span>
+      <input class="ore-supl-inp" id="ore-supl-inp" type="number" min="0" max="480" placeholder="0" inputmode="numeric">
+      <span class="ore-supl-unit">min</span>
+    </div>
+
+    <!-- MANUAL COMPLET (pentru depouri fără indicatori) -->
+    <div class="manual-section" id="manual-complet-section" style="display:none">
+      <div class="manual-title">✏️ Completează manual (fără indicator)</div>
+      <div class="manual-row2">
+        <div class="manual-field">
+          <span class="manual-lbl">Linia</span>
+          <input class="manual-inp" id="mc-linie" type="text" placeholder="335" maxlength="10" inputmode="numeric" oninput="uManualPrev()">
+        </div>
+        <div class="manual-field">
+          <span class="manual-lbl">Tur</span>
+          <input class="manual-inp" id="mc-tur" type="text" placeholder="4" maxlength="10" inputmode="numeric" oninput="uManualPrev()">
+        </div>
+      </div>
+      <div class="manual-row3">
+        <div class="manual-field">
+          <span class="manual-lbl">Ora start</span>
+          <input class="manual-inp" id="mc-start" type="text" placeholder="05:30" maxlength="5" inputmode="numeric" oninput="fmtTimeInput(this);uManualPrev()">
+        </div>
+        <div class="manual-field">
+          <span class="manual-lbl">Ora sfârșit</span>
+          <input class="manual-inp" id="mc-end" type="text" placeholder="13:45" maxlength="5" inputmode="numeric" oninput="fmtTimeInput(this);uManualPrev()">
+        </div>
+        <div class="manual-field">
+          <span class="manual-lbl">Ore supl.</span>
+          <input class="manual-inp" id="mc-supl" type="number" min="0" max="480" placeholder="0" inputmode="numeric" oninput="uManualPrev()">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.62rem;color:var(--muted);">
+          <input type="checkbox" id="mc-depou" onchange="uManualPrev()" style="accent-color:var(--depou)"> 
+          <span>🚌 Plecare din depou</span>
+        </label>
+      </div>
+      <div id="mc-prev" class="manual-prev">Completează datele de mai sus</div>
+    </div>
+
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeM()">Anulează</button>
+      <button class="btn-save" onclick="saveD()">✓ Salvează</button>
+    </div>
+    <button class="btn-delete" id="btn-delete-zi" onclick="deleteZi()" style="display:none">🗑️ Șterge ziua</button>
+  </div>
+</div>
+
+<!-- FRACȚIE MODAL -->
+<div class="fractie-overlay" id="fractie-modal">
+  <div class="fractie-box">
+    <div class="fractie-title">✂️ Completează tura</div>
+    <div class="fractie-sub" id="fractie-sub">Completează datele turului</div>
+
+    <div class="fr-section-lbl">Completează Tura</div>
+
+    <div class="fr-row-2" style="margin-bottom:10px">
+      <div class="fr-row">
+        <label class="fr-lbl">Linia</label>
+        <input class="fr-input" id="fr-linie" type="text" placeholder="335" maxlength="10" inputmode="numeric">
+      </div>
+      <div class="fr-row">
+        <label class="fr-lbl">Tur</label>
+        <input class="fr-input" id="fr-tur" type="text" placeholder="4" maxlength="10" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="fr-row-2" style="margin-bottom:10px">
+      <div class="fr-row">
+        <label class="fr-lbl">Ora Start</label>
+        <input class="fr-input fr-time" id="fr-start" type="text" placeholder="05:30" maxlength="5" inputmode="numeric">
+      </div>
+      <div class="fr-row">
+        <label class="fr-lbl">Ora Finish</label>
+        <input class="fr-input fr-time" id="fr-end" type="text" placeholder="13:00" maxlength="5" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="fr-row" style="margin-bottom:10px">
+      <label class="fr-lbl">Notă (opțional)</label>
+      <input class="fr-input" id="fr-nota" type="text" placeholder="ex: schimb cu Ionescu, mașina 214..." maxlength="80" inputmode="text">
+    </div>
+
+    <div class="fractie-preview" id="fractie-preview">
+      <span style="color:var(--muted);font-size:0.66rem">Completează datele de mai sus</span>
+    </div>
+    <div class="fractie-btns">
+      <button class="btn-cancel" onclick="closeFractie()">Anulează</button>
+      <button class="btn-save" onclick="saveFractie()">✓ Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL STATISTICI -->
+<div class="stats-overlay" id="stats-overlay">
+  <div class="stats-modal">
+    <div class="sm-title">📊 Statistici</div>
+    <div class="sm-sub" id="sm-sub">—</div>
+
+    <div class="sm-section">⏱ Ore lucrate</div>
+    <div class="sm-grid" id="sm-ore-grid"></div>
+    <div class="sm-prog-wrap" id="sm-ore-prog"></div>
+
+    <div class="sm-section">📅 Zile</div>
+    <div class="sm-grid-3" id="sm-zile-grid"></div>
+
+    <div class="sm-section">🚌 Ieșiri din depou</div>
+    <div class="sm-grid" id="sm-depou-grid"></div>
+
+    <div class="sm-section">🚃 Zile pe linie</div>
+    <div id="sm-linii-list"></div>
+
+    <div class="sm-section">🔀 Schimburi</div>
+    <div class="sm-grid" id="sm-schimburi-grid"></div>
+
+    <div class="sm-section">✂️ Fracții</div>
+    <div class="sm-grid" id="sm-fractii-grid"></div>
+
+    <div class="sm-note" id="sm-note"></div>
+
+    <button class="btn-cancel" style="width:100%;margin-top:14px" onclick="closeStats()">Închide</button>
+  </div>
+</div>
+
+<script>
+
+// ==================== AVERTIZARE NEOFICIALĂ ====================
+function toggleWarningCheck(){
+  const cb = document.getElementById('warning-checkbox');
+  cb.checked = !cb.checked;
+  toggleWarningBtn();
+}
+function toggleWarningBtn(){
+  const cb  = document.getElementById('warning-checkbox');
+  const btn = document.getElementById('warning-btn');
+  btn.disabled = !cb.checked;
+  btn.className = 'warning-btn' + (cb.checked ? ' enabled' : '');
+}
+function closeWarning(){
+  const cb = document.getElementById('warning-checkbox');
+  if(!cb.checked) return;
+  const el = document.getElementById('warning-overlay');
+  el.style.opacity = '0';
+  el.style.transition = 'opacity 0.3s';
+  setTimeout(() => el.remove(), 300);
+}
+// Arată avertizarea la fiecare deschidere (nu se poate ascunde permanent)
+window.addEventListener('DOMContentLoaded', () => {
+  // Avertizarea e mereu vizibilă — nu verificăm localStorage
+  // Se afișează indiferent
+});
+
+// ==================== PWA INSTALL ====================
+let deferredPrompt = null;
+
+// Detectează iOS (iPhone / iPad / iPod)
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || 
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Detectează dacă rulează deja ca PWA (standalone)
+const isStandalone = window.navigator.standalone === true || 
+                     window.matchMedia('(display-mode: standalone)').matches;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.getElementById('install-btn');
+  if(btn) btn.style.display = 'flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  // GA4: instalare PWA confirmată de browser
+  gaEvent('pwa_installed', { platform: getPlatform(), event_category: 'pwa' });
+  deferredPrompt = null;
+  const btn = document.getElementById('install-btn');
+  if(btn) btn.style.display = 'none';
+  // Înregistrăm instalarea în analytics
+  trackEvent('install');
+});
+
+// Afișăm butonul pe iOS dacă nu e deja instalat
+window.addEventListener('DOMContentLoaded', () => {
+  if (isIOS && !isStandalone) {
+    const btn = document.getElementById('install-btn');
+    if(btn) btn.style.display = 'flex';
+  }
+  // Ecranul de consimțământ — apare pentru toți care nu au răspuns la v3
+  setTimeout(showConsentScreen, 800);
+});
+
+async function installPWA() {
+  // GA4: utilizatorul a apăsat butonul Instalează
+  gaEvent('install_button_click', { platform: getPlatform(), event_category: 'pwa' });
+  if (deferredPrompt) {
+    // Android / Chrome — prompt nativ
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    if(outcome === 'accepted') {
+      const btn = document.getElementById('install-btn');
+      if(btn) btn.style.display = 'none';
+      trackEvent('install');
+    }
+  } else if (isIOS) {
+    // iOS Safari — instrucțiuni vizuale
+    showIOSInstallGuide();
+  } else {
+    alert('Pentru instalare:\n📱 iOS Safari: apasă Share → "Adaugă pe ecranul principal"\n🤖 Android Chrome: apasă meniu ⋮ → "Adaugă pe ecranul principal"');
+  }
+}
+
+function showIOSInstallGuide() {
+  // Creăm un overlay cu instrucțiuni iOS dacă nu există deja
+  if(document.getElementById('ios-install-guide')) {
+    document.getElementById('ios-install-guide').style.display = 'flex';
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'ios-install-guide';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:300;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    padding:0 0 env(safe-area-inset-bottom);
+  `;
+  overlay.innerHTML = `
+    <div style="background:#0f1626;border:1px solid #22d3a5;border-radius:20px 20px 0 0;
+      padding:24px 20px 36px;width:100%;max-width:500px;text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:#22d3a5;letter-spacing:0.05em;margin-bottom:6px;">
+        📲 Instalează pe iPhone / iPad
+      </div>
+      <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:20px;">
+        Urmează pașii de mai jos în Safari:
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;text-align:left;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:12px;background:#111827;border:1px solid #1e2d47;
+          border-radius:12px;padding:12px 14px;">
+          <span style="font-size:1.6rem;flex-shrink:0;">1️⃣</span>
+          <div>
+            <div style="font-size:0.75rem;font-weight:700;color:#e2e8f0;margin-bottom:2px;">
+              Apasă butonul Share
+            </div>
+            <div style="font-size:0.62rem;color:#94a3b8;">
+              Butonul <strong style="color:#60a5fa;">□↑</strong> din bara de jos a Safari
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:#111827;border:1px solid #1e2d47;
+          border-radius:12px;padding:12px 14px;">
+          <span style="font-size:1.6rem;flex-shrink:0;">2️⃣</span>
+          <div>
+            <div style="font-size:0.75rem;font-weight:700;color:#e2e8f0;margin-bottom:2px;">
+              Derulează și apasă „Adaugă pe ecranul principal"
+            </div>
+            <div style="font-size:0.62rem;color:#94a3b8;">
+              Iconița <strong style="color:#60a5fa;">＋</strong> în meniu
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:#111827;border:1px solid #1e2d47;
+          border-radius:12px;padding:12px 14px;">
+          <span style="font-size:1.6rem;flex-shrink:0;">3️⃣</span>
+          <div>
+            <div style="font-size:0.75rem;font-weight:700;color:#e2e8f0;margin-bottom:2px;">
+              Apasă „Adaugă" în colțul dreapta-sus
+            </div>
+            <div style="font-size:0.62rem;color:#94a3b8;">
+              Aplicația apare pe Home Screen ca o aplicație normală
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Săgeată animată în jos care indică bara Safari -->
+      <div style="font-size:1.8rem;animation:bounce-arrow 1.2s ease-in-out infinite;margin-bottom:16px;">⬇️</div>
+      <button onclick="document.getElementById('ios-install-guide').style.display='none'"
+        style="width:100%;padding:13px;border-radius:12px;border:none;background:#22d3a5;
+        color:#fff;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.85rem;font-weight:800;cursor:pointer;">
+        Am înțeles!
+      </button>
+    </div>
+  `;
+  // Animatie sageata
+  if(!document.getElementById('ios-bounce-style')) {
+    const st = document.createElement('style');
+    st.id = 'ios-bounce-style';
+    st.textContent = '@keyframes bounce-arrow{0%,100%{transform:translateY(0);}50%{transform:translateY(8px);}}';
+    document.head.appendChild(st);
+  }
+  document.body.appendChild(overlay);
+}
+
+// ==================== ANALYTICS — Google Analytics 4 (fără token, fără risc) ====================
+// Tracking-ul e gestionat complet de GA4 (G-V7Z1X668FR) inclus în <head>
+// gaEvent() e deja definit mai sus — folosim doar aia
+
+// Ecran de consimțământ simplu — GA4 respectă preferința utilizatorului
+const CONSENT_VERSION = 'v4';
+
+function hasConsent() {
+  return localStorage.getItem('stb_consent') === 'yes_' + CONSENT_VERSION;
+}
+
+function showConsentScreen() {
+  if (hasConsent()) {
+    // A acceptat deja — GA4 e activ
+    gaEvent('app_open_return', { platform: getPlatform() });
+    return;
+  }
+
+  const existing = document.getElementById('consent-screen');
+  if (existing) return;
+
+  const screen = document.createElement('div');
+  screen.id = 'consent-screen';
+  screen.style.cssText = `
+    position:fixed;inset:0;z-index:500;
+    background:linear-gradient(160deg,#070b14 0%,#0d1a2e 60%,#070b14 100%);
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    padding:0;font-family:'Plus Jakarta Sans',sans-serif;
+  `;
+  screen.innerHTML = `
+    <div style="width:100%;max-width:500px;
+      background:#0f1626;
+      border-radius:28px 28px 0 0;
+      border-top:1px solid rgba(34,211,165,0.25);
+      padding:28px 22px 44px;
+      text-align:center;">
+
+      <div style="font-size:2.8rem;margin-bottom:12px;line-height:1;">🚃</div>
+
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.7rem;
+        color:#e2e8f0;letter-spacing:0.05em;line-height:1.1;margin-bottom:8px;">
+        Bun venit la Program STB!
+      </div>
+
+      <div style="font-size:0.78rem;color:#94a3b8;
+        line-height:1.6;margin-bottom:24px;max-width:300px;margin-left:auto;margin-right:auto;">
+        Ne ajuți să știm că aplicația e folosită?<br>
+        <span style="color:#64748b;font-size:0.68rem;">Nicio dată personală — doar statistici anonime prin Google Analytics.</span>
+      </div>
+
+      <button onclick="setConsent(true)"
+        style="width:100%;padding:17px;border-radius:16px;border:none;
+        background:linear-gradient(135deg,#22d3a5 0%,#0d9488 100%);
+        color:#0b0f1a;font-family:'Plus Jakarta Sans',sans-serif;
+        font-size:0.95rem;font-weight:800;cursor:pointer;
+        box-shadow:0 6px 24px rgba(34,211,165,0.35);
+        margin-bottom:10px;letter-spacing:0.01em;">
+        👍 Da, cu plăcere!
+      </button>
+
+      <button onclick="setConsent(false)"
+        style="width:100%;padding:10px;border-radius:12px;
+        border:none;background:transparent;
+        color:#334155;font-family:'Plus Jakarta Sans',sans-serif;
+        font-size:0.65rem;font-weight:500;cursor:pointer;">
+        nu acum
+      </button>
+    </div>
+  `;
+  document.body.appendChild(screen);
+}
+
+function setConsent(yes) {
+  if (yes) {
+    localStorage.setItem('stb_consent', 'yes_' + CONSENT_VERSION);
+    const s = document.getElementById('consent-screen');
+    if (s) {
+      s.style.opacity = '0';
+      s.style.transition = 'opacity 0.3s';
+      setTimeout(() => s.remove(), 300);
+    }
+    // Activăm GA4 tracking
+    try { gtag('consent', 'update', { analytics_storage: 'granted' }); } catch(e) {}
+    gaEvent('consent_accepted', { platform: getPlatform() });
+  } else {
+    // Refuz — animație shake pe buton
+    const btn = document.querySelector('#consent-screen button:first-of-type');
+    if (btn) {
+      btn.style.animation = 'shake 0.4s ease';
+      btn.textContent = '👆 Apasă aici pentru a continua';
+    }
+    if (!document.getElementById('shake-style')) {
+      const st = document.createElement('style');
+      st.id = 'shake-style';
+      st.textContent = `@keyframes shake {
+        0%,100%{transform:translateX(0)}
+        20%{transform:translateX(-8px)}
+        40%{transform:translateX(8px)}
+        60%{transform:translateX(-6px)}
+        80%{transform:translateX(6px)}
+      }`;
+      document.head.appendChild(st);
+    }
+  }
+}
+
+// Funcție dummy — GA4 face tracking automat, nu mai avem nevoie de trackEvent manual
+function trackEvent(type) {
+  try {
+    if (type === 'install') gaEvent('pwa_installed', { platform: getPlatform(), event_category: 'pwa' });
+    if (type === 'visit')   gaEvent('app_open', { platform: getPlatform(), event_category: 'engagement' });
+  } catch(e) {}
+}
+
+// ── Panou admin ──
+function checkAdminCode() {
+
+  const cod = prompt('Cod admin:');
+  if (cod === 'Andrei') showAdminPanel();
+  else if (cod !== null) alert('Cod greșit.');
+}
+
+async function showAdminPanel() {
+  let adm = document.getElementById('admin-panel');
+  if (adm) adm.remove();
+  adm = document.createElement('div');
+  adm.id = 'admin-panel';
+  adm.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:400;display:flex;align-items:flex-end;justify-content:center;`;
+
+  // Loading state
+  adm.innerHTML = `
+    <div style="background:#0f1626;border:1px solid #22d3a5;border-radius:20px 20px 0 0;
+      padding:40px 18px 50px;width:100%;max-width:500px;text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:#22d3a5;margin-bottom:16px;">🔐 Panou Admin</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:24px;">
+        <div style="width:36px;height:36px;border:3px solid #22d3a5;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <div style="color:#94a3b8;font-size:0.7rem;">Se conectează la Google Analytics...</div>
+      </div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+      <button onclick="document.getElementById('admin-panel').remove()"
+        style="width:100%;padding:12px;border-radius:12px;border:1px solid #1e2d47;
+        background:transparent;color:#94a3b8;font-size:0.8rem;cursor:pointer;">Închide</button>
+    </div>`;
+  document.body.appendChild(adm);
+
+  // ── Colectăm date locale (din localStorage) ──
+  // Acestea sunt date pe care le strângem noi — GA4 nu are API public gratuit
+  // Dar afișăm link direct către GA4 + date locale acumulate
+
+  // Date locale stocate
+  let localStats = {};
+  try {
+    const raw = localStorage.getItem('stb_admin_stats');
+    localStats = raw ? JSON.parse(raw) : {};
+  } catch(e){}
+
+  // Actualizăm sesiunea curentă
+  const today = new Date().toISOString().split('T')[0];
+  const platform = getPlatform();
+  localStats.sessions = (localStats.sessions || 0) + 1;
+  localStats.byDate = localStats.byDate || {};
+  localStats.byDate[today] = (localStats.byDate[today] || 0) + 1;
+  localStats.byPlatform = localStats.byPlatform || {};
+  localStats.byPlatform[platform] = (localStats.byPlatform[platform] || 0) + 1;
+  localStats.firstSeen = localStats.firstSeen || today;
+  try { localStorage.setItem('stb_admin_stats', JSON.stringify(localStats)); } catch(e){}
+
+  // ── Grafic 14 zile ──
+  const last14 = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const label = d.getDate() + '/' + (d.getMonth()+1);
+    last14.push({ key, label, count: (localStats.byDate||{})[key] || 0 });
+  }
+  const maxBar = Math.max(...last14.map(x => x.count), 1);
+
+  const chartHtml = last14.map(x => {
+    const pct = Math.round((x.count / maxBar) * 100);
+    const isToday = x.key === today;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+      <div style="font-size:0.45rem;color:${x.count>0?'#22d3a5':'transparent'};font-weight:700;">${x.count||''}</div>
+      <div style="width:100%;background:#1e2d47;border-radius:3px 3px 0 0;height:48px;display:flex;align-items:flex-end;overflow:hidden;">
+        <div style="width:100%;height:${Math.max(pct,3)}%;background:${isToday?'#fb923c':'linear-gradient(180deg,#22d3a5,#0d9488)'};border-radius:3px 3px 0 0;"></div>
+      </div>
+      <div style="font-size:0.38rem;color:${isToday?'#fb923c':'#94a3b8'};text-align:center;">${x.label}</div>
+    </div>`;
+  }).join('');
+
+  // ── Platforme ──
+  const platColors = {
+    'PWA_Android':'#4ade80','PWA_iOS':'#a78bfa','PWA_Desktop':'#60a5fa',
+    'Browser_Android':'#86efac','Browser_iOS':'#c4b5fd','Browser_Desktop':'#93c5fd'
+  };
+  const totalSess = localStats.sessions || 1;
+  const platHtml = Object.entries(localStats.byPlatform||{})
+    .sort((a,b)=>b[1]-a[1])
+    .map(([p,c])=>{
+      const pct = Math.round((c/totalSess)*100);
+      const col = platColors[p]||'#94a3b8';
+      const isPWA = p.startsWith('PWA');
+      const icon = p.includes('iOS')?'🍎':p.includes('Android')?'🤖':'💻';
+      return `<div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:0.66rem;color:#e2e8f0;font-weight:600;">${icon} ${p.replace('_',' ')}${isPWA?' ✅':''}</span>
+          <span style="font-size:0.66rem;color:${col};font-weight:700;">${c} · ${pct}%</span>
+        </div>
+        <div style="height:5px;background:#1e2d47;border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;"></div>
+        </div>
+      </div>`;
+    }).join('') || '<div style="font-size:0.62rem;color:#334155;padding:8px;text-align:center;">Nicio sesiune locală</div>';
+
+  // ── Date folosite (zile completate) ──
+  const mem = getMEM ? getMEM() : {};
+  const totalZile = Object.keys(mem).length;
+  const zileByType = {};
+  Object.values(mem).forEach(v => {
+    if(v && v.t) zileByType[v.t] = (zileByType[v.t]||0)+1;
+  });
+
+  adm.innerHTML = `
+    <div style="background:#0f1626;border:1px solid #22d3a5;border-radius:20px 20px 0 0;
+      padding:20px 16px 44px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;
+      -webkit-overflow-scrolling:touch;overscroll-behavior:contain;">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:#22d3a5;letter-spacing:0.06em;">🔐 Panou Admin</div>
+        <div style="font-size:0.5rem;color:#334155;text-transform:uppercase;letter-spacing:0.08em;">v3.0</div>
+      </div>
+      <div style="font-size:0.52rem;color:#334155;margin-bottom:18px;text-transform:uppercase;letter-spacing:0.06em;">Program STB 2026 · ${today}</div>
+
+      <!-- Buton GA4 -->
+      <a href="https://analytics.google.com" target="_blank"
+        style="display:flex;align-items:center;justify-content:space-between;
+        background:linear-gradient(135deg,rgba(34,211,165,0.12),rgba(96,165,250,0.08));
+        border:1px solid rgba(34,211,165,0.4);border-radius:14px;
+        padding:14px 16px;margin-bottom:18px;text-decoration:none;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-size:1.8rem;">📊</div>
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:#22d3a5;letter-spacing:0.05em;">Google Analytics 4</div>
+            <div style="font-size:0.6rem;color:#94a3b8;margin-top:1px;">G-V7Z1X668FR · Apasă pentru rapoarte complete</div>
+          </div>
+        </div>
+        <div style="font-size:1.2rem;color:#22d3a5;">→</div>
+      </a>
+
+      <!-- Stats sesiuni locale -->
+      <div style="font-size:0.52rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">📱 Sesiuni pe acest dispozitiv</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:18px;">
+        <div style="background:#111827;border:1px solid #1e2d47;border-radius:12px;padding:12px 8px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#22d3a5;line-height:1;">${localStats.sessions||0}</div>
+          <div style="font-size:0.44rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:3px;">Total sesiuni</div>
+        </div>
+        <div style="background:#111827;border:1px solid #1e2d47;border-radius:12px;padding:12px 8px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#fb923c;line-height:1;">${(localStats.byDate||{})[today]||0}</div>
+          <div style="font-size:0.44rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:3px;">Azi</div>
+        </div>
+        <div style="background:#111827;border:1px solid #1e2d47;border-radius:12px;padding:12px 8px;text-align:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#4ade80;line-height:1;">${totalZile}</div>
+          <div style="font-size:0.44rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:3px;">Zile salvate</div>
+        </div>
+      </div>
+
+      <!-- Grafic 14 zile -->
+      <div style="font-size:0.52rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">📈 Sesiuni · ultimele 14 zile <span style="color:#fb923c">(azi = portocaliu)</span></div>
+      <div style="background:#111827;border:1px solid #1e2d47;border-radius:12px;padding:14px;margin-bottom:18px;">
+        <div style="display:flex;gap:2px;align-items:flex-end;height:70px;">${chartHtml}</div>
+      </div>
+
+      <!-- Platforme -->
+      <div style="font-size:0.52rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">📱 Platforme · sesiuni locale <span style="color:#4ade80">(✅ = PWA instalată)</span></div>
+      <div style="background:#111827;border:1px solid #1e2d47;border-radius:12px;padding:14px;margin-bottom:18px;">${platHtml}</div>
+
+      <!-- Date aplicație -->
+      <div style="font-size:0.52rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">📅 Utilizare calendar · depou ${DEPOT||'—'}</div>
+      <div style="background:#111827;border:1px solid #1e2d47;border-radius:12px;padding:14px;margin-bottom:18px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          ${Object.entries(zileByType).map(([t,c])=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0f1626;border-radius:8px;border:1px solid #1e2d47;">
+              <span style="font-size:0.65rem;color:#94a3b8;">${t==='zl'?'📅 Zi lucr.':t==='we'?'🗓 WE':t==='liber'?'🟢 Liber':t==='co'?'🔴 CO':t==='fractie'?'✂️ Fracție':'❓ '+t}</span>
+              <span style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:#e2e8f0;">${c}</span>
+            </div>`).join('') || '<div style="font-size:0.62rem;color:#334155;text-align:center;padding:4px;grid-column:1/-1;">Nicio zi completată încă</div>'}
+        </div>
+        <div style="font-size:0.5rem;color:#334155;margin-top:10px;text-align:center;">Prima utilizare: ${localStats.firstSeen||'—'} · Dispozitiv: ${platform}</div>
+      </div>
+
+      <!-- Notă GA4 -->
+      <div style="background:rgba(34,211,165,0.05);border:1px solid rgba(34,211,165,0.2);border-radius:12px;padding:12px 14px;margin-bottom:18px;">
+        <div style="font-size:0.65rem;font-weight:700;color:#22d3a5;margin-bottom:6px;">ℹ️ Despre statistici</div>
+        <div style="font-size:0.6rem;color:#94a3b8;line-height:1.7;">
+          Datele de mai sus sunt colectate <strong style="color:#e2e8f0;">local pe acest dispozitiv</strong>.<br>
+          Pentru statistici complete cu <strong style="color:#e2e8f0;">toți utilizatorii</strong>
+          (câți accesează, din ce țară, ce platformă folosesc),
+          apasă butonul <strong style="color:#22d3a5;">Google Analytics 4</strong> de mai sus.<br>
+          <br>
+          Evenimentele trackuite în GA4: <span style="color:#4ade80;">app_open, pwa_installed, depot_selected, day_saved, pwa_session</span>
+        </div>
+      </div>
+
+      <!-- Buton test GA4 -->
+      <button onclick="testGA4()"
+        style="width:100%;padding:12px;border-radius:12px;border:1px solid rgba(96,165,250,0.4);
+        background:rgba(96,165,250,0.08);color:#60a5fa;
+        font-family:'Plus Jakarta Sans',sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer;margin-bottom:10px;">
+        🧪 Trimite eveniment test GA4
+      </button>
+
+      <button onclick="document.getElementById('admin-panel').remove()"
+        style="width:100%;padding:14px;border-radius:12px;border:none;background:#22d3a5;
+        color:#0b0f1a;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.85rem;font-weight:800;cursor:pointer;">
+        ✕ Închide
+      </button>
+    </div>
+  `;
+}
+
+function testGA4() {
+  gaEvent('admin_test', {
+    event_category: 'admin',
+    event_label: 'manual_test_' + new Date().toISOString(),
+    platform: getPlatform(),
+    depot: DEPOT || 'none'
+  });
+  // Feedback vizual
+  const btn = document.querySelector('[onclick="testGA4()"]');
+  if(btn){
+    btn.textContent = '✅ Eveniment trimis! Verifică GA4 → Timp real';
+    btn.style.borderColor = 'rgba(74,222,128,0.4)';
+    btn.style.background = 'rgba(74,222,128,0.1)';
+    btn.style.color = '#4ade80';
+    setTimeout(()=>{
+      btn.textContent = '🧪 Trimite eveniment test GA4';
+      btn.style.borderColor = 'rgba(96,165,250,0.4)';
+      btn.style.background = 'rgba(96,165,250,0.08)';
+      btn.style.color = '#60a5fa';
+    }, 4000);
+  }
+}
+
+
+// ==================== PWA: SERVICE WORKER ====================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/ProgramSTB/sw.js')
+    .then(() => console.log('SW înregistrat'))
+    .catch(e => console.warn('SW eroare:', e));
+}
+
+// ==================== DATE ====================
+// Date încorporate direct — funcționează și fără internet
+let DB_DUDESTI = {
+  zl:{
+    "9/1":  {s1:{i:"05:52",r:"14:52"},s2:{c:"Romprim",     i:"14:52",r:"23:31",d:false}},
+    "10/1": {s1:{i:"04:25",r:"12:37"},s2:{c:"Banu Manta",  i:"14:31",r:"21:25",d:true}},
+    "13/1": {s1:{i:"04:42",r:"12:55"},s2:{c:"Banu Manta",  i:"14:52",r:"23:45",d:true}},
+    "19/1": {s1:{i:"04:45",r:"13:40"},s2:{c:"Romprim",     i:"13:40",r:"20:51",d:false}},
+    "21/1": {s1:{i:"04:52",r:"13:52"},s2:{c:"Romprim",     i:"13:52",r:"21:01",d:false}},
+    "1/5":  {s1:{i:"05:40",r:"13:32"},s2:{c:"Pantelimon",  i:"13:32",r:"22:32",d:false}},
+    "5/5":  {s1:{i:"04:00",r:"12:19"},s2:{c:"Pantelimon",  i:"15:14",r:"23:44",d:true}},
+    "7/5":  {s1:{i:"04:10",r:"11:55"},s2:{c:"Pantelimon",  i:"11:55",r:"20:55",d:false}},
+    "16/5": {s1:{i:"05:06",r:"13:27"},s2:{c:"Aeroport Băneasa",i:"15:05",r:"23:54",d:true}},
+    "18/5": {s1:{i:"04:00",r:"12:47"},s2:{c:"Aeroport Băneasa",i:"15:15",r:"00:09",d:true}},
+    "2/7":  {s1:{i:"06:20",r:"14:18"},s2:{c:"Piața Unirii",i:"14:18",r:"23:15",d:false}},
+    "4/7":  {s1:{i:"04:17",r:"11:05"},s2:{c:"Piața Unirii",i:"15:29",r:"23:30",d:true}},
+    "5/7":  {s1:{i:"06:39",r:"14:36"},s2:{c:"Piața Unirii",i:"14:36",r:"21:27",d:false}},
+    "7/7":  {s1:{i:"04:34",r:"11:23"},s2:{c:"Piața Unirii",i:"15:50",r:"23:45",d:true}},
+    "8/7":  {s1:{i:"07:00",r:"14:55"},s2:{c:"Piața Unirii",i:"14:55",r:"21:46",d:false}},
+    "9/7":  {s1:{i:"05:50",r:"13:49"},s2:{c:"Piața Unirii",i:"13:49",r:"20:42",d:false}},
+    "10/7": {s1:{i:"04:50",r:"11:43"},s2:{c:"Piața Unirii",i:"14:54",r:"23:00",d:true}},
+    "11/7": {s1:{i:"06:07",r:"13:58"},s2:{c:"Piața Unirii",i:"13:58",r:"22:05",d:false}},
+    "1/10": {s1:{i:"04:12",r:"11:32"},s2:{c:"Romprim",     i:"15:02",r:"22:39",d:true}},
+    "2/10": {s1:{i:"06:22",r:"13:19"},s2:{c:"Romprim",     i:"13:19",r:"21:59",d:false}},
+    "4/10": {s1:{i:"04:27",r:"11:50"},s2:{c:"Romprim",     i:"15:20",r:"23:57",d:true}},
+    "10/10":{s1:{i:"04:57",r:"12:25"},s2:{c:"Banu Manta",  i:"14:33",r:"23:22",d:true}},
+    "12/10":{s1:{i:"05:12",r:"12:11"},s2:{c:"Romprim",     i:"12:11",r:"20:43",d:false}},
+    "13/10":{s1:{i:"06:08",r:"14:30"},s2:{c:"Romprim",     i:"14:30",r:"23:30",d:false}},
+    "15/10":{s1:{i:"06:19",r:"14:39"},s2:{c:"Romprim",     i:"14:39",r:"23:39",d:false}}
+  },
+  we:{
+    "15/1": {s1:{i:"06:05",r:"15:05"},s2:{c:"Banu Manta",  i:"15:05",r:"23:39",d:true}},
+    "4/5":  {s1:{i:"04:09",r:"12:59"},s2:{c:"Pantelimon",  i:"12:59",r:"21:58",d:false}},
+    "5/5":  {s1:{i:"06:09",r:"15:09"},s2:{c:"Pantelimon",  i:"15:09",r:"00:09",d:false}},
+    "7/5":  {s1:{i:"06:28",r:"15:28"},s2:{c:"Pantelimon",  i:"15:28",r:"23:43",d:false}},
+    "9/5":  {s1:{i:"06:45",r:"13:51"},s2:{c:"Pantelimon",  i:"13:51",r:"22:51",d:false}},
+    "1/7":  {s1:{i:"04:02",r:"12:19"},s2:{c:"Piața Unirii",i:"12:19",r:"20:21",d:false}},
+    "2/7":  {s1:{i:"06:24",r:"14:41"},s2:{c:"Piața Unirii",i:"14:41",r:"23:41",d:false}},
+    "3/7":  {s1:{i:"04:24",r:"12:41"},s2:{c:"Piața Unirii",i:"12:41",r:"20:41",d:false}},
+    "4/7":  {s1:{i:"06:47",r:"15:01"},s2:{c:"Piața Unirii",i:"15:01",r:"23:01",d:false}},
+    "5/7":  {s1:{i:"04:46",r:"13:03"},s2:{c:"Piața Unirii",i:"13:03",r:"21:04",d:false}},
+    "6/7":  {s1:{i:"07:09",r:"15:23"},s2:{c:"Piața Unirii",i:"15:23",r:"23:21",d:false}},
+    "1/10": {s1:{i:"04:22",r:"12:50"},s2:{c:"Romprim",     i:"12:50",r:"21:21",d:false}},
+    "5/10": {s1:{i:"04:52",r:"13:22"},s2:{c:"Romprim",     i:"13:22",r:"21:50",d:false}},
+    "6/27": {s1:{i:"06:43",r:"14:56"},s2:{c:"Faur",        i:"14:56",r:"23:17",d:false}}
+  }
+};
+
+let DB_GIURGIU = {
+  zl:{
+    "3/1":  {linie:"1",s1:{i:"05:23",r:"14:18",c:"Romprim",d:true},s2:{c:"Romprim",i:"14:18",r:"22:58",d:false}},
+    "5/1":  {linie:"1",s1:{i:"05:37",r:"14:27",c:"Romprim",d:true},s2:{c:"Romprim",i:"14:27",r:"21:43",d:false}},
+    "7/1":  {linie:"1",s1:{i:"05:43",r:"14:43",c:"Romprim",d:true},s2:{c:"Romprim",i:"14:43",r:"21:56",d:false}},
+    "11/1": {linie:"1",s1:{i:"06:07",r:"15:03",c:"Romprim",d:true},s2:{c:"Romprim",i:"15:03",r:"22:19",d:false}},
+    "12/1": {linie:"1",s1:{i:"04:15",r:"13:03",c:"Romprim",d:true},s2:{c:"Romprim",i:"13:03",r:"21:43",d:false}},
+    "14/1": {linie:"1",s1:{i:"04:25",r:"13:12",c:"Romprim",d:true},s2:{c:"Romprim",i:"13:12",r:"21:54",d:false}},
+    "15/1": {linie:"1",s1:{i:"06:31",r:"15:29",c:"Romprim",d:true},s2:{c:"Romprim",i:"15:29",r:"00:08",d:false}},
+    "16/1": {linie:"1",s1:{i:"04:33",r:"13:27",c:"Romprim",d:true},s2:{c:"Romprim",i:"13:27",r:"22:06",d:false}},
+    "17/1": {linie:"1",s1:{i:"04:40",r:"11:57",c:"Romprim",d:true},s2:{c:"Romprim",i:"15:19",r:"22:51",d:true}},
+    "20/1": {linie:"1",s1:{i:"06:57",r:"15:57",c:"Romprim",d:true},s2:{c:"Romprim",i:"15:57",r:"00:23",d:false}},
+    "22/1": {linie:"1",s1:{i:"05:02",r:"12:22",c:"Romprim",d:true},s2:{c:"Romprim",i:"15:45",r:"23:15",d:true}},
+    "23/1": {linie:"1",s1:{i:"05:09",r:"14:00",c:"Romprim",d:true},s2:{c:"Romprim",i:"14:00",r:"22:42",d:false}},
+    "1/7":  {linie:"7",s1:{i:"04:47",r:"12:13",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"12:13",r:"20:13",d:false}},
+    "3/7":  {linie:"7",s1:{i:"06:02",r:"13:48",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"13:48",r:"20:26",d:false}},
+    "6/7":  {linie:"7",s1:{i:"06:22",r:"14:06",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"14:06",r:"20:45",d:false}},
+    "5/25": {linie:"25",s1:{i:"05:54",r:"13:43",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"13:43",r:"22:03",d:false}},
+    "9/25": {linie:"25",s1:{i:"06:17",r:"14:08",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"14:08",r:"22:23",d:false}},
+    "11/25":{linie:"25",s1:{i:"06:29",r:"14:18",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"14:18",r:"20:00",d:false}},
+    "12/25":{linie:"25",s1:{i:"04:07",r:"11:55",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"14:25",r:"22:41",d:true}},
+    "14/25":{linie:"25",s1:{i:"06:46",r:"14:37",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"14:37",r:"22:52",d:false}},
+    "16/25":{linie:"25",s1:{i:"04:20",r:"12:19",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"14:50",r:"23:03",d:true}},
+    "18/25":{linie:"25",s1:{i:"04:34",r:"12:31",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"15:02",r:"23:13",d:true}},
+    "20/25":{linie:"25",s1:{i:"04:46",r:"12:43",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"15:14",r:"23:28",d:true}},
+    "21/25":{linie:"25",s1:{i:"04:56",r:"12:42",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"12:42",r:"20:58",d:false}},
+    "23/25":{linie:"25",s1:{i:"05:08",r:"10:23",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"15:32",r:"23:43",d:true}},
+    "25/25":{linie:"25",s1:{i:"05:19",r:"13:05",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"13:05",r:"21:22",d:false}},
+    "28/25":{linie:"25",s1:{i:"05:28",r:"13:19",c:"CFR Progresul",d:true},s2:{c:"CFR Progresul",i:"13:19",r:"21:40",d:false}}
+  },
+  we:{
+    "1/1":  {linie:"1",s1:{i:"04:05",r:"12:19"},s2:{i:"12:19",r:"20:48",d:false}},
+    "3/1":  {linie:"1",s1:{i:"06:13",r:"14:33"},s2:{i:"14:33",r:"22:56",d:false}},
+    "4/1":  {linie:"1",s1:{i:"04:25",r:"12:43"},s2:{i:"12:43",r:"21:10",d:false}},
+    "6/1":  {linie:"1",s1:{i:"04:40",r:"12:59"},s2:{i:"12:59",r:"21:25",d:false}},
+    "7/1":  {linie:"1",s1:{i:"06:43",r:"15:03"},s2:{i:"15:03",r:"23:21",d:false}},
+    "8/1":  {linie:"1",s1:{i:"04:55",r:"13:14"},s2:{i:"13:14",r:"21:39",d:false}},
+    "9/1":  {linie:"1",s1:{i:"06:58",r:"15:17"},s2:{i:"15:17",r:"23:36",d:false}},
+    "11/1": {linie:"1",s1:{i:"07:12",r:"15:32"},s2:{i:"15:32",r:"23:51",d:false}},
+    "12/1": {linie:"1",s1:{i:"05:23",r:"13:42"},s2:{i:"13:42",r:"22:08",d:false}},
+    "13/1": {linie:"1",s1:{i:"07:25",r:"15:47"},s2:{i:"15:47",r:"00:06",d:false}},
+    "14/1": {linie:"1",s1:{i:"04:05",r:"11:58"},s2:{i:"11:58",r:"20:28",d:false}},
+    "16/1": {linie:"1",s1:{i:"05:50",r:"14:10"},s2:{i:"14:10",r:"22:36",d:false}},
+    "1/25": {linie:"25",s1:{i:"04:22",r:"13:17"},s2:{i:"13:17",r:"22:16",d:false}},
+    "3/25": {linie:"25",s1:{i:"04:42",r:"13:36"},s2:{i:"13:36",r:"22:35",d:false}},
+    "5/25": {linie:"25",s1:{i:"05:02",r:"13:54"},s2:{i:"13:54",r:"22:54",d:false}},
+    "8/25": {linie:"25",s1:{i:"05:25",r:"14:20"},s2:{i:"14:20",r:"23:20",d:false}},
+    "10/25":{linie:"25",s1:{i:"05:42",r:"14:39"},s2:{i:"14:39",r:"23:37",d:false}},
+    "13/25":{linie:"25",s1:{i:"06:08",r:"15:04"},s2:{i:"15:04",r:"23:57",d:false}}
+  }
+};
+
+let DB_TITAN     = {zl:{},we:{}};
+let DB_ALEXANDRIA = {zl:{},we:{}};
+let DB_COLENTINA  = {zl:{},we:{}};
+let DB_MILITARI = {
+  zl:{
+    "3/10"      :{linie:"10",s1:{i:"05:19",r:"12:19",d:true},s2:{i:"12:19",r:"21:12",d:false,c:"Banu Manta"}},
+    "5/10"      :{linie:"10",s1:{i:"06:15",r:"14:42",d:true},s2:{i:"14:42",r:"23:27",d:false,c:"Romprim"}},
+    "6/10"      :{linie:"10",s1:{i:"04:17",r:"12:34",d:true},s2:{i:"12:34",r:"21:30",d:false,c:"Romprim"}},
+    "8/10"      :{linie:"10",s1:{i:"06:32",r:"15:00",d:true},s2:{i:"15:00",r:"23:45",d:false,c:"Romprim"}},
+    "9/10"      :{linie:"10",s1:{i:"05:49",r:"12:55",d:true},s2:{i:"12:55",r:"21:49",d:false,c:"Banu Manta"}},
+    "11/10"     :{linie:"10",s1:{i:"06:01",r:"13:03",d:true},s2:{i:"13:03",r:"22:03",d:false,c:"Banu Manta"}},
+    "14/10"     :{linie:"10",s1:{i:"04:21",r:"11:09",d:true},s2:{i:"15:05",r:"22:15",d:true, c:"Banu Manta"}},
+    "16/10"     :{linie:"10",s1:{i:"04:31",r:"13:31",d:true},s2:{i:"13:31",r:"22:25",d:false,c:"Banu Manta"}},
+    "17/10"     :{linie:"10",s1:{i:"06:35",r:"13:37",d:true},s2:{i:"15:23",r:"00:22",d:true, c:"Banu Manta"}},
+    "18/10"     :{linie:"10",s1:{i:"04:41",r:"13:41",d:true},s2:{i:"13:41",r:"22:35",d:false,c:"Banu Manta"}},
+    "20/10"     :{linie:"10",s1:{i:"04:49",r:"11:41",d:true},s2:{i:"15:41",r:"22:46",d:true, c:"Banu Manta"}},
+    "22/10"     :{linie:"10",s1:{i:"07:01",r:"14:06",d:true},s2:{i:"14:06",r:"22:58",d:false,c:"Banu Manta"}},
+    "1/25"      :{linie:"25",s1:{i:"04:29",r:"12:04",d:true},s2:{i:"14:54",r:"22:49",d:true, c:"Depou Militari"}},
+    "2/25"      :{linie:"25",s1:{i:"07:05",r:"14:47",d:true},s2:{i:"14:47",r:"22:57",d:false,c:"Depou Militari"}},
+    "3/25"      :{linie:"25",s1:{i:"04:44",r:"12:15",d:true},s2:{i:"15:04",r:"20:26",d:true, c:"Depou Militari"}},
+    "4/25"      :{linie:"25",s1:{i:"07:15",r:"14:55",d:true},s2:{i:"14:55",r:"23:04",d:false,c:"Depou Militari"}},
+    "6/25"      :{linie:"25",s1:{i:"04:57",r:"12:32",d:true},s2:{i:"15:19",r:"23:14",d:true, c:"Depou Militari"}},
+    "7/25"      :{linie:"25",s1:{i:"07:33",r:"15:14",d:true},s2:{i:"15:14",r:"23:24",d:true, c:"Depou Militari"}},
+    "8/25"      :{linie:"25",s1:{i:"05:07",r:"12:43",d:true},s2:{i:"12:43",r:"20:56",d:false,c:"Depou Militari"}},
+    "10/25"     :{linie:"25",s1:{i:"05:17",r:"12:56",d:true},s2:{i:"15:43",r:"23:34",d:true, c:"Depou Militari"}},
+    "13/25"     :{linie:"25",s1:{i:"05:32",r:"13:08",d:true},s2:{i:"13:08",r:"21:23",d:false,c:"Depou Militari"}},
+    "15/25"     :{linie:"25",s1:{i:"05:39",r:"13:28",d:true},s2:{i:"13:28",r:"21:36",d:false,c:"Depou Militari"}},
+    "17/25"     :{linie:"25",s1:{i:"05:51",r:"13:37",d:true},s2:{i:"13:37",r:"21:48",d:false,c:"Depou Militari"}},
+    "19/25"     :{linie:"25",s1:{i:"06:03",r:"13:46",d:true},s2:{i:"13:46",r:"22:02",d:false,c:"Depou Militari"}},
+    "22/25"     :{linie:"25",s1:{i:"06:21",r:"14:04",d:true},s2:{i:"14:04",r:"22:14",d:false,c:"Depou Militari"}},
+    "24/25"     :{linie:"25",s1:{i:"06:33",r:"14:12",d:true},s2:{i:"14:12",r:"22:28",d:false,c:"Depou Militari"}},
+    "26/25"     :{linie:"25",s1:{i:"06:44",r:"14:30",d:true},s2:{i:"14:30",r:"22:35",d:false,c:"Depou Militari"}},
+    "27/25"     :{linie:"25",s1:{i:"06:49",r:"11:54",d:true},s2:{i:"14:43",r:"22:43",d:true, c:"Depou Militari"}},
+    "5/44"      :{linie:"44",s1:{i:"04:13",r:"13:05",d:true},s2:{i:"13:05",r:"21:39",d:false,c:"Vasile Parvan"}},
+    "6/44"      :{linie:"44",s1:{i:"06:28",r:"15:01",d:true},s2:{i:"15:01",r:"23:47",d:true, c:"Vasile Parvan"}},
+    "7/44"      :{linie:"44",s1:{i:"04:28",r:"11:28",d:true},s2:{i:"14:54",r:"21:55",d:true, c:"Vasile Parvan"}},
+    "8/44"      :{linie:"44",s1:{i:"05:39",r:"14:35",d:true},s2:{i:"14:35",r:"23:29",d:false,c:"Vasile Parvan"}}
+  },
+  we:{
+    "2/10"      :{linie:"10",s1:{i:"06:03",r:"14:56",d:true},s2:{i:"14:56",r:"23:54",d:false,c:"Banu Manta"}},
+    "3/10"      :{linie:"10",s1:{i:"04:13",r:"13:07",d:true},s2:{i:"13:07",r:"22:07",d:false,c:"Banu Manta"}},
+    "4/10"      :{linie:"10",s1:{i:"06:18",r:"15:13",d:true},s2:{i:"15:13",r:"00:07",d:false,c:"Banu Manta"}},
+    "6/10"      :{linie:"10",s1:{i:"06:33",r:"15:29",d:true},s2:{i:"15:29",r:"22:37",d:false,c:"Banu Manta"}},
+    "7/10"      :{linie:"10",s1:{i:"04:43",r:"13:37",d:true},s2:{i:"13:37",r:"22:37",d:false,c:"Banu Manta"}},
+    "8/10"      :{linie:"10",s1:{i:"06:48",r:"15:43",d:true},s2:{i:"15:43",r:"00:36",d:false,c:"Banu Manta"}},
+    "9/10"      :{linie:"10",s1:{i:"04:16",r:"12:50",d:true},s2:{i:"12:50",r:"21:09",d:false,c:"Banu Manta"}},
+    "11/10"     :{linie:"10",s1:{i:"04:31",r:"13:04",d:true},s2:{i:"13:04",r:"21:25",d:false,c:"Banu Manta"}},
+    "13/10"     :{linie:"10",s1:{i:"04:45",r:"13:19",d:true},s2:{i:"13:19",r:"21:25",d:false,c:"Banu Manta"}},
+    "14/10"     :{linie:"10",s1:{i:"05:32",r:"14:26",d:true},s2:{i:"14:26",r:"23:26",d:false,c:"Banu Manta"}},
+    "15/10"     :{linie:"10",s1:{i:"05:00",r:"13:33",d:true},s2:{i:"13:33",r:"21:39",d:false,c:"Banu Manta"}},
+    "16/10"     :{linie:"10",s1:{i:"05:48",r:"14:41",d:true},s2:{i:"14:41",r:"23:40",d:false,c:"Romprim"}},
+    "2/25"      :{linie:"25",s1:{i:"05:46",r:"14:32",d:true},s2:{i:"14:32",r:"23:22",d:false,c:"Depou Militari"}},
+    "4/25"      :{linie:"25",s1:{i:"06:04",r:"14:50",d:true},s2:{i:"14:50",r:"23:38",d:false,c:"Depou Militari"}},
+    "6/25"      :{linie:"25",s1:{i:"06:22",r:"15:08",d:true},s2:{i:"15:08",r:"23:56",d:false,c:"Depou Militari"}},
+    "7/25"      :{linie:"25",s1:{i:"04:24",r:"13:03",d:true},s2:{i:"13:03",r:"22:03",d:false,c:"Depou Militari"}},
+    "9/25"      :{linie:"25",s1:{i:"04:39",r:"13:21",d:true},s2:{i:"13:21",r:"22:21",d:false,c:"Depou Militari"}},
+    "11/25"     :{linie:"25",s1:{i:"04:54",r:"13:38",d:true},s2:{i:"13:38",r:"20:23",d:false,c:"Depou Militari"}},
+    "12/25"     :{linie:"25",s1:{i:"05:07",r:"13:47",d:true},s2:{i:"13:47",r:"22:40",d:false,c:"Depou Militari"}},
+    "14/25"     :{linie:"25",s1:{i:"05:19",r:"14:05",d:true},s2:{i:"14:05",r:"20:50",d:false,c:"Depou Militari"}},
+    "15/25"     :{linie:"25",s1:{i:"05:28",r:"14:14",d:true},s2:{i:"14:14",r:"23:06",d:false,c:"Depou Militari"}},
+    "1/44"      :{linie:"44",s1:{i:"04:07",r:"13:04",d:true},s2:{i:"13:04",r:"21:34",d:false,c:"Vasile Parvan"}},
+    "2/44"      :{linie:"44",s1:{i:"06:27",r:"15:26",d:true},s2:{i:"15:26",r:"00:20",d:false,c:"Vasile Parvan"}}
+  }
+};
+let DB_BUDESTI    = {zl:{},we:{}};
+let DB_AUTOBUZE   = {zl:{},we:{}};
+let DB_TROLEIBUZE = {zl:{},we:{}};
+let DB_LOADED = false;
+
+// Încearcă să încarce db.json pentru update-uri viitoare (opțional)
+async function loadDB() {
+  try {
+    const res = await fetch('/ProgramSTB/db.json?v=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if(data.dudesti && Object.keys(data.dudesti.zl||{}).length > 0){
+      DB_DUDESTI = data.dudesti;
+      DB_GIURGIU = data.giurgiu;
+      if(data.victoria)  DB_VICTORIA  = data.victoria;
+      if(data.titan)     DB_TITAN     = data.titan;
+      if(data.alexandria) DB_ALEXANDRIA = data.alexandria;
+      if(data.colentina) DB_COLENTINA = data.colentina;
+      if(data.militari)  DB_MILITARI  = data.militari;
+      if(data.budesti)   DB_BUDESTI   = data.budesti;
+      if(data.autobuze)  DB_AUTOBUZE  = data.autobuze;
+      if(data.troleibuze) DB_TROLEIBUZE = data.troleibuze;
+    }
+    DB_LOADED = true;
+  } catch (e) {
+    console.warn('db.json: folosesc datele încorporate', e);
+    DB_LOADED = true;
+  }
+}
+
+// ── DEPOUL VICTORIA ──
+let DB_VICTORIA = {
+  zl:{
+    "3/5":  {linie:"5",s1:{i:"04:26",r:"12:02",d:true},s2:{i:"15:36",r:"23:26",d:true,c:"Pantelimon"}},
+    "4/5":  {linie:"5",s1:{i:"06:36",r:"13:50",d:true},s2:{i:"13:50",r:"21:29",d:false,c:"Pantelimon"}},
+    "8/5":  {linie:"5",s1:{i:"04:56",r:"12:33",d:true},s2:{i:"16:10",r:"23:52",d:true,c:"Pantelimon"}},
+    "9/5":  {linie:"5",s1:{i:"07:06",r:"14:21",d:true},s2:{i:"14:21",r:"21:59",d:false,c:"Pantelimon"}},
+    "11/5": {linie:"5",s1:{i:"05:15",r:"12:51",d:true},s2:{i:"16:31",r:"00:05",d:true,c:"Pantelimon"}},
+    "7/10": {linie:"10",s1:{i:"06:14",r:"12:49",d:true},s2:{i:"14:52",r:"23:38",d:true,c:"Banu Manta"}},
+    "19/10":{linie:"10",s1:{i:"07:16",r:"13:49",d:true},s2:{i:"13:49",r:"22:45",d:false,c:"Banu Manta"}},
+    "21/10":{linie:"10",s1:{i:"05:28",r:"13:58",d:true},s2:{i:"13:58",r:"22:56",d:false,c:"Banu Manta"}},
+    "23/10":{linie:"10",s1:{i:"05:35",r:"14:15",d:true},s2:{i:"14:15",r:"23:08",d:false,c:"Banu Manta"}},
+    "4/11": {linie:"11",s1:{i:"06:11",r:"15:11",d:true},s2:{i:"15:11",r:"00:11",d:false,c:"Zetarilor"}},
+    "5/11": {linie:"11",s1:{i:"04:19",r:"12:03",d:true},s2:{i:"14:42",r:"22:30",d:true,c:"Zetarilor"}},
+    "6/11": {linie:"11",s1:{i:"06:30",r:"15:30",d:true},s2:{i:"15:30",r:"00:30",d:false,c:"Zetarilor"}},
+    "8/11": {linie:"11",s1:{i:"06:46",r:"14:52",d:true},s2:{i:"14:52",r:"22:54",d:false,c:"C-tier Giulești"}},
+    "9/11": {linie:"11",s1:{i:"04:51",r:"12:43",d:true},s2:{i:"15:23",r:"23:09",d:true,c:"Zetarilor"}},
+    "3/47": {linie:"47",s1:{i:"04:48",r:"13:06",d:true},s2:{i:"13:06",r:"21:59",d:false,c:"Ghencea"}},
+    "4/47": {linie:"47",s1:{i:"05:54",r:"14:22",d:true},s2:{i:"14:22",r:"23:13",d:false,c:"Ghencea"}},
+    "5/47": {linie:"47",s1:{i:"05:01",r:"11:38",d:true},s2:{i:"15:08",r:"22:15",d:true,c:"Ghencea"}},
+    "6/47": {linie:"47",s1:{i:"06:11",r:"14:33",d:true},s2:{i:"14:33",r:"23:26",d:false,c:"Ghencea"}},
+    "7/47": {linie:"47",s1:{i:"05:13",r:"13:39",d:true},s2:{i:"13:39",r:"22:32",d:false,c:"Ghencea"}},
+    "8/47": {linie:"47",s1:{i:"06:27",r:"14:54",d:true},s2:{i:"14:54",r:"23:40",d:false,c:"Ghencea"}}
+  },
+  we:{
+    "1/5":  {linie:"5",s1:{i:"06:06",r:"14:29",d:true},s2:{i:"14:29",r:"23:27",d:false,c:"Pantelimon"}},
+    "2/5":  {linie:"5",s1:{i:"04:26",r:"12:39",d:true},s2:{i:"12:39",r:"21:30",d:false,c:"Pantelimon"}},
+    "3/5":  {linie:"5",s1:{i:"06:26",r:"14:49",d:true},s2:{i:"14:49",r:"23:47",d:false,c:"Pantelimon"}},
+    "10/10":{linie:"10",s1:{i:"06:52",r:"14:56",d:true},s2:{i:"14:56",r:"23:01",d:false,c:"Banu Manta"}},
+    "12/10":{linie:"10",s1:{i:"07:06",r:"15:10",d:true},s2:{i:"15:10",r:"23:16",d:false,c:"Banu Manta"}},
+    "6/11": {linie:"11",s1:{i:"06:25",r:"14:51",d:true},s2:{i:"14:51",r:"23:26",d:false,c:"Zetarilor"}},
+    "7/11": {linie:"11",s1:{i:"04:49",r:"13:07",d:true},s2:{i:"13:07",r:"21:50",d:false,c:"Zetarilor"}},
+    "4/47": {linie:"47",s1:{i:"06:05",r:"15:05",d:true},s2:{i:"15:05",r:"23:15",d:false,c:"Ghencea"}},
+    "5/47": {linie:"47",s1:{i:"05:15",r:"13:11",d:true},s2:{i:"13:11",r:"21:28",d:false,c:"Ghencea"}},
+    "6/47": {linie:"47",s1:{i:"06:29",r:"15:24",d:true},s2:{i:"15:24",r:"23:34",d:false,c:"Ghencea"}}
+  }
+};
+
+const SARB={"2026-1-1":"Anul Nou","2026-1-2":"Anul Nou","2026-4-10":"Vinerea Mare","2026-4-12":"Paște","2026-4-13":"Paște","2026-5-1":"Ziua Muncii","2026-5-3":"Duminica Tomii","2026-6-1":"Ziua Copilului","2026-6-11":"Înălțarea","2026-6-21":"Rusalii","2026-6-22":"Rusalii","2026-8-15":"Sf. Maria","2026-11-30":"Sf. Andrei","2026-12-1":"Ziua Națională","2026-12-25":"Crăciun","2026-12-26":"Crăciun"};
+
+// Genereaza toate lunile 2026-2029
+function genLuni(){
+  const NL=["Ian.","Feb.","Mar.","Apr.","Mai","Iun.","Iul.","Aug.","Sep.","Oct.","Nov.","Dec."];
+  const ZL=[31,28,31,30,31,30,31,31,30,31,30,31];
+  function zl(a,l){if(l===2)return(a%4===0&&(a%100!==0||a%400===0))?29:28;return ZL[l-1];}
+  const arr=[];let idx=0;
+  // 2026: Apr-Dec
+  for(let m=4;m<=12;m++)arr.push({i:idx++,n:NL[m-1],a:2026,l:m,z:zl(2026,m)});
+  // 2027-2029: toate lunile
+  for(let y=2027;y<=2029;y++)for(let m=1;m<=12;m++)arr.push({i:idx++,n:NL[m-1],a:y,l:m,z:zl(y,m)});
+  return arr;
+}
+const LUNI=genLuni();
+const ZN=["Duminică","Luni","Marți","Miercuri","Joi","Vineri","Sâmbătă"];
+const ZNS=["Du","Lu","Ma","Mi","Jo","Vi","Sâ"];
+const TODAY=new Date();
+
+// ==================== STORAGE ====================
+let DEPOT='';
+let MEM_D={},MEM_G={},MEM_V={},MEM_T={},MEM_AL={},MEM_CO={},MEM_MI={},MEM_BU={},MEM_AU={},MEM_TR={};
+try{const d=localStorage.getItem('p2026_dudesti');if(d)MEM_D=JSON.parse(d)||{};}catch(e){}
+try{const g=localStorage.getItem('p2026_giurgiu');if(g)MEM_G=JSON.parse(g)||{};}catch(e){}
+try{const v=localStorage.getItem('p2026_victoria');if(v)MEM_V=JSON.parse(v)||{};}catch(e){}
+try{const t=localStorage.getItem('p2026_titan');if(t)MEM_T=JSON.parse(t)||{};}catch(e){}
+try{const al=localStorage.getItem('p2026_alexandria');if(al)MEM_AL=JSON.parse(al)||{};}catch(e){}
+try{const co=localStorage.getItem('p2026_colentina');if(co)MEM_CO=JSON.parse(co)||{};}catch(e){}
+try{const mi=localStorage.getItem('p2026_militari');if(mi)MEM_MI=JSON.parse(mi)||{};}catch(e){}
+try{const bu=localStorage.getItem('p2026_budesti');if(bu)MEM_BU=JSON.parse(bu)||{};}catch(e){}
+try{const au=localStorage.getItem('p2026_autobuze');if(au)MEM_AU=JSON.parse(au)||{};}catch(e){}
+try{const tr=localStorage.getItem('p2026_troleibuze');if(tr)MEM_TR=JSON.parse(tr)||{};}catch(e){}
+function getMEM(){return DEPOT==='giurgiu'?MEM_G:DEPOT==='victoria'?MEM_V:DEPOT==='titan'?MEM_T:DEPOT==='alexandria'?MEM_AL:DEPOT==='colentina'?MEM_CO:DEPOT==='militari'?MEM_MI:DEPOT==='budesti'?MEM_BU:DEPOT==='autobuze'?MEM_AU:DEPOT==='troleibuze'?MEM_TR:MEM_D;}
+function getDB(){return DEPOT==='giurgiu'?DB_GIURGIU:DEPOT==='victoria'?DB_VICTORIA:DEPOT==='titan'?DB_TITAN:DEPOT==='alexandria'?DB_ALEXANDRIA:DEPOT==='colentina'?DB_COLENTINA:DEPOT==='militari'?DB_MILITARI:DEPOT==='budesti'?DB_BUDESTI:DEPOT==='autobuze'?DB_AUTOBUZE:DEPOT==='troleibuze'?DB_TROLEIBUZE:DB_DUDESTI;}
+function _save(){try{const _k={giurgiu:'p2026_giurgiu',victoria:'p2026_victoria',titan:'p2026_titan',alexandria:'p2026_alexandria',colentina:'p2026_colentina',militari:'p2026_militari',budesti:'p2026_budesti',autobuze:'p2026_autobuze',troleibuze:'p2026_troleibuze'};localStorage.setItem(_k[DEPOT]||'p2026_dudesti',JSON.stringify(getMEM()));}catch(e){}}
+function nz(a,l,z){return ZN[new Date(a,l-1,z).getDay()];}
+function nzs(a,l,z){return ZNS[new Date(a,l-1,z).getDay()];}
+function isWE(a,l,z){const d=new Date(a,l-1,z).getDay();return d===0||d===6;}
+function isTD(a,l,z){return TODAY.getFullYear()===a&&TODAY.getMonth()===l-1&&TODAY.getDate()===z;}
+function gs(a,l,z){return getMEM()[`${a}-${l}-${z}`]||{t:'gol',r:null,s:['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT)?1:2};}
+function ss(a,l,z,v){
+  // GA4: zi completata
+  try {
+    gaEvent('day_saved', {
+      type: v.t,
+      depot: DEPOT,
+      event_category: 'usage',
+      event_label: v.t === 'zl' || v.t === 'we' ? 'tura' : v.t
+    });
+  } catch(e){}
+  // Când salvăm o tură (zl/we), salvăm și un snapshot cu orele exacte
+  // Astfel dacă tura dispare din db.json, orele rămân
+  if((v.t==='zl'||v.t==='we')&&v.r){
+    const db=getDB();
+    const dbd=v.t==='we'?db.we:db.zl;
+    const dd=dbd[v.r];
+    if(dd){
+      const sch=v.s||(DEPOT==='giurgiu'?1:2);
+      const oreD=sch===1?dd.s1:dd.s2;
+      // Snapshot: salvăm orele, linia, depou — tot ce ne trebuie pentru calcul
+      v._snap={
+        i: oreD.i,
+        r: oreD.r,
+        linie: DEPOT==='giurgiu'?(dd.linie||v.r.split('/')[0]):v.r.split('/')[1],
+        tur: v.r.split('/')[0],
+        depou: (sch===1&&DEPOT!=='giurgiu')||(sch===2&&dd.s2&&dd.s2.d)||false,
+        capac: (!( DEPOT==='giurgiu')&&sch===2&&dd.s2&&dd.s2.c)||''
+      };
+    }
+  }
+  getMEM()[`${a}-${l}-${z}`]=v;_save();
+}
+function getSarb(a,l,z){return SARB[`${a}-${l}-${z}`]||null;}
+
+// Returnează datele turei: din db dacă există, din snapshot dacă tura a dispărut
+function getDD(s){
+  if(!s||!s.r) return null;
+  const db=getDB();
+  const dbd=s.t==='we'?db.we:db.zl;
+  const dd=dbd[s.r];
+  if(dd) return {dd, fromSnap:false};
+  // Tura nu mai există în db — folosim snapshot
+  if(s._snap){
+    const snap=s._snap;
+    const sch=s.s||(DEPOT==='giurgiu'?1:2);
+    // Reconstruim structura dd din snapshot
+    const fakeOre={i:snap.i, r:snap.r, d:snap.depou, c:snap.capac};
+    const fakeDd={
+      s1: sch===1?fakeOre:{i:'?',r:'?'},
+      s2: sch===2?fakeOre:{i:'?',r:'?'},
+      linie: snap.linie,
+      _deleted: true // marcaj că tura a fost ștearsă
+    };
+    return {dd:fakeDd, fromSnap:true};
+  }
+  // Dacă e introdus manual (depouri fără indicatori)
+  if(s._manual){
+    const m=s._manual;
+    const fakeOre={i:m.i, r:m.r, d:m.depou||false, c:''};
+    const fakeDd={
+      s1: fakeOre, s2: fakeOre,
+      linie: m.linie, tur: m.tur,
+      _manual: true, _supl: m.supl||0
+    };
+    return {dd:fakeDd, fromSnap:false, isManual:true};
+  }
+  return null;
+}
+function calcOre(i,r){const[ih,im]=i.split(':').map(Number);const[rh,rm]=r.split(':').map(Number);let s=ih*60+im,e=rh*60+rm;if(e<=s)e+=1440;return e-s;}
+
+// calcOreZi — calculează ore totale pentru o zi salvată (ține cont de override și supl)
+function calcOreZi(s, dd, sch){
+  let min=0;
+  // Ore manuale override (utilizatorul a modificat orele indicatorului)
+  if(s._oreManuale && s._oreManuale.i && s._oreManuale.r){
+    min = calcOre(s._oreManuale.i, s._oreManuale.r);
+  } else if(s._manual && s._manual.i && s._manual.r){
+    // Introdus complet manual
+    min = calcOre(s._manual.i, s._manual.r);
+  } else if(dd){
+    const oreD = sch===1 ? dd.s1 : dd.s2;
+    if(oreD && oreD.i && oreD.r) min = calcOre(oreD.i, oreD.r);
+  }
+  // Adăugăm ore suplimentare
+  const supl = (s._supl||0) + (s._manual?.supl||0);
+  return min + supl;
+}
+function fmtOre(m){const h=Math.floor(m/60),mm=m%60;return mm>0?`${h}h ${mm}m`:`${h}h`;}
+function fmtTur(k,linie){return`T${k.split('/')[0]} L${linie}`;}
+function fmtTurD(k){const p=k.split('/');return p.length===2?`T${p[0]} L${p[1]}`:k;}
+
+// ==================== DEPOT ====================
+let selectedDepot='';
+function selDepot(d){selectedDepot=d;['dudesti','giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].forEach(x=>document.getElementById('dc-'+x).classList.toggle('sel',d===x));}
+async function confirmDepot(){if(!selectedDepot){alert('Alege un depou!');return;}DEPOT=selectedDepot;
+  // GA4: depoul ales
+  gaEvent('depot_selected', { depot: selectedDepot, platform: getPlatform(), event_category: 'onboarding' });try{localStorage.setItem('p2026_depot',DEPOT);}catch(e){}document.getElementById('depot-screen').style.display='none';document.getElementById('app').style.display='block';document.getElementById('bottom-nav').style.display='flex';if(!DB_LOADED)await loadDB();initApp();}
+function showDepotScreen(){selectedDepot=DEPOT;['dudesti','giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].forEach(x=>{const el=document.getElementById('dc-'+x);if(el)el.classList.remove('sel');});document.getElementById('dc-'+DEPOT).classList.add('sel');document.getElementById('depot-screen').style.display='flex';document.getElementById('app').style.display='none';document.getElementById('bottom-nav').style.display='none';}
+
+// Nume depouri — accesibil global
+const DEPOT_NAMES={dudesti:'Depoul Dudești',giurgiu:'Depoul Giurgiu',victoria:'Depoul Victoria',titan:'Depoul Titan',alexandria:'Depoul Alexandria',colentina:'Depoul Colentina',militari:'Depoul Militari',budesti:'Depoul Budești Noi',autobuze:'Autobuze / Troleibuze STB'};
+
+function initApp(){
+  const _ico=DEPOT==='autobuze'?'🚌':'🚃';
+  document.getElementById('app-depot').textContent=_ico+' '+(DEPOT_NAMES[DEPOT]||'Depoul Dudești')+' · tap pentru schimbare';
+  let LA=0;LUNI.forEach((l,i)=>{if(l.a===TODAY.getFullYear()&&l.l===TODAY.getMonth()+1)LA=i;});
+  window.LA=LA;
+  rTabs();
+  setView('azi');
+}
+
+// ==================== VIEW SWITCHING ====================
+let currentView='azi';
+function setView(v){
+  currentView=v;
+  ['azi','calendar','lista'].forEach(x=>{
+    document.getElementById('nav-'+x).classList.toggle('active',x===v);
+  });
+  // Show/hide month tabs - only for calendar and lista
+  document.getElementById('month-tabs').style.display=(v==='azi')?'none':'flex';
+  renderView();
+}
+
+function renderView(){
+  if(currentView==='azi') renderAzi();
+  else if(currentView==='calendar') renderCalendar();
+  else renderLista();
+}
+
+// ==================== TABS ====================
+function rTabs(){
+  const tabs=document.getElementById('month-tabs');tabs.innerHTML='';
+  let lastAn=null;
+  LUNI.forEach((l,i)=>{
+    if(l.a!==lastAn){
+      lastAn=l.a;
+      const sep=document.createElement('span');
+      sep.style.cssText='flex-shrink:0;display:flex;align-items:center;padding:0 4px;font-size:0.6rem;color:var(--stb-green);font-weight:700;letter-spacing:0.05em;';
+      sep.textContent=l.a;tabs.appendChild(sep);
+    }
+    let hd=false;const mem=getMEM();
+    try{hd=Object.keys(mem).some(k=>k.startsWith(`${l.a}-${l.l}-`));}catch(e){}
+    const b=document.createElement('button');
+    b.className='month-tab'+(i===window.LA?' active':'')+(hd?' has-data':'');
+    b.textContent=l.n;b.onclick=()=>{window.LA=i;rTabs();renderView();};
+    tabs.appendChild(b);
+  });
+  // Scroll la luna activa
+  setTimeout(()=>{const at=tabs.querySelector('.month-tab.active');if(at)at.scrollIntoView({inline:'center',behavior:'smooth'});},50);
+}
+
+
+// ── Helper: info complet tură pentru afișare ──
+function getTuraInfo(s, dd, sch, isG) {
+  const oreD = sch===1 ? dd.s1 : dd.s2;
+  const oreAf = s._oreManuale ? s._oreManuale : (s._manual ? {i:s._manual.i, r:s._manual.r} : oreD);
+  const suplMin = (s._supl||0) + (s._manual && s._manual.supl ? s._manual.supl : 0);
+
+  // Plecare din depou?
+  const depouSch1 = sch===1 && !isG;                       // Dudesti schimb 1 = plecare depou
+  const depouSch1G = isG && sch===1 && dd.s1 && dd.s1.d;  // Giurgiu s1.d:true = plecare depou
+  const depouSch2 = sch===2 && dd.s2 && dd.s2.d;          // schimb 2 cu d:true = plecare depou
+  const depouManual = s._manual && s._manual.depou;
+  const isDep = depouSch1 || depouSch1G || depouSch2 || depouManual;
+
+  // intrareDepou nu mai este folosit (eliminat)
+  const intrareDepou = false;
+
+  // Capăt linie schimb
+  const capac = sch===2 && dd.s2 && dd.s2.c ? dd.s2.c : (sch===1 && dd.s1 && dd.s1.c ? dd.s1.c : '');
+
+  // Text tur
+  let turTxt = '';
+  if (s._manual) {
+    turTxt = `L${s._manual.linie||'?'} T${s._manual.tur||'?'}`;
+  } else if (isG) {
+    turTxt = fmtTur(s.r, dd.linie);
+  } else {
+    turTxt = fmtTurD(s.r);
+  }
+
+  // Detaliu schimb complet
+  let schimbInfo = '';
+  if (isDep && capac) {
+    schimbInfo = `🚌 Plecare din DEPOU · Schimb la ${capac}`;
+  } else if (isDep) {
+    schimbInfo = `🚌 Plecare din DEPOU`;
+  } else if (intrareDepou && capac) {
+    schimbInfo = `Schimb la ${capac} · 🏠 Intrare în DEPOU`;
+  } else if (intrareDepou) {
+    schimbInfo = `🏠 Intrare în DEPOU`;
+  } else if (capac) {
+    schimbInfo = `Schimb la ${capac}`;
+  } else {
+    schimbInfo = `Schimb ${sch}`;
+  }
+
+  return { oreAf, suplMin, isDep, turTxt, schimbInfo, capac, oreD };
+}
+
+// ==================== VIEW: AZI + SĂPTĂMÂNĂ ====================
+let weekOffset=0; // 0=saptamana curenta, 1=urmatoarea, -1=anterioara
+
+function renderAzi(){
+  const vc=document.getElementById('view-container');vc.innerHTML='';
+  const a=TODAY.getFullYear(),l=TODAY.getMonth()+1,z=TODAY.getDate();
+  const lunaObj=LUNI.find(x=>x.a===a&&x.l===l);
+
+  // Card AZI
+  const todayDiv=document.createElement('div');
+  todayDiv.className='today-big';
+  if(lunaObj){
+    const s=gs(a,l,z);const sarb=getSarb(a,l,z);
+    const nZ=ZN[new Date(a,l-1,z).getDay()];
+    const sch=s.s||(DEPOT==='giurgiu'?1:2);
+    let bodyHtml='';
+    if(s.t==='liber') bodyHtml=`<div class="tb-status" style="color:var(--green)">🟢 Zi liberă</div>`;
+    else if(s.t==='co') bodyHtml=`<div class="tb-status" style="color:var(--red)">🔴 Concediu</div>`;
+    else if(s.t==='fractie'&&s.fr){const fr=s.fr;const turLabel=[(fr.linie?'L'+fr.linie:''),(fr.tur?'T'+fr.tur:'')].filter(Boolean).join(' · ');const durHtml=fr.start&&fr.end&&/^\d{2}:\d{2}$/.test(fr.start)&&/^\d{2}:\d{2}$/.test(fr.end)?` <span style="font-size:0.7rem;color:var(--muted)">(${fmtOre(calcOre(fr.start,fr.end))})</span>`:'';bodyHtml=`<div class="tb-status" style="color:var(--blue)">✂️ Fracție${turLabel?' — '+turLabel:''}</div>${fr.start||fr.end?`<div class="tb-ore">${fr.start||'?'} <span style="font-size:1rem;color:var(--muted)">→</span> ${fr.end||'?'}${durHtml}</div>`:''}${fr.nota?`<div style="font-size:0.62rem;color:var(--muted);margin-top:3px">📝 ${fr.nota}</div>`:''}`;}
+    else if(s.t==='sarb'){
+      const sarbN=sarb||'Sărbătoare legală';
+      if(s.r){
+        const dbA=getDB();const dbdA=s.t==='we'?dbA.we:dbA.zl;const ddA=dbdA[s.r];
+        const schA=s.s||(DEPOT==='giurgiu'?1:2);
+        if(ddA){const orA=schA===1?ddA.s1:ddA.s2;const depA=(schA===1&&DEPOT!=='giurgiu')||(schA===2&&ddA.s2&&ddA.s2.d);
+          bodyHtml=`<div style="font-size:0.7rem;color:var(--sarb);margin-bottom:6px">🎉 ${sarbN}</div>
+            <div class="tb-ore${depA?' dep':''}">${orA.i} <span style="font-size:1rem;color:var(--muted)">→</span> ${orA.r}</div>
+            <div class="tb-info">${DEPOT==='giurgiu'?fmtTur(s.r,ddA.linie):fmtTurD(s.r)} · Schimb ${schA}</div>
+            ${depA?'<div class="tb-dep">🚌 Plecare din DEPOU</div>':''}`;}
+        else bodyHtml=`<div class="tb-status" style="color:var(--sarb)">🎉 ${sarbN}</div>`;
+      } else bodyHtml=`<div class="tb-status" style="color:var(--sarb)">🎉 ${sarbN}</div>`;
+    }
+    else if((s.t==='zl'||s.t==='we')||s._manual){
+      const ddResA=getDD(s);
+      if(ddResA){
+        const {dd}=ddResA;
+        const isG=['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT);
+        const ti=getTuraInfo(s,dd,sch,isG);
+        const durMin=ti.oreAf.i&&ti.oreAf.r?calcOre(ti.oreAf.i,ti.oreAf.r)+ti.suplMin:0;
+        const durStr=durMin>0?`<span style="font-size:0.7rem;color:var(--green);margin-left:8px">${fmtOre(durMin)}</span>`:'';
+        bodyHtml=`
+          <div class="tb-ore${ti.isDep?' dep':''}" style="font-size:2.6rem;letter-spacing:-0.02em;">
+            ${ti.oreAf.i} <span style="font-size:1.4rem;color:var(--muted)">→</span> ${ti.oreAf.r}${durStr}
+          </div>
+          <div class="tb-info" style="font-size:0.85rem;margin-top:6px;font-weight:700;">
+            ${ti.turTxt}
+          </div>
+          <div style="font-size:0.75rem;color:${ti.isDep?'var(--depou)':'var(--accent)'};margin-top:4px;font-weight:600;">
+            ${ti.schimbInfo}
+          </div>
+          ${ti.suplMin>0?`<div style="font-size:0.62rem;color:var(--depou);margin-top:3px">+${ti.suplMin} min suplimentare</div>`:''}`;
+      }
+    } else {bodyHtml=`<div class="tb-gol">Ziua necompletată — apasă Modifică</div>`;}
+    todayDiv.innerHTML=`<div class="tb-head"><div class="tb-label">⏰ Astăzi</div><div class="tb-date">${z} ${nZ} · ${lunaObj.n}</div></div>
+      <div class="tb-body">${bodyHtml}<button class="tb-edit" onclick="openM(${a},${l},${z})">✂️ Modifică ziua de azi</button></div>`;
+  } else {
+    todayDiv.innerHTML=`<div class="tb-head"><div class="tb-label">⏰ Astăzi</div></div><div class="tb-body"><div class="tb-gol">Data de azi nu este în program (Apr–Dec 2026)</div></div>`;
+  }
+  vc.appendChild(todayDiv);
+
+  // Statistici rapide luna curenta
+  if(lunaObj){
+    const statsDiv=document.createElement('div');statsDiv.className='stats-bar';
+    let zl=0,totalMin=0,depouC=0;
+    const db=getDB();
+    for(let d=1;d<=lunaObj.z;d++){
+      const s=gs(a,l,d);
+      if(s.t==='zl'||s.t==='we'){zl++;if(s.r){const dbd=s.t==='we'?db.we:db.zl;const dd=dbd[s.r];if(dd){const sch=s.s||(DEPOT==='giurgiu'?1:2);totalMin+=sch===1?calcOre(dd.s1.i,dd.s1.r):calcOre(dd.s2.i,dd.s2.r);if(sch===1||dd.s2&&dd.s2.d)depouC++;}}}
+    }
+    statsDiv.innerHTML=`
+      <div class="sb-box"><div class="sb-val" style="color:var(--green)">${fmtOre(totalMin)}</div><div class="sb-lbl">Ore luna</div></div>
+      <div class="sb-box"><div class="sb-val" style="color:var(--blue)">${zl}</div><div class="sb-lbl">Zile lucrate</div></div>
+      <div class="sb-box"><div class="sb-val" style="color:var(--depou)">${depouC}</div><div class="sb-lbl">Din depou</div></div>`;
+    vc.appendChild(statsDiv);
+  }
+
+  // Săptămâna - cu navigare
+  const wNav=document.createElement('div');
+  wNav.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+  const wOffsetDate=new Date(TODAY);
+  const dowW=TODAY.getDay();const monOff=dowW===0?-6:1-dowW;
+  wOffsetDate.setDate(TODAY.getDate()+monOff+weekOffset*7);
+  const wEndDate=new Date(wOffsetDate);wEndDate.setDate(wOffsetDate.getDate()+6);
+  const isCurrent=weekOffset===0;
+  const wLabel=isCurrent?'Săptămâna curentă':`${wOffsetDate.getDate()}.${String(wOffsetDate.getMonth()+1).padStart(2,'0')} — ${wEndDate.getDate()}.${String(wEndDate.getMonth()+1).padStart(2,'0')}`;
+  wNav.innerHTML=`
+    <button onclick="weekOffset--;renderAzi()" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:var(--font-body);font-size:0.65rem;cursor:pointer;">◀ Prev</button>
+    <div style="font-family:var(--font-display);font-size:0.72rem;font-weight:800;color:${isCurrent?'var(--accent)':'var(--text)'};text-transform:uppercase;letter-spacing:0.06em;">${wLabel}</div>
+    <button onclick="weekOffset++;renderAzi()" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:var(--font-body);font-size:0.65rem;cursor:pointer;">Next ▶</button>`;
+  vc.appendChild(wNav);
+  const wGrid=document.createElement('div');wGrid.className='week-grid';
+
+  const mondayOffset=monOff+weekOffset*7;
+  for(let i=0;i<7;i++){
+    const d2=new Date(TODAY);d2.setDate(TODAY.getDate()+mondayOffset+i);
+    const da=d2.getFullYear(),dl=d2.getMonth()+1,dz=d2.getDate();
+    const lunaObjW=LUNI.find(x=>x.a===da&&x.l===dl);
+    const row=document.createElement('div');
+    const isToday=isTD(da,dl,dz);
+    const sarb=getSarb(da,dl,dz);
+    const weDay=isWE(da,dl,dz);
+    let cls='week-row';
+    if(isToday)cls+=' wr-today';
+    else if(sarb)cls+=' wr-sarb';
+    else if(weDay)cls+=' wr-we';
+    row.className=cls;
+
+    let numCls='wr-num';
+    if(isToday)numCls+=' wn-today';
+    else if(sarb)numCls+=' wn-sarb';
+    else if(weDay)numCls+=' wn-we';
+
+    let infoCls='wr-info';let infoText='';let badge='';
+    if(!lunaObjW){infoText='—';infoCls+=' wi-gol';}
+    else{
+      const s=gs(da,dl,dz);
+      if(s.t==='liber'){infoText='Liber';badge=`<span class="wr-badge tb-libre">Liber</span>`;}
+      else if(s.t==='co'){infoText='CO';badge=`<span class="wr-badge tb-co">CO</span>`;}
+      else if(s.t==='fractie'&&s.fr){const fr=s.fr;const turLabel=[(fr.linie?'L'+fr.linie:''),(fr.tur?'T'+fr.tur:'')].filter(Boolean).join(' ');infoText=`✂️${turLabel?' '+turLabel:''}${fr.start?' · '+fr.start:''}${fr.end?'–'+fr.end:''}`;badge=`<span class="wr-badge" style="background:rgba(33,150,243,0.1);color:var(--blue);border:1px solid rgba(33,150,243,0.25)">Fracție</span>`;}
+      else if(s.t==='sarb'||sarb){
+        const sNume=sarb||'Sărbătoare';
+        if(s.r){
+          const db2=getDB();const dbd2=s.t==='we'?db2.we:db2.zl;const dd2=dbd2[s.r];
+          const sch2=s.s||(DEPOT==='giurgiu'?1:2);
+          if(dd2){const oD=sch2===1?dd2.s1:dd2.s2;infoText=`🎉 ${sNume} · ${DEPOT==='giurgiu'?fmtTur(s.r,dd2.linie):fmtTurD(s.r)} ${oD.i}–${oD.r}`;}
+          else infoText=sNume;
+        } else infoText=sNume;
+        badge=`<span class="wr-badge tb-sarb">Sărbătoare</span>`;
+      }
+      else if((s.t==='zl'||s.t==='we')||s._manual){
+        const ddRw2=getDD(s);
+        const sch=s.s||(['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT)?1:2);
+        if(ddRw2){
+          const {dd}=ddRw2;
+          const isG=['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT);
+          const ti=getTuraInfo(s,dd,sch,isG);
+          infoText=`${ti.turTxt} · ${ti.oreAf.i}–${ti.oreAf.r}`;
+          badge=`<span class="wr-badge ${sch===1?'tb-s1':'tb-s2'}">${ti.isDep?'🚌':''}Sch${sch}</span>`;
+          // Linie secundară cu schimb/depou info
+          if(ti.schimbInfo && ti.schimbInfo!==`Schimb ${sch}`){
+            infoCls='wr-info';
+            infoText=`<div style="font-size:0.68rem;">${ti.turTxt} · ${ti.oreAf.i}–${ti.oreAf.r}</div><div style="font-size:0.58rem;color:${ti.isDep?'var(--depou)':'var(--accent)'};margin-top:1px;">${ti.schimbInfo}</div>`;
+          }
+        }
+      } else {infoText='Necompletat';infoCls+=' wi-gol';}
+    }
+
+    // depou tag — eliminat, info e deja în infoText
+    row.innerHTML=`<div class="${numCls}">${dz}</div><div class="wr-day">${ZNS[d2.getDay()]}</div><div class="${infoCls}">${infoText}</div>${badge}`;
+    if(lunaObjW) row.onclick=()=>openM(da,dl,dz);
+    wGrid.appendChild(row);
+  }
+  vc.appendChild(wGrid);
+
+  // Total ore saptamana
+  let weekMin=0;
+  const db2=getDB();
+  for(let i=0;i<7;i++){
+    const d3=new Date(TODAY);d3.setDate(TODAY.getDate()+mondayOffset+i);
+    const da3=d3.getFullYear(),dl3=d3.getMonth()+1,dz3=d3.getDate();
+    const sw=gs(da3,dl3,dz3);
+    if((sw.t==='zl'||sw.t==='we')||sw._manual){const ddRw=getDD(sw);if(ddRw){const sch3=sw.s||(['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT)?1:2);weekMin+=calcOreZi(sw,ddRw.dd,sch3);}else if(sw._manual&&sw._manual.i&&sw._manual.r){weekMin+=calcOre(sw._manual.i,sw._manual.r)+(sw._manual.supl||0);}}
+    else if(sw.t==='fractie'&&sw.fr&&sw.fr.start&&sw.fr.end){try{weekMin+=calcOre(sw.fr.start,sw.fr.end);}catch(e){}}
+  }
+  if(weekMin>0){
+    const wobDiv=document.createElement('div');wobDiv.className='week-ore-bar';
+    wobDiv.innerHTML=`<div><div class="wob-label">Total ore săptămână</div><div class="wob-sub">${isCurrent?'Săptămâna curentă':wLabel}</div></div><div style="text-align:right"><div class="wob-val">${fmtOre(weekMin)}</div></div>`;
+    vc.appendChild(wobDiv);
+  }
+}
+
+// ==================== VIEW: CALENDAR GRID ====================
+function renderCalendar(){
+  const vc=document.getElementById('view-container');vc.innerHTML='';
+  const l=LUNI[window.LA];
+  const db=getDB();
+
+  // Stats
+  let totalMin=0,zl=0;
+  for(let d=1;d<=l.z;d++){const s=gs(l.a,l.l,d);if(s.t==='zl'||s.t==='we'){zl++;if(s.r){const ddR=getDD(s);if(ddR){const ddC=ddR.dd;const schC=s.s||(DEPOT==='giurgiu'?1:2);const oreC=schC===1?ddC.s1:ddC.s2;if(oreC&&oreC.i&&oreC.r)totalMin+=calcOre(oreC.i,oreC.r);}}}}
+
+  // Legend
+  const leg=document.createElement('div');leg.className='cal-legend';
+  leg.innerHTML=`
+    <div class="cal-li"><div class="cal-dot" style="background:var(--orange)"></div>Sch 1</div>
+    <div class="cal-li"><div class="cal-dot" style="background:var(--blue)"></div>Sch 2</div>
+    <div class="cal-li"><div class="cal-dot" style="background:var(--green)"></div>Liber</div>
+    <div class="cal-li"><div class="cal-dot" style="background:var(--red)"></div>CO</div>
+    <div class="cal-li"><div class="cal-dot" style="background:var(--sarb)"></div>Sărbătoare</div>
+    <div class="cal-li"><div class="cal-dot" style="background:var(--purple)"></div>Weekend</div>`;
+  vc.appendChild(leg);
+
+  // Statistici complete
+  let liber=0,co=0,depouC=0;const peLinii={};
+  for(let d=1;d<=l.z;d++){
+    const s=gs(l.a,l.l,d);
+    if(s.t==='liber')liber++;
+    else if(s.t==='co')co++;
+    else if(s.t==='zl'||s.t==='we'){
+      if(s.r){const dbd=s.t==='we'?db.we:db.zl;const dd=dbd[s.r];if(dd){
+        const sch=s.s||(DEPOT==='giurgiu'?1:2);
+        if(sch===1||(dd.s2&&dd.s2.d))depouC++;
+        const lin=DEPOT==='giurgiu'?(dd.linie||s.r.split('/')[1]):s.r.split('/')[1];
+        peLinii[lin]=(peLinii[lin]||0)+1;
+      }}
+    }
+  }
+  const liniiSortate=Object.entries(peLinii).sort((a,b)=>Number(a[0])-Number(b[0]));
+
+  const title=document.createElement('div');title.className='cal-month-title';
+  title.innerHTML=`<span>${l.n} ${l.a}</span><span class="cal-month-ore">${fmtOre(totalMin)}</span>`;
+  vc.appendChild(title);
+
+  // ── Buton Statistici ──
+  const statsBtn=document.createElement('button');
+  statsBtn.className='stats-btn';
+  statsBtn.innerHTML='📊 Vezi statistici detaliate';
+  statsBtn.onclick=()=>openStats(l.a,l.l);
+  vc.appendChild(statsBtn);
+
+  // ── Statistici compacte ──
+  const statsRow=document.createElement('div');statsRow.className='stats-bar';statsRow.style.marginBottom='10px';
+  statsRow.innerHTML=`
+    <div class="sb-box"><div class="sb-val" style="color:var(--blue)">${zl}</div><div class="sb-lbl">Zile lucrate</div></div>
+    <div class="sb-box"><div class="sb-val" style="color:var(--green)">${liber}</div><div class="sb-lbl">Zile libere</div></div>
+    <div class="sb-box"><div class="sb-val" style="color:var(--red)">${co}</div><div class="sb-lbl">Zile CO</div></div>`;
+  vc.appendChild(statsRow);
+
+  // Day of week headers - starting Monday
+  const dowRow=document.createElement('div');dowRow.className='cal-dow';
+  ['Lu','Ma','Mi','Jo','Vi','Sâ','Du'].forEach(d=>{const c=document.createElement('div');c.className='cal-dow-lbl';c.textContent=d;dowRow.appendChild(c);});
+  vc.appendChild(dowRow);
+
+  const grid=document.createElement('div');grid.className='cal-grid';
+
+  // First day of month (0=Sun..6=Sat), convert to Mon-based (0=Mon..6=Sun)
+  const firstDow=new Date(l.a,l.l-1,1).getDay();
+  const offset=firstDow===0?6:firstDow-1;
+  for(let i=0;i<offset;i++){const c=document.createElement('div');c.className='cal-cell cc-empty';grid.appendChild(c);}
+
+  for(let d=1;d<=l.z;d++){
+    const s=gs(l.a,l.l,d);const sarb=getSarb(l.a,l.l,d);
+    const td=isTD(l.a,l.l,d);const weDay=isWE(l.a,l.l,d);
+    const sch=s.s||(DEPOT==='giurgiu'?1:2);
+    const cell=document.createElement('div');
+
+    let cc='cc-gol';let dotColor='';
+    if(s.t==='liber'){cc='cc-liber';dotColor='';}
+    else if(s.t==='co'){cc='cc-co';}
+    else if(s.t==='fractie'){cc='cc-fractie';}
+    else if(s.t==='sarb'||sarb){cc='cc-sarb';}
+    else if(s.t==='zl'||s.t==='we'){cc=sch===1?'cc-s1':'cc-s2';}
+    else if(weDay){cc='cc-we';}
+
+    cell.className=`cal-cell ${cc}${td?' cc-today':''}`;
+    cell.style.animationDelay=`${(d-1)*12}ms`;
+    cell.style.animation=`fadeSlideIn 0.35s ease both`;
+    // Tur info pentru calendar — mai clar, pe 2 rânduri
+    let calInfo='';
+    if((s.t==='zl'||s.t==='we')&&s.r){
+      const ddRes2=getDD(s);
+      if(ddRes2){
+        const {dd:dd2,fromSnap:fs2}=ddRes2;
+        const parts=s.r.split('/');const tur=parts[0];const lin=parts[1];
+        const snap=fs2?'⚠':'';
+        if(DEPOT==='giurgiu'){
+          calInfo=`<div class="cc-tur">${snap}T${tur}<br>L${dd2.linie}</div>`;
+        } else {
+          calInfo=`<div class="cc-tur">${snap}T${tur}<br>L${lin}</div>`;
+        }
+      }
+    } else if(s.t==='liber'){calInfo='<div class="cc-tur" style="color:var(--green);font-size:0.65rem">lib</div>';}
+    else if(s.t==='co'){calInfo='<div class="cc-tur" style="color:var(--red);font-size:0.65rem">CO</div>';}
+    else if(s.t==='fractie'){calInfo=`<div class="cc-tur" style="color:var(--blue);font-size:0.65rem">✂️${s.fr&&s.fr.linie?' L'+s.fr.linie:''}</div>`;}
+    else if(s.t==='sarb'||sarb){calInfo='<div class="cc-tur" style="color:var(--sarb);font-size:0.6rem">sarb</div>';}
+    cell.innerHTML=`<div class="cc-num">${d}</div>${calInfo}`;
+    cell.onclick=()=>openM(l.a,l.l,d);
+    grid.appendChild(cell);
+  }
+  vc.appendChild(grid);
+}
+
+// ==================== VIEW: LISTĂ ====================
+function renderLista(){
+  const vc=document.getElementById('view-container');vc.innerHTML='';
+  const l=LUNI[window.LA];
+  const db=getDB();
+  let totalMin=0,zl=0;
+
+  const header=document.createElement('div');header.className='list-month-header';
+
+  const rows=[];
+  for(let d=1;d<=l.z;d++){
+    const s=gs(l.a,l.l,d);const sarb=getSarb(l.a,l.l,d);
+    const td=isTD(l.a,l.l,d);const weDay=isWE(l.a,l.l,d);
+    const sch=s.s||(DEPOT==='giurgiu'?1:2);
+    if(s.t==='zl'||s.t==='we'){zl++;if(s.r){const ddCalc=getDD(s);if(ddCalc){const ddC=ddCalc.dd;const oreC=sch===1?ddC.s1:ddC.s2;if(oreC&&oreC.i&&oreC.r)totalMin+=calcOre(oreC.i,oreC.r);}}}
+
+    const row=document.createElement('div');
+    let cls='list-row';
+    if(td)cls+=' lr-today';
+    else if(sarb&&s.t==='gol')cls+=' lr-sarb';
+    else if(weDay)cls+=' lr-we';
+    row.className=cls;
+
+    let numCls='lr-num';
+    if(td)numCls+=' ln-today';
+    else if(sarb)numCls+=' ln-sarb';
+    else if(weDay)numCls+=' ln-we';
+
+    let turHtml='',oreHtml='',badgeHtml='';
+    if(s.t==='liber'){turHtml='Zi liberă';badgeHtml=`<span class="lr-badge tb-libre">Liber</span>`;}
+    else if(s.t==='co'){turHtml='Concediu';badgeHtml=`<span class="lr-badge tb-co">CO</span>`;}
+    else if(s.t==='fractie'&&s.fr){const fr=s.fr;const turLabel=[(fr.linie?'L'+fr.linie:''),(fr.tur?'T'+fr.tur:'')].filter(Boolean).join(' · ');turHtml=`✂️ Fracție${turLabel?' — '+turLabel:''}`;oreHtml=fr.start&&fr.end&&/^\d{2}:\d{2}$/.test(fr.start)&&/^\d{2}:\d{2}$/.test(fr.end)?`${fr.start} → ${fr.end} (${fmtOre(calcOre(fr.start,fr.end))})`:fr.start&&fr.end?`${fr.start} → ${fr.end}`:fr.start||fr.end||'';if(fr.nota)oreHtml+=(oreHtml?' · ':'')+`📝 ${fr.nota}`;badgeHtml=`<span class="lr-badge" style="background:rgba(33,150,243,0.1);color:var(--blue);border:1px solid rgba(33,150,243,0.25)">Fracție</span>`;}
+    else if(s.t==='sarb'||sarb){
+      // Arata sarbatoarea SI tura daca e completata
+      const sarbNume=sarb||'Sărbătoare';
+      if(s.r){
+        const dbd=s.t==='we'?db.we:db.zl;const dd=dbd[s.r];
+        const sch=s.s||(DEPOT==='giurgiu'?1:2);
+        if(dd){
+          const oreD=sch===1?dd.s1:dd.s2;
+          turHtml=`🎉 ${sarbNume} · ${DEPOT==='giurgiu'?fmtTur(s.r,dd.linie):fmtTurD(s.r)}`;
+          oreHtml=`${oreD.i} → ${oreD.r} · Sch${sch}`;
+          badgeHtml=`<span class="lr-badge tb-sarb">Sărbătoare</span>`;
+        } else {turHtml=sarbNume;badgeHtml=`<span class="lr-badge tb-sarb">Sărbătoare</span>`;}
+      } else {turHtml=sarbNume;badgeHtml=`<span class="lr-badge tb-sarb">Sărbătoare</span>`;}
+    }
+    else if((s.t==='zl'||s.t==='we')||s._manual){
+      const ddRes=getDD(s);
+      if(ddRes){
+        const {dd,fromSnap}=ddRes;
+        const isG=['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT);
+        const ti=getTuraInfo(s,dd,sch,isG);
+        turHtml=(fromSnap?'⚠️ ':'')+ti.turTxt;
+        oreHtml=`${ti.oreAf.i} → ${ti.oreAf.r}${ti.suplMin>0?' +'+ti.suplMin+'m supl.':''}${fromSnap?' <span style="color:var(--orange);font-size:0.65rem">tură eliminată</span>':''}`;
+        const schimbLine = ti.schimbInfo && ti.schimbInfo!==`Schimb ${sch}`
+          ? `<div style="font-size:0.6rem;color:${ti.isDep?'var(--depou)':'var(--accent)'};margin-top:2px;">${ti.schimbInfo}</div>` : '';
+        if(schimbLine) oreHtml = oreHtml + schimbLine;
+        badgeHtml=`<span class="lr-badge ${sch===1?'tb-s1':'tb-s2'}" style="${fromSnap?'opacity:0.7;border-style:dashed':''}">${ti.isDep?'🚌':''}Sch${sch}</span>`;
+      }
+    } else {turHtml='Necompletat';}
+
+    row.innerHTML=`<div class="list-main">
+      <div class="${numCls}">${d}</div>
+      <div class="lr-day">${nzs(l.a,l.l,d)}</div>
+      <div class="lr-mid">
+        <div class="lr-tur${!turHtml||turHtml==='Necompletat'?' lr-gol':''}">${turHtml||'Necompletat'}</div>
+        ${oreHtml?`<div class="lr-ore">${oreHtml}</div>`:''}
+      </div>
+      ${badgeHtml}
+    </div>`;
+
+    // Expandabil
+    let expanded=false;
+    row.addEventListener('click',()=>{
+      if(expanded){row.querySelector('.list-expanded')?.remove();expanded=false;return;}
+      expanded=true;
+      const exp=document.createElement('div');exp.className='list-expanded';
+      // Build expanded content
+      let expHtml='';
+      if((s.t==='zl'||s.t==='we')&&s.r){
+        const ddEx=getDD(s);
+        if(ddEx){
+          const {dd,fromSnap:fsEx}=ddEx;
+          if(fsEx){expHtml+=`<div style="padding:6px 10px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.3);border-radius:8px;font-size:0.65rem;color:var(--orange);margin-bottom:8px">⚠️ Această tură a fost eliminată din program. Orele sunt cele salvate la momentul completării.</div>`;}
+          {
+            const isGEx=['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT);
+            const tiEx=getTuraInfo(s,dd,sch,isGEx);
+            const oreEx=tiEx.oreAf;
+            const cls=tiEx.isDep?(sch===1?'le-s1':'le-s2d'):(sch===1?'le-s1':'le-s2');
+            expHtml=`<div class="le-shift ${cls}">
+              <div class="le-lbl">Schimb ${sch} — ${sch===1?'Dimineață':'După-amiază'}</div>
+              ${tiEx.isDep?'<div class="le-dep">🚌 Plecare din DEPOU</div>':''}
+              ${tiEx.capac?`<div class="le-capac">Schimb la ${tiEx.capac}</div>`:''}
+              <div class="le-ore">${oreEx.i} → ${oreEx.r}</div>
+              ${tiEx.suplMin>0?`<div style="font-size:0.6rem;color:var(--depou)">+${tiEx.suplMin} min suplimentare</div>`:''}
+            </div>`;
+          }
+        }
+      } else if(s.t==='fractie'&&s.fr){
+        const fr=s.fr;
+        const turLabel=[(fr.linie?'L'+fr.linie:''),(fr.tur?'T'+fr.tur:'')].filter(Boolean).join(' · ');
+        const durHtml=fr.start&&fr.end&&/^\d{2}:\d{2}$/.test(fr.start)&&/^\d{2}:\d{2}$/.test(fr.end)?` · ${fmtOre(calcOre(fr.start,fr.end))}`:'';
+        expHtml=`<div class="le-shift le-g">
+          <div class="le-lbl" style="color:var(--blue)">✂️ Fracție manuală${turLabel?' — '+turLabel:''}</div>
+          <div class="le-ore" style="color:var(--blue)">${fr.start||'—'} → ${fr.end||'—'}${durHtml}</div>
+          ${fr.nota?`<div style="font-size:0.6rem;color:var(--muted);margin-top:4px">📝 ${fr.nota}</div>`:''}
+        </div>`;
+      } else if(sarb||s.t==='sarb'){
+        expHtml=`<div style="font-size:0.7rem;color:var(--sarb);padding:4px 0 6px">🎉 ${sarb||'Sărbătoare'}</div>`;
+        if(s.r){
+          const dbE=getDB();const dbdE=s.t==='we'?dbE.we:dbE.zl;const ddE=dbdE[s.r];
+          const schE=s.s||(DEPOT==='giurgiu'?1:2);
+          if(ddE){const orE=schE===1?ddE.s1:ddE.s2;const dcE=schE===1?'le-s1':(ddE.s2&&ddE.s2.d?'le-s2d':'le-s2');
+            expHtml+=`<div class="le-shift ${dcE}"><div class="le-lbl">Schimb ${schE}</div>${schE===1&&DEPOT!=='giurgiu'?'<div class="le-dep">🚌 Plecare din DEPOU</div>':schE===2&&ddE.s2&&ddE.s2.d?'<div class="le-dep">🚌 Plecare din DEPOU</div>':''}<div class="le-ore">${orE.i} → ${orE.r}</div></div>`;}
+        }
+      }
+      expHtml+=`<button class="le-edit" onclick="openM(${l.a},${l.l},${d})">✂️ Modifică</button>`;
+      exp.innerHTML=expHtml;row.appendChild(exp);
+    });
+    rows.push(row);
+  }
+
+  header.innerHTML=`<div class="list-month-title">${l.n} ${l.a}</div><div class="list-stats">${zl} zile · ${totalMin>0?fmtOre(totalMin):'0h'}</div>`;
+  vc.appendChild(header);
+  rows.forEach(r=>vc.appendChild(r));
+
+  if(totalMin>0){
+    const footer=document.createElement('div');footer.className='list-footer';
+    footer.innerHTML=`<div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Total ore lucrate</div><div style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;color:var(--green)">${fmtOre(totalMin)}</div>`;
+    vc.appendChild(footer);
+  }
+}
+
+// ==================== MODAL ====================
+let mA,mL,mZ,mT='zl',mS=1,mR=null,mLinie=null;
+
+function openM(a,l,z){
+  mA=a;mL=l;mZ=z;
+  const s=gs(a,l,z);const weekend=isWE(a,l,z);
+  if(s.t==='we'||s.t==='zl'){mT=s.t;}else{mT=weekend?'we':'zl';}
+  mS=s.s||(['giurgiu','victoria','militari','titan','alexandria','colentina','budesti','autobuze'].includes(DEPOT)?1:2);mR=s.r||null;
+  const sarb=getSarb(a,l,z);
+  document.getElementById('mtitle').textContent=`${z} ${nz(a,l,z)}`;
+  document.getElementById('msub').textContent=(sarb?'🎉 '+sarb+' · ':'')+LUNI.find(x=>x.l===l&&x.a===a)?.n+' '+a;
+  if(weekend){document.getElementById('tzl').style.display='none';document.getElementById('twe').style.display='';document.getElementById('tip-lbl').textContent='Indicatori (weekend)';}
+  else{document.getElementById('tzl').style.display='';document.getElementById('twe').style.display='';document.getElementById('tip-lbl').textContent='Indicatori — alege tipul zilei';}
+  document.getElementById('s1btn').innerHTML=DEPOT==='giurgiu'?'1 — Dimineață<br><span class="hint">Plecare din depou</span>':'1 — Dimineață<br><span class="hint">Plecare din depou</span>';
+  document.getElementById('s2btn').innerHTML=DEPOT==='giurgiu'?'2 — După-amiază<br><span class="hint">Schimb de tură</span>':'2 — După-amiază<br><span class="hint">Schimb de tură</span>';
+  if(s.r){mLinie=DEPOT==='giurgiu'?(getDB()[mT==='we'?'we':'zl'][s.r]?.linie||null):(s.r.split('/')[1]||null);}else{mLinie=null;}
+  document.getElementById('tur-section').style.display=mLinie?'block':'none';
+  openMExtins(a,l,z);
+  document.getElementById('modal').classList.add('active');
+  // Arata butonul de stergere doar daca ziua are date salvate
+  const hasData=s.t!=='gol';
+  document.getElementById('btn-delete-zi').style.display=hasData?'block':'none';
+  uTip();uSch();rLG();if(mLinie)rTG();uPrev();
+}
+function closeM(){document.getElementById('modal').classList.remove('active');}
+function setQ(t){ss(mA,mL,mZ,{t,r:null,s:mS});rTabs();renderView();closeM();}
+function sTip(t){mT=t;mR=null;mLinie=null;document.getElementById('tur-section').style.display='none';uTip();rLG();uPrev();}
+function sSch(s){mS=s;uSch();uPrev();}
+function uTip(){document.getElementById('tzl').className='tip-btn'+(mT==='zl'?' act':'');document.getElementById('twe').className='tip-btn'+(mT==='we'?' act':'');}
+function uSch(){document.getElementById('s1btn').className='sch-btn'+(mS===1?' act1':'');document.getElementById('s2btn').className='sch-btn'+(mS===2?' act2':'');}
+
+function getLinii(){const db=getDB();const dbd=mT==='we'?db.we:db.zl;const linii=new Set();Object.entries(dbd).forEach(([k,v])=>{if(DEPOT==='giurgiu')linii.add(v.linie);else linii.add(k.split('/')[1]);});return Array.from(linii).sort((a,b)=>Number(a)-Number(b));}
+
+function rLG(){
+  const g=document.getElementById('liniegrid');g.innerHTML='';
+  const linii=getLinii();
+  linii.forEach(l=>{const b=document.createElement('button');b.className='linie-btn'+(mLinie===l?' sel':'');b.textContent='L'+l;b.onclick=()=>{mLinie=l;mR=null;rLG();document.getElementById('tur-section').style.display='block';rTG();uPrev();};g.appendChild(b);});
+  if(mLinie&&!linii.includes(mLinie)){mLinie=null;mR=null;document.getElementById('tur-section').style.display='none';}
+}
+
+function rTG(){
+  const g=document.getElementById('turgrid');g.innerHTML='';if(!mLinie)return;
+  const db=getDB();const dbd=mT==='we'?db.we:db.zl;
+  Object.entries(dbd).forEach(([k,v])=>{
+    const linie=DEPOT==='giurgiu'?v.linie:k.split('/')[1];
+    if(linie!==mLinie)return;
+    const b=document.createElement('button');const isDep=v.s2&&v.s2.d;
+    let cls='tur-btn'+(isDep?' dt':'');if(mR===k)cls+=' sel';
+    b.textContent='T'+k.split('/')[0];b.className=cls;
+    b.onclick=()=>{mR=k;rTG();uPrev();};g.appendChild(b);
+  });
+  document.getElementById('lbl-tur').textContent='Tur — Linia '+mLinie;
+}
+
+function uPrev(){
+  const box=document.getElementById('preview');
+  if(!mR){box.innerHTML='<span style="color:var(--muted);font-size:0.66rem">Alege tur</span>';return;}
+  const db=getDB();const dbd=mT==='we'?db.we:db.zl;const d=dbd[mR];
+  if(!d){box.innerHTML='<span style="color:var(--orange)">Date lipsă</span>';return;}
+  if(DEPOT==='giurgiu'){const oreD=mS===1?d.s1:d.s2;const depou=(mS===1&&d.s1&&d.s1.d)||(mS===2&&d.s2&&d.s2.d);const capac=oreD&&oreD.c?oreD.c:'';box.innerHTML=`<span class="pv-linie">🚌 ${fmtTur(mR,d.linie)}</span>${capac?`<span class="pv-capac">${capac}</span>`:''} ${depou?'<span class="pv-dep">🚌 Plecare din DEPOU</span>':''}<span class="pv-ore" style="${depou?'color:var(--depou)':''}">${oreD.i} → ${oreD.r}</span>`;}
+  else{const isGDep=['victoria','militari','titan','alexandria','colentina','budesti','autobuze'].includes(DEPOT);if(mS===1){const c1=d.s1&&d.s1.c?d.s1.c:'';box.innerHTML=`<span class="pv-dep-main">🚌 Plecare din DEPOU</span>${c1?`<span class="pv-capac">${c1}</span>`:''}<span class="pv-ore" style="color:var(--depou)">${d.s1.i} → ${d.s1.r}</span>`;}else{box.innerHTML=`<span class="pv-capac">${d.s2.c||''}</span>${d.s2.d?'<span class="pv-dep">🚌 Plecare din DEPOU</span>':''}<span class="pv-ore">${d.s2.i} → ${d.s2.r}</span>`;}}
+}
+
+function saveD(){/* — suprascris de saveD extins din secțiunea MODAL EXTINS — 
+   Vezi funcția completă mai jos */}
+function deleteZi(){
+  if(!confirm(`Ștergi datele pentru ${mZ} ${nz(mA,mL,mZ)}?`))return;
+  const mem=getMEM();delete mem[`${mA}-${mL}-${mZ}`];_save();
+  rTabs();renderView();closeM();
+}
+document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeM();});
+
+
+// ==================== MODAL EXTINS ====================
+const DEPOTS_FARA_INDICATORI = ['titan','alexandria','colentina','militari','budesti','autobuze'];
+
+function isDepouFaraIndicatori(){
+  return DEPOTS_FARA_INDICATORI.includes(DEPOT);
+}
+
+// Formatare automată HH:MM la tastat
+function fmtTimeInput(inp){
+  let v=inp.value.replace(/[^0-9]/g,'');
+  if(v.length>=3) v=v.slice(0,2)+':'+v.slice(2,4);
+  inp.value=v;
+}
+
+// Toggle secțiunea de ore manuale (pentru depouri cu indicatori)
+function toggleOreManuale(){
+  const sec=document.getElementById('ore-manual-section');
+  sec.classList.toggle('open');
+  const btn=document.getElementById('ore-manual-toggle');
+  if(sec.classList.contains('open')){
+    btn.textContent='✏️ Ascunde orele manuale';
+    btn.style.borderColor='rgba(96,165,250,0.5)';
+  } else {
+    btn.textContent='✏️ Modifică orele manual (opțional)';
+    btn.style.borderColor='';
+    document.getElementById('om-start').value='';
+    document.getElementById('om-end').value='';
+    document.getElementById('om-prev').innerHTML='<span style="color:var(--muted);font-size:0.62rem">Introdu orele pentru a vedea durata</span>';
+  }
+}
+
+// Preview ore manuale (override)
+function uPrevManual(){
+  const s=document.getElementById('om-start').value;
+  const e=document.getElementById('om-end').value;
+  const prev=document.getElementById('om-prev');
+  if(s.match(/^\d{2}:\d{2}$/) && e.match(/^\d{2}:\d{2}$/)){
+    const min=calcOre(s,e);
+    const h=Math.floor(min/60),m=min%60;
+    prev.innerHTML=`<strong style="color:var(--blue)">${s} → ${e}</strong> &nbsp;·&nbsp; <span style="color:var(--green)">${h}h${m>0?' '+m+'m':''}</span>`;
+  } else {
+    prev.innerHTML='<span style="color:var(--muted);font-size:0.62rem">Introdu orele pentru a vedea durata</span>';
+  }
+}
+
+// Preview manual complet (depouri fără indicatori)
+function uManualPrev(){
+  const lin=document.getElementById('mc-linie').value.trim();
+  const tur=document.getElementById('mc-tur').value.trim();
+  const s=document.getElementById('mc-start').value;
+  const e=document.getElementById('mc-end').value;
+  const supl=parseInt(document.getElementById('mc-supl').value)||0;
+  const dep=document.getElementById('mc-depou').checked;
+  const prev=document.getElementById('mc-prev');
+
+  if(!s.match(/^\d{2}:\d{2}$/) || !e.match(/^\d{2}:\d{2}$/)){
+    prev.innerHTML='<span style="color:var(--muted);font-size:0.62rem">Completează orele</span>';
+    return;
+  }
+  const min=calcOre(s,e)+supl;
+  const h=Math.floor(min/60),m=min%60;
+  let html='';
+  if(dep) html+='<span style="color:var(--depou);font-size:0.62rem">🚌 DEPOU &nbsp;</span>';
+  if(lin||tur) html+=`<strong style="color:var(--blue)">L${lin||'?'} T${tur||'?'}</strong> &nbsp;`;
+  html+=`<strong style="color:var(--text)">${s} → ${e}</strong>`;
+  html+=` &nbsp;·&nbsp; <span style="color:var(--green)">${h}h${m>0?' '+m+'m':''}</span>`;
+  if(supl>0) html+=` <span style="color:var(--depou);font-size:0.6rem">+${supl}m supl.</span>`;
+  prev.innerHTML=html;
+}
+
+// Deschide modalul — afișează secțiunile corecte
+const _origOpenM = typeof openM === 'function' ? openM : null;
+
+function openMExtins(a,l,z){
+  // Reset câmpuri manuale
+  document.getElementById('om-start').value='';
+  document.getElementById('om-end').value='';
+  document.getElementById('ore-supl-inp').value='';
+  document.getElementById('mc-linie').value='';
+  document.getElementById('mc-tur').value='';
+  document.getElementById('mc-start').value='';
+  document.getElementById('mc-end').value='';
+  document.getElementById('mc-supl').value='';
+  document.getElementById('mc-depou').checked=false;
+  document.getElementById('ore-manual-section').classList.remove('open');
+  document.getElementById('ore-manual-toggle').textContent='✏️ Modifică orele manual (opțional)';
+
+  // Decide ce afișăm
+  const fara = isDepouFaraIndicatori();
+  document.getElementById('ore-supl-row').style.display = fara ? 'none' : 'flex';
+  document.getElementById('manual-complet-section').style.display = fara ? 'block' : 'none';
+  document.getElementById('ore-manual-toggle').style.display = fara ? 'none' : 'block';
+  // Ascundem linii/tururi pentru depouri fără indicatori
+  document.getElementById('liniegrid').style.display = fara ? 'none' : '';
+  document.getElementById('lbl-linie').style.display = fara ? 'none' : '';
+  document.getElementById('tur-section').style.display = 'none';
+  document.getElementById('sch-section').style.display = fara ? 'none' : '';
+  document.getElementById('preview').style.display = fara ? 'none' : '';
+
+  // Populăm cu date existente dacă ziua are deja valori
+  const s = gs(a,l,z);
+  if(s._manual){
+    document.getElementById('mc-linie').value = s._manual.linie||'';
+    document.getElementById('mc-tur').value   = s._manual.tur||'';
+    document.getElementById('mc-start').value = s._manual.i||'';
+    document.getElementById('mc-end').value   = s._manual.r||'';
+    document.getElementById('mc-supl').value  = s._manual.supl||'';
+    document.getElementById('mc-depou').checked = !!s._manual.depou;
+    uManualPrev();
+  }
+  if(s._oreManuale){
+    document.getElementById('om-start').value = s._oreManuale.i||'';
+    document.getElementById('om-end').value   = s._oreManuale.r||'';
+    toggleOreManuale();
+    uPrevManual();
+  }
+  if(s._supl){
+    document.getElementById('ore-supl-inp').value = s._supl;
+  }
+}
+
+// saveD extins — salvează și datele manuale
+const _origSaveD = saveD;
+function saveD(){
+  const fara = isDepouFaraIndicatori();
+
+  if(fara){
+    // Salvare manual complet
+    const lin  = document.getElementById('mc-linie').value.trim();
+    const tur  = document.getElementById('mc-tur').value.trim();
+    const s    = document.getElementById('mc-start').value;
+    const e    = document.getElementById('mc-end').value;
+    const supl = parseInt(document.getElementById('mc-supl').value)||0;
+    const dep  = document.getElementById('mc-depou').checked;
+
+    if(!s.match(/^\d{2}:\d{2}$/) || !e.match(/^\d{2}:\d{2}$/)){
+      alert('Introdu orele în format HH:MM');
+      return;
+    }
+    ss(mA,mL,mZ,{
+      t: mT||'zl',
+      r: (tur&&lin) ? tur+'/'+lin : null,
+      s: mS,
+      _manual: { linie:lin, tur:tur, i:s, r:e, supl:supl||0, depou:dep }
+    });
+    rTabs();renderView();closeM();
+    return;
+  }
+
+  // Salvare normală (cu indicator)
+  if(!mR){ closeM(); return; }
+
+  const oreSuplMin = parseInt(document.getElementById('ore-supl-inp').value)||0;
+
+  // Ore manuale override
+  const omStart = document.getElementById('om-start').value;
+  const omEnd   = document.getElementById('om-end').value;
+  const oreManuale = (document.getElementById('ore-manual-section').classList.contains('open') &&
+    omStart.match(/^\d{2}:\d{2}$/) && omEnd.match(/^\d{2}:\d{2}$/))
+    ? {i:omStart, r:omEnd} : null;
+
+  const obj = {t:mT, r:mR, s:mS};
+  if(oreSuplMin>0) obj._supl = oreSuplMin;
+  if(oreManuale)   obj._oreManuale = oreManuale;
+
+  ss(mA,mL,mZ,obj);
+  rTabs();renderView();closeM();
+}
+
+// ==================== FRACȚIE MANUAL ====================
+const FR_ORA_START=['04:30','05:00','05:30','06:00','06:30','07:00','07:30','08:00','09:00','10:00','11:00','12:00'];
+const FR_ORA_END=['12:00','13:00','13:30','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
+
+function buildTimeQuick(containerId, times, inputId){
+  const c=document.getElementById(containerId);if(!c)return;c.innerHTML='';
+  times.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='fr-tq';b.textContent=t;b.type='button';
+    b.onclick=()=>{
+      const inp=document.getElementById(inputId);
+      inp.value=t;
+      c.querySelectorAll('.fr-tq').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      uFractiePreview();
+    };
+    c.appendChild(b);
+  });
+}
+
+function openFractie(){
+  document.getElementById('fractie-sub').textContent=`${mZ} ${nz(mA,mL,mZ)} · ${LUNI.find(x=>x.l===mL&&x.a===mA)?.n} ${mA}`;
+  const s=gs(mA,mL,mZ);
+  if(s.t==='fractie'&&s.fr){
+    document.getElementById('fr-linie').value=s.fr.linie||'';
+    document.getElementById('fr-tur').value=s.fr.tur||'';
+    document.getElementById('fr-start').value=s.fr.start||'';
+    document.getElementById('fr-end').value=s.fr.end||'';
+    document.getElementById('fr-nota').value=s.fr.nota||'';
+  } else {
+    ['fr-linie','fr-tur','fr-start','fr-end','fr-nota'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  }
+  buildTimeQuick('fr-start-quick', FR_ORA_START, 'fr-start');
+  buildTimeQuick('fr-end-quick', FR_ORA_END, 'fr-end');
+  // Mark already-selected values
+  ['start','end'].forEach(which=>{
+    const val=document.getElementById(`fr-${which}`).value;
+    if(!val)return;
+    document.getElementById(`fr-${which}-quick`).querySelectorAll('.fr-tq').forEach(b=>{if(b.textContent===val)b.classList.add('sel');});
+  });
+  uFractiePreview();
+  document.getElementById('fractie-modal').classList.add('active');
+  ['fr-linie','fr-tur','fr-start','fr-end','fr-nota'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.oninput=()=>{
+      // auto colon for time fields
+      if(id==='fr-start'||id==='fr-end'){
+        let v=el.value.replace(/[^0-9]/g,'');
+        if(v.length>=3)v=v.slice(0,2)+':'+v.slice(2,4);
+        if(el.value!==v&&v.length<=5)el.value=v;
+        // sync quick button highlight
+        const qid=id+'-quick';
+        document.getElementById(qid)?.querySelectorAll('.fr-tq').forEach(b=>b.classList.toggle('sel',b.textContent===el.value));
+      }
+      uFractiePreview();
+    };
+  });
+}
+
+function closeFractie(){document.getElementById('fractie-modal').classList.remove('active');}
+
+function uFractiePreview(){
+  const linie=document.getElementById('fr-linie').value.trim();
+  const tur=document.getElementById('fr-tur').value.trim();
+  const start=document.getElementById('fr-start').value.trim();
+  const end=document.getElementById('fr-end').value.trim();
+  const nota=document.getElementById('fr-nota').value.trim();
+  const box=document.getElementById('fractie-preview');
+  if(!linie&&!tur&&!start&&!end){box.innerHTML='<span style="color:var(--muted);font-size:0.66rem">Completează datele de mai sus</span>';return;}
+  let html='';
+  if(linie||tur) html+=`<span style="color:var(--blue);font-size:0.8rem;font-weight:500">🚌 ${linie?'L'+linie:''}${linie&&tur?' · ':''}${tur?'T'+tur:''}</span>`;
+  if(start||end){
+    let ore=(start||'?')+' → '+(end||'?');
+    let durHtml='';
+    if(/^\d{2}:\d{2}$/.test(start)&&/^\d{2}:\d{2}$/.test(end)){
+      const dur=calcOre(start,end);
+      durHtml=` <span style="color:var(--muted);font-size:0.65rem">(${fmtOre(dur)})</span>`;
+    }
+    html+=`<span style="color:#fff;font-size:1rem;font-weight:500;margin-top:2px">${ore}${durHtml}</span>`;
+  }
+  if(nota) html+=`<span style="color:var(--muted);font-size:0.62rem;margin-top:1px">📝 ${nota}</span>`;
+  box.innerHTML=html;
+}
+
+function saveFractie(){
+  const linie=document.getElementById('fr-linie').value.trim();
+  const tur=document.getElementById('fr-tur').value.trim();
+  const start=document.getElementById('fr-start').value.trim();
+  const end=document.getElementById('fr-end').value.trim();
+  const nota=document.getElementById('fr-nota').value.trim();
+  if(!linie&&!tur&&!start&&!end){alert('Completează cel puțin un câmp!');return;}
+  ss(mA,mL,mZ,{t:'fractie',fr:{linie,tur,start,end,nota},s:mS});
+  rTabs();renderView();closeFractie();closeM();
+}
+document.getElementById('fractie-modal').addEventListener('click',function(e){if(e.target===this)closeFractie();});
+
+// ==================== STATISTICI ====================
+function closeStats(){document.getElementById('stats-overlay').classList.remove('active');}
+document.getElementById('stats-overlay').addEventListener('click',function(e){if(e.target===this)closeStats();});
+
+function openStats(an, luna){
+  const l=LUNI.find(x=>x.a===an&&x.l===luna);
+  if(!l)return;
+  const db=getDB();
+  // Calcule
+  let totalMin=0,sch1Min=0,sch2Min=0;
+  let zlucrate=0,zliber=0,zco=0,zsarb=0,zgol=0;
+  let depouC=0,fractieC=0,fractieMin=0;
+  let sch1C=0,sch2C=0;
+  const peLinii={};const tururi=[];
+  const zileLucrate=[];
+  for(let d=1;d<=l.z;d++){
+    const s=gs(an,luna,d);
+    const sarb=getSarb(an,luna,d);
+    if(s.t==='liber')zliber++;
+    else if(s.t==='co')zco++;
+    else if(s.t==='sarb'||(sarb&&s.t==='gol'))zsarb++;
+    else if(s.t==='fractie'&&s.fr){
+      fractieC++;zlucrate++;
+      if(s.fr.start&&s.fr.end&&/^\d{2}:\d{2}$/.test(s.fr.start)&&/^\d{2}:\d{2}$/.test(s.fr.end)){
+        const m=calcOre(s.fr.start,s.fr.end);fractieMin+=m;totalMin+=m;
+      }
+    }
+    else if(s.t==='zl'||s.t==='we'||s._manual){
+      const ddSt=getDD(s);
+      if(ddSt){
+        const {dd}=ddSt;
+        zlucrate++;
+        const sch=s.s||(['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT)?1:2);
+        const m=calcOreZi(s,dd,sch);
+        totalMin+=m;
+        if(sch===1){sch1C++;sch1Min+=m;}else{sch2C++;sch2Min+=m;}
+        const isDepou=(!['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT)&&sch===1)||(sch===2&&dd.s2&&dd.s2.d)||(s._manual&&s._manual.depou);
+        if(isDepou)depouC++;
+        const lin=s._manual?s._manual.linie:(['giurgiu','victoria','titan','alexandria','colentina','militari','budesti','autobuze'].includes(DEPOT)?(dd.linie||s.r?.split('/')[0]):s.r?.split('/')[1])||'?';
+        const tur=s._manual?s._manual.tur:(s.r?s.r.split('/')[0]:'?');
+        peLinii[lin]=(peLinii[lin]||0)+1;
+        zileLucrate.push({d,min:m,sch,linie:lin,tur});
+      } else if(!s._manual) zgol++;
+    } else if(s.t==='gol'&&!sarb)zgol++;
+  }
+
+  // Ziua cu cele mai multe ore
+  const maxZ=zileLucrate.sort((a,b)=>b.min-a.min)[0];
+  // Media ore pe zi lucrata
+  const mediaMin=zlucrate>0?Math.round(totalMin/zlucrate):0;
+  // Procent completare
+  const zileTotal=l.z;const completate=zlucrate+zliber+zco+zsarb+fractieC;
+  const pctCompletare=Math.round((completate/zileTotal)*100);
+  // Ore norma (21 zile lucratoare x 8h = 168h, aprox)
+  const normMin=zlucrate*8*60;
+
+  document.getElementById('sm-sub').textContent=`${l.n} ${l.a} · ${DEPOT_NAMES[DEPOT]||'Depoul Dudești'}`;
+
+  // Ore lucrate
+  document.getElementById('sm-ore-grid').innerHTML=`
+    <div class="sm-box"><div class="sm-val" style="color:var(--green)">${fmtOre(totalMin)}</div><div class="sm-lbl">Total lună</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--accent)">${fmtOre(mediaMin)}</div><div class="sm-lbl">Media / zi</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--orange)">${fmtOre(sch1Min)}</div><div class="sm-lbl">Schimb 1</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--blue)">${fmtOre(sch2Min)}</div><div class="sm-lbl">Schimb 2</div></div>`;
+
+  // Progress bar ore
+  const pctOre=normMin>0?Math.min(100,Math.round((totalMin/normMin)*100)):0;
+  document.getElementById('sm-ore-prog').innerHTML=`
+    <div class="sm-prog-label"><span style="font-size:0.6rem;color:var(--muted)">Față de norma estimată (${fmtOre(normMin)})</span><span style="color:var(--green);font-size:0.6rem">${pctOre}%</span></div>
+    <div class="sm-prog-bar"><div class="sm-prog-fill" style="width:${pctOre}%;background:${pctOre>=100?'var(--green)':pctOre>=80?'var(--accent)':'var(--orange)'}"></div></div>`;
+
+  // Zile
+  document.getElementById('sm-zile-grid').innerHTML=`
+    <div class="sm-box"><div class="sm-val" style="color:var(--blue)">${zlucrate}</div><div class="sm-lbl">Lucrate</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--green)">${zliber}</div><div class="sm-lbl">Libere</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--red)">${zco}</div><div class="sm-lbl">CO</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--sarb)">${zsarb}</div><div class="sm-lbl">Sărbători</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--blue)">${fractieC}</div><div class="sm-lbl">Fracții</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--muted)">${zgol}</div><div class="sm-lbl">Necompletate</div></div>`;
+
+  // Depou
+  document.getElementById('sm-depou-grid').innerHTML=`
+    <div class="sm-box"><div class="sm-val" style="color:var(--depou)">${depouC}</div><div class="sm-lbl">Ieșiri depou</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--muted)">${zlucrate-depouC}</div><div class="sm-lbl">Preluări linie</div></div>`;
+
+  // Linii
+  const liniiSortate=Object.entries(peLinii).sort((a,b)=>b[1]-a[1]);
+  const maxLinii=liniiSortate[0]?liniiSortate[0][1]:1;
+  document.getElementById('sm-linii-list').innerHTML=liniiSortate.length?liniiSortate.map(([lin,cnt])=>`
+    <div class="sm-linie-row">
+      <div><div class="sm-linie-name">Linia ${lin}</div><div class="sm-linie-bar" style="width:${Math.round((cnt/maxLinii)*120)+20}px"></div></div>
+      <div style="text-align:right"><div class="sm-linie-val" style="color:var(--text);font-family:var(--font-display);font-size:1rem;font-weight:800">${cnt}</div><div style="font-size:0.5rem;color:var(--muted)">zile</div></div>
+    </div>`).join(''):'<div style="font-size:0.65rem;color:var(--muted);text-align:center;padding:8px">Nicio zi lucrătoare completată</div>';
+
+  // Schimburi
+  document.getElementById('sm-schimburi-grid').innerHTML=`
+    <div class="sm-box"><div class="sm-val" style="color:var(--orange)">${sch1C}</div><div class="sm-lbl">Schimb 1 (dimineață)</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--blue)">${sch2C}</div><div class="sm-lbl">Schimb 2 (după-amiază)</div></div>`;
+
+  // Fracții
+  document.getElementById('sm-fractii-grid').innerHTML=`
+    <div class="sm-box"><div class="sm-val" style="color:var(--blue)">${fractieC}</div><div class="sm-lbl">Zile fracție</div></div>
+    <div class="sm-box"><div class="sm-val" style="color:var(--blue)">${fmtOre(fractieMin)}</div><div class="sm-lbl">Ore fracție</div></div>`;
+
+  // Nota de jos
+  const noteArr=[];
+  if(maxZ)noteArr.push(`Cea mai lungă zi: <strong style="color:var(--accent)">${maxZ.d} — ${fmtOre(maxZ.min)}</strong>`);
+  noteArr.push(`Completare lună: <strong style="color:var(--text)">${pctCompletare}%</strong> (${completate}/${zileTotal} zile)`);
+  document.getElementById('sm-note').innerHTML=noteArr.join('<br>');
+
+  document.getElementById('stats-overlay').classList.add('active');
+}
+
+
+// ==================== CONTACT / SUPORT ====================
+function showContact() {
+  let overlay = document.getElementById('contact-overlay');
+  if (overlay) { overlay.remove(); return; }
+
+  overlay = document.createElement('div');
+  overlay.id = 'contact-overlay';
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;
+    display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px);`;
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:500px;background:#0f1626;
+      border-radius:24px 24px 0 0;border-top:1px solid rgba(34,211,165,0.25);
+      padding:24px 20px 48px;font-family:'Plus Jakarta Sans',sans-serif;">
+
+      <div style="width:36px;height:4px;background:#1e2d47;border-radius:2px;
+        margin:0 auto 20px;"></div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <div style="width:46px;height:46px;border-radius:14px;
+          background:linear-gradient(135deg,rgba(34,211,165,0.2),rgba(96,165,250,0.1));
+          border:1px solid rgba(34,211,165,0.3);
+          display:flex;align-items:center;justify-content:center;font-size:1.4rem;">💬</div>
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;
+            color:#e2e8f0;letter-spacing:0.05em;line-height:1;">Suport & Contact</div>
+          <div style="font-size:0.58rem;color:#64748b;margin-top:2px;">
+            Program STB 2026 · Ajutor și feedback
+          </div>
+        </div>
+      </div>
+
+      <a href="tel:0750476008" style="text-decoration:none;">
+        <div style="display:flex;align-items:center;gap:14px;
+          background:#111827;border:1px solid #1e2d47;border-radius:14px;
+          padding:16px;margin-bottom:10px;"
+          ontouchstart="this.style.borderColor='#22d3a5'"
+          ontouchend="this.style.borderColor='#1e2d47'">
+          <div style="width:42px;height:42px;border-radius:12px;
+            background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.25);
+            display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">📞</div>
+          <div style="flex:1;">
+            <div style="font-size:0.58rem;color:#64748b;text-transform:uppercase;
+              letter-spacing:0.08em;margin-bottom:3px;">Telefon</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;
+              color:#4ade80;letter-spacing:0.05em;">0750 476 008</div>
+          </div>
+          <div style="font-size:0.7rem;color:#22d3a5;font-weight:700;">Apelează →</div>
+        </div>
+      </a>
+
+      <a href="mailto:gully892005@gmail.com" style="text-decoration:none;">
+        <div style="display:flex;align-items:center;gap:14px;
+          background:#111827;border:1px solid #1e2d47;border-radius:14px;
+          padding:16px;margin-bottom:20px;"
+          ontouchstart="this.style.borderColor='#60a5fa'"
+          ontouchend="this.style.borderColor='#1e2d47'">
+          <div style="width:42px;height:42px;border-radius:12px;
+            background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.25);
+            display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">✉️</div>
+          <div style="flex:1;overflow:hidden;">
+            <div style="font-size:0.58rem;color:#64748b;text-transform:uppercase;
+              letter-spacing:0.08em;margin-bottom:3px;">Email</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#60a5fa;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              gully892005@gmail.com</div>
+          </div>
+          <div style="font-size:0.7rem;color:#60a5fa;font-weight:700;">Scrie →</div>
+        </div>
+      </a>
+
+      <div style="text-align:center;padding:14px;
+        background:rgba(34,211,165,0.04);border:1px solid rgba(34,211,165,0.1);
+        border-radius:12px;margin-bottom:16px;">
+        <div style="font-size:0.52rem;color:#334155;text-transform:uppercase;
+          letter-spacing:0.1em;margin-bottom:5px;">Dezvoltat de</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;
+          color:#22d3a5;letter-spacing:0.1em;">Andrei · 10890</div>
+        <div style="font-size:0.52rem;color:#334155;margin-top:3px;">
+          Program STB 2026 · Depoul Dudești &amp; Giurgiu</div>
+      </div>
+
+      <div style="text-align:center;font-size:0.5rem;color:#1e2d47;margin-bottom:16px;">
+        v3.0 · ${new Date().getFullYear()}
+      </div>
+
+      <button onclick="document.getElementById('contact-overlay').remove()"
+        style="width:100%;padding:14px;border-radius:14px;border:none;
+        background:#1e2d47;color:#94a3b8;
+        font-family:'Plus Jakarta Sans',sans-serif;
+        font-size:0.82rem;font-weight:700;cursor:pointer;">
+        Închide
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  gaEvent('contact_open', { event_category: 'engagement' });
+}
+
+function showExport(){document.getElementById('exp-overlay').classList.add('active');}
+function hideExport(){document.getElementById('exp-overlay').classList.remove('active');}
+function exportData(){const b=JSON.stringify({dudesti:MEM_D,giurgiu:MEM_G,victoria:MEM_V,titan:MEM_T,alexandria:MEM_AL,colentina:MEM_CO,militari:MEM_MI,budesti:MEM_BU,autobuze:MEM_AU,troleibuze:MEM_TR,depot:DEPOT,ts:new Date().toISOString()});if(navigator.clipboard){navigator.clipboard.writeText(b).then(()=>alert('✅ Date copiate! Salvează textul într-o notă sau email.'));}else{prompt('Copiază:',b);}}
+function importData(){const t=prompt('Lipește textul de backup:');if(!t)return;try{const d=JSON.parse(t);if(d.dudesti){localStorage.setItem('p2026_dudesti',JSON.stringify(d.dudesti));MEM_D=d.dudesti;}if(d.giurgiu){localStorage.setItem('p2026_giurgiu',JSON.stringify(d.giurgiu));MEM_G=d.giurgiu;}if(d.victoria){localStorage.setItem('p2026_victoria',JSON.stringify(d.victoria));MEM_V=d.victoria;}if(d.titan){localStorage.setItem('p2026_titan',JSON.stringify(d.titan));MEM_T=d.titan;}if(d.alexandria){localStorage.setItem('p2026_alexandria',JSON.stringify(d.alexandria));MEM_AL=d.alexandria;}if(d.colentina){localStorage.setItem('p2026_colentina',JSON.stringify(d.colentina));MEM_CO=d.colentina;}if(d.militari){localStorage.setItem('p2026_militari',JSON.stringify(d.militari));MEM_MI=d.militari;}if(d.budesti){localStorage.setItem('p2026_budesti',JSON.stringify(d.budesti));MEM_BU=d.budesti;}if(d.autobuze){localStorage.setItem('p2026_autobuze',JSON.stringify(d.autobuze));MEM_AU=d.autobuze;}if(d.troleibuze){localStorage.setItem('p2026_troleibuze',JSON.stringify(d.troleibuze));MEM_TR=d.troleibuze;}alert('✅ Date restaurate!');hideExport();rTabs();renderView();}catch(e){alert('❌ Text invalid.');}}
+function resetData(){if(!confirm('Ștergi TOATE datele?'))return;localStorage.removeItem('p2026_dudesti');localStorage.removeItem('p2026_giurgiu');localStorage.removeItem('p2026_victoria');localStorage.removeItem('p2026_titan');localStorage.removeItem('p2026_alexandria');localStorage.removeItem('p2026_colentina');localStorage.removeItem('p2026_militari');localStorage.removeItem('p2026_budesti');localStorage.removeItem('p2026_autobuze');localStorage.removeItem('p2026_troleibuze');MEM_D={};MEM_G={};MEM_V={};MEM_T={};MEM_AL={};MEM_CO={};MEM_MI={};MEM_BU={};MEM_AU={};MEM_TR={};MEM_BU={};MEM_AU={};MEM_TR={};hideExport();rTabs();renderView();alert('✅ Date șterse.');}
+
+// ==================== SWIPE NAVIGATION ====================
+(function(){
+  let tx=0,ty=0;
+  const views=['azi','calendar','lista'];
+  document.getElementById('view-container').addEventListener('touchstart',e=>{
+    tx=e.touches[0].clientX;ty=e.touches[0].clientY;
+  },{passive:true});
+  document.getElementById('view-container').addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-tx;
+    const dy=e.changedTouches[0].clientY-ty;
+    if(Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy)*1.2)return; // nu e swipe orizontal
+    const ci=views.indexOf(currentView);
+    if(dx<-40&&ci<views.length-1) setView(views[ci+1]); // swipe stanga = next
+    else if(dx>40&&ci>0) setView(views[ci-1]); // swipe dreapta = prev
+  },{passive:true});
+})();
+
+// ==================== ADMIN HOLD ====================
+let adminHoldTimer = null;
+function startAdminHold() {
+  adminHoldTimer = setTimeout(() => { checkAdminCode(); }, 2000);
+}
+function cancelAdminHold() {
+  if (adminHoldTimer) { clearTimeout(adminHoldTimer); adminHoldTimer = null; }
+}
+
+// ==================== INIT ====================
+try{const saved=localStorage.getItem('p2026_depot');if(saved){DEPOT=saved;selectedDepot=saved;document.getElementById('depot-screen').style.display='none';document.getElementById('app').style.display='block';document.getElementById('bottom-nav').style.display='flex';loadDB().then(()=>initApp());}}catch(e){}
+</script>
+</body>
+</html>
