@@ -1,2 +1,1 @@
 https://gully892005-spec.github.io/ProgramSTB/
-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
