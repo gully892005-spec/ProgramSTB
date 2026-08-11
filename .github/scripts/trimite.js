@@ -9,16 +9,41 @@
 
 const webpush = require('web-push');
 
-const FB_URL = process.env.FB_URL;
-const VAPID_PUBLIC = process.env.VAPID_PUBLIC;
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
+// Curățăm secretele: la copy-paste de pe telefon se strecoară des un spațiu
+// sau un rând nou invizibil, iar cheile devin invalide.
+const curata = v => (v || '').trim().replace(/[\r\n\s]/g, '');
+const FB_URL = curata(process.env.FB_URL).replace(/\/+$/, '');
+const VAPID_PUBLIC = curata(process.env.VAPID_PUBLIC);
+const VAPID_PRIVATE = curata(process.env.VAPID_PRIVATE);
 
 if (!FB_URL || !VAPID_PUBLIC || !VAPID_PRIVATE) {
-  console.error('Lipsesc secretele: FB_URL, VAPID_PUBLIC, VAPID_PRIVATE');
+  console.error('EROARE: lipsește un secret.');
+  console.error('  FB_URL        : ' + (FB_URL ? 'OK' : 'LIPSEȘTE'));
+  console.error('  VAPID_PUBLIC  : ' + (VAPID_PUBLIC ? 'OK' : 'LIPSEȘTE'));
+  console.error('  VAPID_PRIVATE : ' + (VAPID_PRIVATE ? 'OK' : 'LIPSEȘTE'));
   process.exit(1);
 }
 
-webpush.setVapidDetails('mailto:programstb@example.com', VAPID_PUBLIC, VAPID_PRIVATE);
+// Diagnostic — nu afișăm cheile, doar lungimile, ca să vedem dacă sunt întregi
+console.log(`FB_URL: ${FB_URL}`);
+console.log(`VAPID_PUBLIC: ${VAPID_PUBLIC.length} caractere (trebuie 87)`);
+console.log(`VAPID_PRIVATE: ${VAPID_PRIVATE.length} caractere (trebuie 43)`);
+
+if (VAPID_PUBLIC.length !== 87 || VAPID_PRIVATE.length !== 43) {
+  console.error('EROARE: una dintre chei are lungime greșită — probabil a fost');
+  console.error('copiată incomplet sau au fost inversate între ele.');
+  console.error('Cheia publică începe cu "B", cea privată NU.');
+  process.exit(1);
+}
+
+try {
+  webpush.setVapidDetails('mailto:programstb@example.com', VAPID_PUBLIC, VAPID_PRIVATE);
+} catch (e) {
+  console.error('EROARE la cheile VAPID: ' + e.message);
+  console.error('Verifică în Settings → Secrets că VAPID_PUBLIC conține cheia');
+  console.error('publică (cea lungă, care începe cu B) și nu invers.');
+  process.exit(1);
+}
 
 // Jobul rulează pe UTC; turele sunt în ora României.
 function acumRo() {
@@ -51,7 +76,11 @@ async function main() {
   try {
     toti = await getJSON(`${FB_URL}/push.json`);
   } catch (e) {
-    console.error('Nu am putut citi abonamentele:', e.message);
+    console.error('EROARE la citirea abonamentelor: ' + e.message);
+    console.error('Cauze posibile:');
+    console.error('  • FB_URL greșit — verifică-l deschizându-l în browser');
+    console.error('  • regulile Realtime Database nu permit citirea');
+    console.error(`  • testează manual: ${FB_URL}/push.json`);
     process.exit(1);
   }
   if (!toti) { console.log('Niciun abonament înregistrat.'); return; }
