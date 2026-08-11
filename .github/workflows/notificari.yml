@@ -1,12 +1,12 @@
-name: NotificÄri turÄ
+name: Notificări tură
 
-# RuleazÄ la fiecare 15 minute. GitHub nu garanteazÄ minutul exact â
-# ĂŽn orele aglomerate poate ĂŽntĂ˘rzia 3-5 minute. De asta trimitem
-# notificarea ĂŽntr-o fereastrÄ, nu la secundÄ fixÄ (vezi trimite.js).
+# Rulează la fiecare 15 minute. GitHub nu garantează minutul exact —
+# în orele aglomerate poate întârzia 3-5 minute. De asta trimitem
+# notificarea într-o fereastră, nu la secundă fixă (vezi trimite.js).
 on:
   schedule:
     - cron: '*/15 * * * *'
-  workflow_dispatch:        # buton de rulare manualÄ, pentru testare
+  workflow_dispatch:        # buton de rulare manuală, pentru testare
 
 jobs:
   trimite:
@@ -18,10 +18,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: InstaleazÄ web-push
+      - name: Instalează web-push
         run: npm install web-push@3.6.7 --no-save
 
-      - name: Trimite notificÄrile
+      - name: Trimite notificările
         env:
           VAPID_PUBLIC: ${{ secrets.VAPID_PUBLIC }}
           VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
