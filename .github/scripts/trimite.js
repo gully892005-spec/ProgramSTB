@@ -8,6 +8,32 @@
 // ══════════════════════════════════════════════════════════════
 
 const webpush = require('web-push');
+const fs = require('fs');
+
+// ── Raport vizibil direct pe pagina rulării ───────────────────
+// Log-ul e greu de deschis pe telefon, așa că scriem tot ce contează
+// în „Summary" — apare sub titlul rulării, fără să mai intri nicăieri.
+const _raport = [];
+function raport(linie) {
+  _raport.push(linie);
+  console.log(linie.replace(/^#+ /, '').replace(/\*\*/g, ''));
+}
+function scrieRaport() {
+  try {
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, _raport.join('\n') + '\n');
+    }
+  } catch (e) {}
+}
+process.on('exit', scrieRaport);
+process.on('uncaughtException', e => {
+  raport('## ❌ Eroare neașteptată');
+  raport('```');
+  raport(String(e && e.stack || e));
+  raport('```');
+  scrieRaport();
+  process.exit(1);
+});
 
 // Curățăm secretele: la copy-paste de pe telefon se strecoară des un spațiu
 // sau un rând nou invizibil, iar cheile devin invalide.
@@ -17,31 +43,38 @@ const VAPID_PUBLIC = curata(process.env.VAPID_PUBLIC);
 const VAPID_PRIVATE = curata(process.env.VAPID_PRIVATE);
 
 if (!FB_URL || !VAPID_PUBLIC || !VAPID_PRIVATE) {
-  console.error('EROARE: lipsește un secret.');
-  console.error('  FB_URL        : ' + (FB_URL ? 'OK' : 'LIPSEȘTE'));
-  console.error('  VAPID_PUBLIC  : ' + (VAPID_PUBLIC ? 'OK' : 'LIPSEȘTE'));
-  console.error('  VAPID_PRIVATE : ' + (VAPID_PRIVATE ? 'OK' : 'LIPSEȘTE'));
+  raport('## ❌ Lipsește un secret');
+  raport('- FB_URL: **' + (FB_URL ? 'OK' : 'LIPSEȘTE') + '**');
+  raport('- VAPID_PUBLIC: **' + (VAPID_PUBLIC ? 'OK' : 'LIPSEȘTE') + '**');
+  raport('- VAPID_PRIVATE: **' + (VAPID_PRIVATE ? 'OK' : 'LIPSEȘTE') + '**');
   process.exit(1);
 }
 
 // Diagnostic — nu afișăm cheile, doar lungimile, ca să vedem dacă sunt întregi
-console.log(`FB_URL: ${FB_URL}`);
-console.log(`VAPID_PUBLIC: ${VAPID_PUBLIC.length} caractere (trebuie 87)`);
-console.log(`VAPID_PRIVATE: ${VAPID_PRIVATE.length} caractere (trebuie 43)`);
+raport('## 🔍 Verificare secrete');
+raport('| ce | valoare | ar trebui |');
+raport('|---|---|---|');
+raport(`| FB_URL | \`${FB_URL}\` | — |`);
+raport(`| VAPID_PUBLIC | ${VAPID_PUBLIC.length} caractere | 87 |`);
+raport(`| VAPID_PRIVATE | ${VAPID_PRIVATE.length} caractere | 43 |`);
+raport(`| VAPID_PUBLIC începe cu B | ${VAPID_PUBLIC.startsWith('B') ? 'da ✅' : 'NU ❌'} | da |`);
 
 if (VAPID_PUBLIC.length !== 87 || VAPID_PRIVATE.length !== 43) {
-  console.error('EROARE: una dintre chei are lungime greșită — probabil a fost');
-  console.error('copiată incomplet sau au fost inversate între ele.');
-  console.error('Cheia publică începe cu "B", cea privată NU.');
+  raport('');
+  raport('## ❌ O cheie are lungimea greșită');
+  raport('A fost copiată incomplet, sau cele două au fost inversate.');
+  raport('Cheia **publică** are 87 de caractere și începe cu `B`.');
   process.exit(1);
 }
 
 try {
   webpush.setVapidDetails('mailto:programstb@example.com', VAPID_PUBLIC, VAPID_PRIVATE);
 } catch (e) {
-  console.error('EROARE la cheile VAPID: ' + e.message);
-  console.error('Verifică în Settings → Secrets că VAPID_PUBLIC conține cheia');
-  console.error('publică (cea lungă, care începe cu B) și nu invers.');
+  raport('');
+  raport('## ❌ Chei VAPID invalide');
+  raport('```');
+  raport(e.message);
+  raport('```');
   process.exit(1);
 }
 
@@ -58,9 +91,16 @@ function acumRo() {
   return { data, minute: h * 60 + m };
 }
 
-// Fereastra de trimitere: cron-ul poate întârzia, deci acceptăm
-// orice moment între "acum" și "acum + 20 minute" față de ținta calculată.
-const FEREASTRA = 20;
+// [FIX] GitHub NU garantează rularea la 15 minute — la încărcare mare poate
+// întârzia și o oră, uneori mai mult, indiferent ce scrie în cron. Cu o
+// fereastră de doar 20 de minute, multe notificări de tură nu erau prinse
+// de nicio rulare: fereastra se închidea între două execuții reale.
+//
+// Acum: orice țintă DEJA TRECUTĂ e eligibilă, oricât de rar rulează jobul —
+// dedup-ul (marcajul 'trimis') previne trimiterea de două ori. Singura
+// limită e un plafon de întârziere maximă, ca să nu trimitem o alertă
+// „pregătește-te" pentru o tură care oricum s-a terminat de mult.
+const INTARZIERE_MAX = 90; // acoperă întârzierile observate (până la ~70 min) cu marjă
 
 async function getJSON(url) {
   const r = await fetch(url);
@@ -76,17 +116,26 @@ async function main() {
   try {
     toti = await getJSON(`${FB_URL}/push.json`);
   } catch (e) {
-    console.error('EROARE la citirea abonamentelor: ' + e.message);
-    console.error('Cauze posibile:');
-    console.error('  • FB_URL greșit — verifică-l deschizându-l în browser');
-    console.error('  • regulile Realtime Database nu permit citirea');
-    console.error(`  • testează manual: ${FB_URL}/push.json`);
+    raport('');
+    raport('## ❌ Nu am putut citi abonamentele');
+    raport('```');
+    raport(e.message);
+    raport('```');
+    raport(`Testează în browser: ${FB_URL}/push.json`);
+    raport('Cauze uzuale: FB_URL greșit, sau regulile bazei de date blochează citirea.');
     process.exit(1);
   }
-  if (!toti) { console.log('Niciun abonament înregistrat.'); return; }
+  raport('');
+  if (!toti) {
+    raport('## ⚠️ Niciun abonament înregistrat');
+    raport('Baza de date răspunde corect, dar nu există nimic sub `/push`.');
+    raport('Înseamnă că butonul de push din aplicație nu a reușit să se aboneze.');
+    return;
+  }
 
   const numere = Object.keys(toti);
-  console.log(`${numere.length} abonamente de verificat.`);
+  raport(`## ✅ ${numere.length} ${numere.length === 1 ? 'abonament găsit' : 'abonamente găsite'}`);
+  raport('Numere de serviciu: `' + numere.join('`, `') + '`');
 
   let trimise = 0, sarite = 0, expirate = 0;
 
@@ -105,15 +154,26 @@ async function main() {
       const tinta = h * 60 + m - minBefore;             // când ar trebui să sune
       const diff = now.minute - tinta;
 
-      if (diff < 0 || diff >= FEREASTRA) continue;      // nu e momentul
+      if (diff < 0 || diff >= INTARZIERE_MAX) continue;  // fie prea devreme, fie prea depășit
 
       // Nu trimitem de două ori aceeași alertă
       const marcaj = `${t.data}_${t.start}`;
       if (u.trimis === marcaj) { sarite++; continue; }
 
-      const payload = JSON.stringify({
-        title: `🚃 Tură în ${minBefore} minute`,
+      // [FIX] Când jobul întârzie, timpul rămas real diferă de preferința
+      // setată (minBefore). Calculăm câte minute au mai rămas cu adevărat —
+      // dacă tura a pornit deja între timp, schimbăm mesajul în loc să
+      // afișăm un "în X minute" greșit.
+      const startMin = h * 60 + m;
+      const ramase = startMin - now.minute;
+      const payload = JSON.stringify(ramase > 0 ? {
+        title: `🚃 Tură în ${ramase} minute`,
         body: t.text ? `${t.text}\nPregătește-te!` : `Plecare la ${t.start}. Pregătește-te!`,
+        tag: 'tura-' + t.data,
+        url: '/ProgramSTB/'
+      } : {
+        title: `🚃 Tura ta a început`,
+        body: t.text || `Plecare la ${t.start}`,
         tag: 'tura-' + t.data,
         url: '/ProgramSTB/'
       });
@@ -141,7 +201,8 @@ async function main() {
     }
   }
 
-  console.log(`\nTure: ${trimise} trimise · ${sarite} sărite · ${expirate} expirate`);
+  raport('');
+  raport(`**Ture:** ${trimise} trimise · ${sarite} sărite · ${expirate} expirate`);
 
   // ── NOTIFICĂRI CHAT (grupate) ─────────────────────────────
   // Rulăm o dată la 15 minute, deci nu trimitem un push per mesaj:
@@ -195,7 +256,7 @@ async function main() {
       }
     }
   }
-  console.log(`Chat: ${chatTrimise} notificări trimise (${mesaje.length} mesaje în jurnal)`);
+  raport(`**Chat:** ${chatTrimise} notificări trimise (${mesaje.length} mesaje în jurnal)`);
 
   // Curățăm jurnalul: păstrăm doar ultimele 24 de ore
   const limita = Date.now() - 24 * 3600 * 1000;
@@ -206,4 +267,11 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch(e => {
+  raport('');
+  raport('## ❌ Eroare');
+  raport('```');
+  raport(String(e && e.stack || e));
+  raport('```');
+  process.exit(1);
+});
