@@ -1,0 +1,10 @@
+name = "programstb-notificari"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# [FIX] Cloudflare rulează cron-ul pe infrastructura de margine, nu într-o
+# coadă de build-uri ca GitHub Actions — de asta poate rula la fiecare 5
+# minute, punctual, în loc de o dată pe oră cu întârzieri variabile.
+[triggers]
+crons = ["*/5 * * * *"]
