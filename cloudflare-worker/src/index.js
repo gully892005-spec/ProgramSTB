@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// Trimite notificările de tură și de chat — rulează pe Cloudflare Workers
+// Andrei Trimite notificările de tură și de chat — rulează pe Cloudflare Workers
 //
 // Aceeași logică ca vechiul .github/scripts/trimite.js, dar aici cron-ul
 // e nativ Cloudflare: rulează pe infrastructura de margine, nu într-o
