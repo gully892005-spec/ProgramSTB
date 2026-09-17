@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Program STB 2026 — programul de lucru în telefon</title>
+<meta name="description" content="Aplicația gratuită pentru vatmani și șoferi STB: ture cu orele din indicator, calculul orelor ca pe fluturaș, raport PDF, notificări înainte de tură, repartizarea de la depou și programul colegilor.">
+<meta property="og:title" content="Program STB 2026">
+<meta property="og:description" content="Ture, ore calculate singure, raport PDF, notificări, repartizare. Gratuit, făcută de un coleg.">
+<meta property="og:image" content="https://programstb.com/Icons/banner-sus.jpg">
+<meta name="theme-color" content="#07101d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --noapte:#07101d;
+  --noapte2:#0d1929;
+  --noapte3:#132338;
+  --teal:#27e0bd;
+  --chihlimbar:#f5a524;
+  --albastru:#6cb4ff;
+  --mov:#b99cff;
+  --rosu:#f2657a;
+  --hartie:#f5f2e9;
+  --cerneala:#18202c;
+  --text:#e7edf6;
+  --slab:#8998b0;
+  --linie:rgba(255,255,255,.09);
+  --max:780px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--noapte);color:var(--text);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 20px}
+h1,h2,h3,.disp{font-family:"Barlow Condensed",sans-serif;font-weight:700;line-height:1.04;letter-spacing:.005em}
+h2{font-size:clamp(2rem,7vw,2.9rem);margin-bottom:.55rem}
+h3{font-size:1.28rem;margin-bottom:.3rem;letter-spacing:.01em}
+p{margin-bottom:.9rem;color:#c3cfe0}
+p.intro{font-size:1.06rem;color:#d3dcea;max-width:62ch}
+strong{color:var(--text);font-weight:600}
+.mono{font-family:"IBM Plex Mono",monospace}
+section{padding:66px 0;border-top:1px solid var(--linie)}
+a{color:var(--teal)}
+
+/* ── HERO: poza din antetul aplicației ── */
+.hero{position:relative;min-height:88vh;display:flex;align-items:flex-end;overflow:hidden;border-top:0;padding:0}
+.hero-foto{position:absolute;inset:0;background:url('Icons/banner-sus.jpg') 38% center/cover no-repeat}
+.hero-foto::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(7,16,29,.25) 0%,rgba(7,16,29,.35) 40%,rgba(7,16,29,.92) 78%,var(--noapte) 100%)}
+.hero .wrap{position:relative;padding-bottom:44px;padding-top:120px;width:100%}
+.hero h1{font-size:clamp(3.4rem,15vw,6.2rem);text-transform:uppercase;line-height:.9;
+  text-shadow:0 4px 30px rgba(0,0,0,.6)}
+.hero h1 span{display:block;color:var(--teal)}
+.hero .sub{font-size:1.2rem;color:#e3eaf4;margin:14px 0 6px;max-width:34ch}
+.hero .gratis{font-size:.92rem;color:var(--slab);margin-bottom:24px}
+.hero .gratis b{color:var(--chihlimbar)}
+.actiuni{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+/* pe telefon poza (lată) stă întreagă sus, nu mărită și neclară */
+@media (max-width:760px){
+  .hero{min-height:0;display:block}
+  .hero-foto{position:relative;inset:auto;width:100%;aspect-ratio:1000/337;background-position:center;background-size:cover}
+  .hero-foto::after{background:linear-gradient(180deg,rgba(7,16,29,0) 55%,var(--noapte) 100%)}
+  .hero .wrap{padding-top:22px;padding-bottom:40px}
+  .hero h1{text-shadow:none}
+}
+.buton{display:inline-block;background:var(--teal);color:#04241d;text-decoration:none;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.3rem;letter-spacing:.02em;
+  padding:12px 26px;border-radius:12px}
+.buton:active{transform:scale(.98)}
+.link-mic{color:#d6e1ee;font-size:.95rem}
+
+/* ── cuprins ── */
+.cuprins{display:flex;gap:8px;overflow-x:auto;padding:14px 20px;max-width:var(--max);margin:0 auto;scrollbar-width:none}
+.cuprins::-webkit-scrollbar{display:none}
+.cuprins a{flex-shrink:0;text-decoration:none;color:#c9d4e3;font-size:.86rem;font-weight:500;
+  border:1px solid var(--linie);border-radius:999px;padding:6px 13px;background:var(--noapte2)}
+
+/* ── pași ── */
+.pasi{list-style:none;counter-reset:pas;margin-top:26px}
+.pasi li{counter-increment:pas;position:relative;padding:0 0 26px 58px}
+.pasi li::before{content:counter(pas);position:absolute;left:0;top:-2px;width:40px;height:40px;border-radius:50%;
+  display:grid;place-items:center;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.35rem;
+  color:var(--noapte);background:var(--teal)}
+.pasi li:not(:last-child)::after{content:"";position:absolute;left:19px;top:44px;bottom:6px;width:2px;background:rgba(39,224,189,.25)}
+.pasi p{margin-bottom:.4rem}
+
+/* ── telefon / rânduri de săptămână ── */
+.ecran{background:var(--noapte2);border:1px solid #1f3149;border-radius:22px;padding:14px;margin:22px 0}
+.rand{display:grid;grid-template-columns:44px 38px 1fr auto;align-items:center;gap:8px;
+  background:#0f1c2e;border:1px solid #213350;border-radius:14px;padding:11px 12px;margin-bottom:8px}
+.rand:last-child{margin-bottom:0}
+.rand .zi{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.75rem;line-height:1}
+.rand .zs{font-size:.72rem;color:var(--slab);font-weight:600}
+.rand .ce{font-size:.86rem;line-height:1.35}
+.rand .ce small{display:block;font-size:.76rem}
+.rand .ce em{font-style:normal;color:var(--teal);font-weight:600}
+.eti{font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.rand.azi{border-color:var(--teal);box-shadow:0 0 0 1px rgba(39,224,189,.3) inset}
+.rand.azi .zi{color:var(--teal)}
+.legenda-foto{font-size:.84rem;color:var(--slab);margin-top:-10px}
+
+.taste{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+.tasta{border:1.5px solid;border-radius:11px;padding:7px 12px;font-weight:600;font-size:.9rem;background:rgba(255,255,255,.02)}
+
+.doua{display:grid;grid-template-columns:1fr;gap:18px;margin-top:26px}
+@media(min-width:700px){.doua{grid-template-columns:1fr 1fr}}
+.bloc{border-left:2px solid var(--linie);padding:2px 0 2px 16px}
+.bloc h3{color:#fff}
+.bloc p{font-size:.95rem;margin-bottom:0}
+
+/* ── CALCULUL ORELOR: ecuația de pe fluturaș ── */
+.calcul{background:
+  radial-gradient(900px 400px at 10% 0%,rgba(39,224,189,.08),transparent 60%),var(--noapte)}
+.ecuatie{margin:30px 0 10px;display:flex;flex-wrap:wrap;align-items:stretch;gap:6px}
+.termen{flex:1 1 120px;background:var(--noapte2);border:1px solid #1f3149;border-radius:14px;padding:12px 12px 10px}
+.termen .v{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:2rem;line-height:1}
+.termen .n{font-size:.8rem;color:var(--slab);margin-top:4px;line-height:1.3}
+.op{align-self:center;font-family:"Barlow Condensed",sans-serif;font-size:1.8rem;color:#4f6280;padding:0 2px}
+.termen.total{background:#0c2a27;border-color:rgba(39,224,189,.55)}
+.termen.total .v{color:var(--teal)}
+.norma{margin:18px 0 6px;background:var(--noapte2);border:1px solid #1f3149;border-radius:14px;padding:14px}
+.norma .sus{display:flex;justify-content:space-between;gap:10px;font-size:.88rem;color:var(--slab);margin-bottom:8px}
+.norma .sus b{color:var(--text)}
+.bara{height:9px;background:#1b2b42;border-radius:6px;overflow:hidden}
+.bara i{display:block;height:100%;width:104%;max-width:100%;background:linear-gradient(90deg,#1fb996,var(--teal));border-radius:6px}
+.cifre{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:22px}
+@media(min-width:620px){.cifre{grid-template-columns:repeat(4,1fr)}}
+.cifra{border-top:2px solid;padding-top:10px}
+.cifra .v{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.7rem;line-height:1}
+.cifra .n{font-size:.84rem;color:#c3cfe0;margin-top:4px;line-height:1.35}
+.reguli{margin-top:30px;display:grid;gap:14px}
+.regula{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start}
+.regula .ic{font-size:1.4rem;line-height:1.2}
+.regula p{margin:0;font-size:.95rem}
+.regula b{color:#fff}
+
+/* ── RAPORT PDF: foaie de hârtie ── */
+.pdf{background:linear-gradient(180deg,var(--noapte) 0%,#0b1626 100%)}
+.coala-wrap{margin:28px -6px 0;perspective:1400px}
+.coala{background:#fff;color:#1e293b;border-radius:6px;padding:18px 16px 14px;
+  box-shadow:0 30px 60px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.1);transform:rotate(-1.2deg);
+  font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto}
+.coala .cap{text-align:center;border-bottom:2px solid #0ea882;padding-bottom:9px;margin-bottom:11px}
+.coala .cap b{display:block;font-size:1.02rem;color:#0f172a}
+.coala .cap span{font-size:.7rem;color:#64748b}
+.coala .luna{background:linear-gradient(135deg,#0ea882,#0284c7);color:#fff;border-radius:7px;padding:8px 11px;margin-bottom:8px}
+.coala .luna b{display:block;font-size:.98rem;letter-spacing:.03em}
+.coala .luna span{font-size:.68rem;opacity:.9}
+.coala .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
+.coala .kpi div{border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;text-align:center;padding:5px 2px}
+.coala .kpi b{display:block;font-size:.86rem}
+.coala .kpi span{font-size:.52rem;color:#64748b;text-transform:uppercase}
+.coala table{width:100%;border-collapse:collapse;font-size:.64rem}
+.coala th{background:#0ea882;color:#fff;text-align:left;padding:5px 6px;font-size:.58rem}
+.coala td{padding:4px 6px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+.coala td:first-child{font-weight:700;color:#475569;white-space:nowrap;width:44px}
+.coala td:last-child{font-family:monospace;white-space:nowrap}
+.coala td small{display:block;color:#64748b;font-size:.56rem}
+.coala .pic{text-align:center;font-size:.55rem;color:#94a3b8;margin-top:8px}
+.coala .sep td{background:#f0fdf4;color:#16a34a}
+.coala .ro td{background:#fef2f2}
+.coala .we td:nth-child(2){color:#1d4ed8}
+.coala .vm td{background:#f0fdfa;color:#0d9488}
+.ce-are{margin-top:34px;display:grid;gap:12px}
+.ce-are div{display:grid;grid-template-columns:28px 1fr;gap:10px}
+.ce-are p{margin:0;font-size:.95rem}
+
+/* ── REPARTIZARE: fluxul foaie → aplicație ── */
+.flux{display:grid;gap:10px;margin:28px 0 8px}
+@media(min-width:700px){.flux{grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch}}
+.pas-flux{background:var(--noapte2);border:1px solid #1f3149;border-radius:14px;padding:14px}
+.pas-flux .ic{font-size:1.6rem}
+.pas-flux h3{font-size:1.15rem;margin:6px 0 4px}
+.pas-flux p{font-size:.9rem;margin:0}
+.sageata{align-self:center;justify-self:center;color:#3e5373;font-size:1.5rem;transform:rotate(90deg)}
+@media(min-width:700px){.sageata{transform:none}}
+.coduri{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.cod{font-family:"IBM Plex Mono",monospace;font-size:.8rem;font-weight:600;border-radius:7px;padding:4px 9px;background:#11243a;color:#bfe4ff;border:1px solid #23405f}
+.cod.gri{background:transparent;color:#6f7f98;border-style:dashed}
+
+/* ── NOTIFICĂRI: ecran blocat ── */
+.blocat{background:linear-gradient(160deg,#1b2a4a,#0c1424 60%);border-radius:28px;padding:22px 14px 18px;margin:26px auto 8px;max-width:420px;border:1px solid #243659}
+.blocat .ora{text-align:center;font-family:"Barlow Condensed",sans-serif;font-size:3.6rem;font-weight:600;line-height:1;color:#eef3fb}
+.blocat .data{text-align:center;font-size:.85rem;color:#9fb0c8;margin-bottom:16px}
+.notif{background:rgba(255,255,255,.1);border-radius:16px;padding:11px 13px;margin-bottom:8px;backdrop-filter:blur(6px)}
+.notif .t{display:flex;justify-content:space-between;font-size:.72rem;color:#b9c6d9;margin-bottom:3px}
+.notif b{display:block;color:#fff;font-size:.93rem}
+.notif span{font-size:.85rem;color:#d7e1ee}
+
+/* ── colegi ── */
+.pastila-demo{display:inline-flex;align-items:center;gap:10px;margin:18px 0 4px;flex-wrap:wrap}
+.pd{border:2px solid var(--teal);border-radius:999px;padding:6px 14px;font-weight:700;color:#5ff5d6;background:rgba(39,224,189,.08)}
+.meniu{background:#0b1422;border:1px solid #203955;border-radius:14px;padding:6px;max-width:260px;margin-top:10px}
+.meniu div{padding:9px 12px;border-radius:10px;font-weight:700;font-size:.92rem}
+.meniu div small{display:block;font-weight:400;color:#64748b;font-size:.76rem}
+.meniu .ales{background:rgba(39,224,189,.12)}
+
+/* ── cloud ── */
+.lista{list-style:none;margin-top:18px;display:grid;gap:12px}
+.lista li{display:grid;grid-template-columns:30px 1fr;gap:10px}
+.lista li p{margin:0}
+
+/* ── final ── */
+footer{padding:64px 0 80px;text-align:center;background:linear-gradient(180deg,var(--noapte),#050b15)}
+.qr-card{display:flex;gap:20px;align-items:center;justify-content:center;flex-wrap:wrap;margin:26px auto 22px;
+  background:var(--noapte2);border:1px solid #1f3149;border-radius:18px;padding:18px;max-width:560px;text-align:left}
+.qr-box{background:#fff;border-radius:12px;padding:10px;width:190px;height:190px;display:grid;place-items:center;flex-shrink:0}
+.qr-box img,.qr-box canvas{width:170px!important;height:170px!important}
+.qr-txt p{margin:.3rem 0 .6rem}
+.semnatura{margin-top:34px;font-size:.82rem;color:#5f7090;line-height:1.8}
+@media(max-width:520px){.qr-card{text-align:center}}
+a:focus-visible,.buton:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-foto" role="img" aria-label="Tramvai STB noaptea, în București"></div>
+  <div class="wrap">
+    <h1>Program<span>STB 2026</span></h1>
+    <p class="sub">Programul tău de lucru în telefon. Orele se pun singure, pontajul se face singur.</p>
+    <p class="gratis"><b>Gratuit</b>, fără reclame, fără cont din magazin. Merge și fără internet.</p>
+    <div class="actiuni">
+      <a class="buton" href="https://programstb.com/">Deschide aplicația</a>
+      <a class="link-mic" href="#incepe">sau scanează codul de la final</a>
+    </div>
+  </div>
+</header>
+
+<nav class="cuprins" aria-label="Cuprins">
+  <a href="#pasi">Primii pași</a>
+  <a href="#zile">Completarea zilelor</a>
+  <a href="#repartizare">Repartizarea</a>
+  <a href="#ore">Calculul orelor</a>
+  <a href="#pdf">Raportul PDF</a>
+  <a href="#notificari">Notificări</a>
+  <a href="#colegi">Programul colegilor</a>
+  <a href="#cloud">Cloud</a>
+</nav>
+
+<!-- PRIMII PAȘI -->
+<section id="pasi">
+  <div class="wrap">
+    <h2>Pornești o singură dată</h2>
+    <p class="intro">Câteva minute la început. După asta doar completezi zilele, sau le completează foaia de la depou.</p>
+    <ol class="pasi">
+      <li>
+        <h3>Pune-o pe ecranul telefonului</h3>
+        <p>Când intri pe <strong>programstb.com</strong>, aplicația îți propune singură <strong>Instalează pe ecran</strong>.</p>
+        <p><strong>Android:</strong> din Chrome, apeși butonul. <strong>iPhone:</strong> obligatoriu din Safari, butonul de partajare, apoi <strong>Adaugă la ecranul principal</strong>.</p>
+      </li>
+      <li>
+        <h3>Alegi tramvai sau autobuz, apoi depoul</h3>
+        <p>Dudești, Giurgiu, Victoria, Titan, Alexandria, Colentina, Militari, București Noi, plus autobuze și troleibuze. Depoul se poate schimba oricând din antet.</p>
+      </li>
+      <li>
+        <h3>Alegi schimbul: Sch1 sau Sch2</h3>
+        <p>Orice zi nouă pornește pe schimbul tău. Dacă într-o zi lucrezi pe celălalt, îl schimbi doar pentru ziua aceea.</p>
+      </li>
+      <li>
+        <h3>Treci numărul de serviciu</h3>
+        <p>E cheia ta: cu el se salvează programul în cloud, ajung notificările, se găsește rândul tău pe repartizare și îți pot urmări colegii programul.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- COMPLETAREA ZILELOR -->
+<section id="zile">
+  <div class="wrap">
+    <h2>Apeși pe zi, alegi linia și turul</h2>
+    <p class="intro">La tramvai, indicatorii de ore sunt deja în aplicație pentru toate depourile. Ora de plecare, ora de retragere, locul schimbului și ieșirea din depou vin singure.</p>
+
+    <div class="ecran" aria-label="Exemplu de săptămână completată">
+      <div class="rand">
+        <div class="zi">14</div><div class="zs">LU</div>
+        <div class="ce">T10 L1 · 14:35–22:03 <em>7h 28m</em><small style="color:var(--chihlimbar)">🚌 Plecare din DEPOU · Acces la Romprim</small></div>
+        <div class="eti" style="color:var(--albastru);border:1px solid rgba(108,180,255,.4)">Sch2</div>
+      </div>
+      <div class="rand azi">
+        <div class="zi">16</div><div class="zs">MI</div>
+        <div class="ce">T24 L1 · 14:05–21:07 <em>7h 2m</em><small style="color:var(--teal)">Schimb la Romprim</small></div>
+        <div class="eti" style="color:var(--albastru);border:1px solid rgba(108,180,255,.4)">Sch2</div>
+      </div>
+      <div class="rand">
+        <div class="zi">17</div><div class="zs">JO</div>
+        <div class="ce">🩺 Viză medicală anuală · 8h</div>
+        <div class="eti" style="color:#2dd4bf;border:1px solid rgba(45,212,191,.45)">VMA</div>
+      </div>
+      <div class="rand">
+        <div class="zi" style="color:var(--mov)">19</div><div class="zs">SÂ</div>
+        <div class="ce">Liber</div>
+        <div class="eti" style="color:#4ade80;border:1px solid rgba(74,222,128,.4)">Liber</div>
+      </div>
+    </div>
+    <p class="legenda-foto">Așa arată săptămâna în aplicație. Nicio oră nu e scrisă de mână.</p>
+
+    <h3 style="margin-top:30px">Zilele care nu sunt ture</h3>
+    <p>Un singur tap pentru fiecare, iar fiecare intră corect în calculul orelor:</p>
+    <div class="taste">
+      <span class="tasta" style="color:#4ade80;border-color:rgba(74,222,128,.45)">🟢 Liber</span>
+      <span class="tasta" style="color:var(--rosu);border-color:rgba(242,101,122,.45)">🔴 CO</span>
+      <span class="tasta" style="color:#fb923c;border-color:rgba(251,146,60,.45)">🏥 CM</span>
+      <span class="tasta" style="color:var(--albastru);border-color:rgba(108,180,255,.45)">✂️ Fracție</span>
+      <span class="tasta" style="color:#93c5fd;border-color:rgba(147,197,253,.4)">🦺 PM</span>
+      <span class="tasta" style="color:var(--mov);border-color:rgba(185,156,255,.45)">🔄 Rezervă</span>
+      <span class="tasta" style="color:var(--chihlimbar);border-color:rgba(245,165,36,.45)">🚌 Detașare</span>
+      <span class="tasta" style="color:#2dd4bf;border-color:rgba(45,212,191,.45)">🩺 VMA</span>
+    </div>
+
+    <div class="doua">
+      <div class="bloc">
+        <h3>Autobuz și troleibuz</h3>
+        <p>Scrii linia, turul și orele. Durata, suplimentarele și totalurile se calculează la fel de exact ca la tramvai.</p>
+      </div>
+      <div class="bloc">
+        <h3>Copiezi o zi în alta</h3>
+        <p>Ții apăsat pe o zi cam o secundă, apoi apeși pe celelalte zile. Se lipesc cu tot cu ore, schimb și observații.</p>
+      </div>
+      <div class="bloc">
+        <h3>Ore scrise de mână, când e nevoie</h3>
+        <p>Dacă în ziua respectivă orele au fost altele decât în indicator, le modifici doar pentru ziua aceea.</p>
+      </div>
+      <div class="bloc">
+        <h3>Indicatorii noi nu strică lunile vechi</h3>
+        <p>Când se schimbă indicatorii, zilele deja lucrate rămân cu orele de atunci. Pontajul din urmă nu se modifică.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REPARTIZARE -->
+<section id="repartizare">
+  <div class="wrap">
+    <h2>Luna se completează din foaia de la depou</h2>
+    <p class="intro">Nu mai bați zi cu zi la început de lună. Repartizarea lunară de la depou se încarcă o singură dată în aplicație, iar fiecare coleg își găsește rândul după numărul de serviciu.</p>
+
+    <div class="flux">
+      <div class="pas-flux">
+        <div class="ic">📄</div>
+        <h3>Foaia lunii</h3>
+        <p>Repartizarea lunară a depoului se urcă în aplicație de administrator, pentru tot depoul deodată.</p>
+      </div>
+      <div class="sageata" aria-hidden="true">➜</div>
+      <div class="pas-flux">
+        <div class="ic">📋</div>
+        <h3>Butonul din lună</h3>
+        <p>În bara lunii îți apare 📋 cu o bulină albastră: câte zile din foaie îți poate completa.</p>
+      </div>
+      <div class="sageata" aria-hidden="true">➜</div>
+      <div class="pas-flux">
+        <div class="ic">✅</div>
+        <h3>Alegi cum</h3>
+        <p><strong>Completează doar zilele libere</strong>, fără să atingă ce ai pus tu, sau <strong>suprascrie tot</strong> cu ce e pe foaie.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:28px">Ce se ia de pe foaie</h3>
+    <div class="coduri">
+      <span class="cod">10/7 tur și linie</span><span class="cod">L</span><span class="cod">CO</span><span class="cod">CM</span><span class="cod">R rezervă</span><span class="cod">VMA</span>
+    </div>
+    <p>Orele fiecărei ture se iau din indicatorii depoului, pe schimbul tău. Codurile care nu se pot ponta sigur, cum ar fi SU, REC, IMP sau MM, rămân necompletate, ca să le pui tu cum au fost.</p>
+    <div class="coduri">
+      <span class="cod gri">SU</span><span class="cod gri">REC</span><span class="cod gri">IMP</span><span class="cod gri">MM</span><span class="cod gri">SSM</span>
+    </div>
+    <p>Aplicația te avertizează dacă foaia e de la alt depou decât cel ales de tine. Orice zi completată din foaie o poți modifica după aceea, ca pe oricare alta.</p>
+  </div>
+</section>
+
+<!-- CALCULUL ORELOR -->
+<section id="ore" class="calcul">
+  <div class="wrap">
+    <h2>Orele, socotite ca pe fluturaș</h2>
+    <p class="intro">Aplicația adună exact ce apare pe fluturașul de salariu, nu doar ora de tură. Totalul îl vezi oricând, pe lună sau pe an, în tab-ul Statistici.</p>
+
+    <div class="ecuatie" aria-label="Cum se formează totalul lunii">
+      <div class="termen"><div class="v">169h 11m</div><div class="n">ore de tură, din indicator</div></div>
+      <div class="op">+</div>
+      <div class="termen"><div class="v" style="color:#f87171">9h 57m</div><div class="n">pontaj: PSI, blocări, alte cauze, def. tehnică, staționare</div></div>
+      <div class="op">+</div>
+      <div class="termen"><div class="v" style="color:var(--mov)">16h</div><div class="n">rezervă, PM, VMA, suplimentare</div></div>
+      <div class="op">=</div>
+      <div class="termen"><div class="v" style="color:var(--albastru)">195h 08m</div><div class="n">brut lucrat</div></div>
+      <div class="op">+</div>
+      <div class="termen"><div class="v" style="color:var(--rosu)">16h</div><div class="n">CO, 8 ore pe zi</div></div>
+      <div class="op">=</div>
+      <div class="termen total"><div class="v">211h 08m</div><div class="n">total, ca pe ștatul de plată</div></div>
+    </div>
+
+    <div class="norma">
+      <div class="sus"><span>Total cu CO față de <b>norma lunii</b></span><b>211h / 176h</b></div>
+      <div class="bara"><i></i></div>
+    </div>
+    <p style="font-size:.9rem;color:var(--slab)">Norma lunii înseamnă zilele lucrătoare × 8 ore. Orele de concediu intră în comparație, ca o lună cu CO să nu pară „sub normă”.</p>
+
+    <div class="cifre">
+      <div class="cifra" style="border-color:var(--chihlimbar)"><div class="v" style="color:var(--chihlimbar)">2</div><div class="n">zile consecutive pe serie, ziua a 6-a și a 7-a</div></div>
+      <div class="cifra" style="border-color:var(--mov)"><div class="v" style="color:var(--mov)">31h 40m</div><div class="n">ore sâmbătă și duminică</div></div>
+      <div class="cifra" style="border-color:#4ade80"><div class="v" style="color:#4ade80">14</div><div class="n">zile de CO rămase din an</div></div>
+      <div class="cifra" style="border-color:var(--albastru)"><div class="v" style="color:var(--albastru)">7h 44m</div><div class="n">media pe zi lucrată</div></div>
+    </div>
+
+    <div class="reguli">
+      <div class="regula"><div class="ic">🔁</div><p><b>Zilele consecutive se numără corect.</b> Într-o serie de zile lucrate la rând, ziua a 6-a și a 7-a sunt consecutive, maximum două pe serie. Liberul, CO și CM rup seria. VMA și rezerva nu o rup. Seria trece și dintr-o lună în alta.</p></div>
+      <div class="regula"><div class="ic">🎉</div><p><b>Sărbătorile legale</b> sunt marcate în calendar, iar weekendurile lucrate se numără separat: câte sâmbete, câte duminici.</p></div>
+      <div class="regula"><div class="ic">📊</div><p><b>Vezi și restul detaliilor:</b> câte zile pe fiecare linie, câte pe Sch1 și câte pe Sch2, ieșiri din depou față de preluări pe traseu, fracții, și comparația cu luna trecută.</p></div>
+      <div class="regula"><div class="ic">🧊</div><p><b>Lunile trecute nu se schimbă.</b> Orele zilelor deja lucrate se păstrează așa cum erau, chiar dacă între timp se schimbă indicatorii sau tu îți schimbi schimbul.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- RAPORTUL PDF -->
+<section id="pdf" class="pdf">
+  <div class="wrap">
+    <h2>Raportul PDF, bun de arătat oricui</h2>
+    <p class="intro">Din Statistici apeși <strong>📄 Exportă raport PDF</strong>, alegi anul și bifezi lunile, câte vrei. Iese o foaie A4 curată, cu fiecare zi și totalurile, pe care o poți salva, trimite pe mail sau printa.</p>
+
+    <div class="coala-wrap">
+      <div class="coala" aria-label="Exemplu de raport PDF">
+        <div class="cap"><b>📋 Program Lucru STB 2026</b><span>Depoul Dudești · Generat: 17 septembrie 2026</span></div>
+        <div class="luna"><b>Septembrie 2026</b><span>Depoul Dudești</span></div>
+        <div class="kpi">
+          <div><b style="color:#0ea882">171h 20m</b><span>Total ore</span></div>
+          <div><b style="color:#3b82f6">21</b><span>Zile lucrate</span></div>
+          <div><b style="color:#16a34a">7</b><span>Zile libere</span></div>
+          <div><b style="color:#e11d48">2</b><span>CO + CM</span></div>
+        </div>
+        <table>
+          <thead><tr><th>Data</th><th>Tip · Linie · Detalii</th><th>Ore</th></tr></thead>
+          <tbody>
+            <tr><td>14 Lu</td><td>🔵 ZL Sch.2 · L1 T10 · Acces Romprim<small>🚃 Vagon: 408</small></td><td>14:35–22:03</td></tr>
+            <tr><td>15 Ma</td><td>🔵 ZL Sch.2 · L1 T4 · Acces Banu Manta<small>🦺 PM: 2h</small></td><td>15:03–23:34</td></tr>
+            <tr><td>16 Mi</td><td>🔵 ZL Sch.2 · L1 T24 · Schimb Romprim</td><td>14:05–21:07</td></tr>
+            <tr class="vm"><td>17 Jo</td><td>🩺 VMA</td><td>8h</td></tr>
+            <tr class="we"><td style="color:#dc2626">19 Sâ</td><td>🌅 WE Sch.2 · L7 T9 · Schimb Piața Unirii<small>📝 a venit mai târziu tramvaiul</small></td><td>13:49–20:42</td></tr>
+            <tr class="sep"><td style="color:#dc2626">20 Du</td><td>─ Liber</td><td></td></tr>
+            <tr class="ro"><td>21 Lu</td><td style="color:#e11d48">🏖️ CO</td><td></td></tr>
+          </tbody>
+        </table>
+        <div class="pic">Program STB 2026 · Depoul Dudești · Date generate din indicatorii de ore și înregistrările personale</div>
+      </div>
+    </div>
+
+    <div class="ce-are">
+      <div><span>🗂️</span><p><strong>Mai multe luni deodată:</strong> fiecare lună pe pagina ei, iar la final un total general cu orele și zilele din toate lunile alese.</p></div>
+      <div><span>🧾</span><p><strong>Fiecare zi cu detaliile ei:</strong> tipul zilei, schimbul, linia și turul, locul schimbului sau ieșirea din depou, orele, vagonul, orele de PM, rezerva și observațiile scrise de tine.</p></div>
+      <div><span>🎨</span><p><strong>Se citește dintr-o privire:</strong> weekendurile și sărbătorile cu roșu la dată, liberele pe verde, concediile pe roz, VMA pe turcoaz.</p></div>
+      <div><span>📱</span><p><strong>Se deschide direct în aplicație,</strong> cu butoanele <strong>🖨️ Salvează PDF</strong> și <strong>⬇️ Descarcă</strong>. Nu rămâi blocat pe o pagină goală.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- NOTIFICĂRI -->
+<section id="notificari">
+  <div class="wrap">
+    <h2>Nu mai ratezi o intrare</h2>
+    <p class="intro">Alertele vin pe telefon și când aplicația e închisă. Nu trebuie ținută deschisă și nu consumă bateria.</p>
+
+    <div class="blocat" aria-label="Exemplu de notificări pe ecranul blocat">
+      <div class="ora">12:05</div>
+      <div class="data">Joi, 17 septembrie</div>
+      <div class="notif"><div class="t"><span>🚃 Program STB</span><span>acum</span></div><b>🚃 Tură în 2h</b><span>L1 T19 · 13:38–20:42 · Pregătește-te!</span></div>
+      <div class="notif"><div class="t"><span>🚃 Program STB</span><span>ieri, 20:00</span></div><b>🌙 Mâine — Joi 17</b><span>L1 T19 · 13:38–20:42 · Schimb la Romprim</span></div>
+    </div>
+
+    <div class="doua">
+      <div class="bloc">
+        <h3>Până la 4 alerte pe tură</h3>
+        <p>De exemplu cu 2 ore și cu 30 de minute înainte. Alegi tu cât timp înainte, de la 5 minute până la câteva ore.</p>
+      </div>
+      <div class="bloc">
+        <h3>Seara, tura de mâine</h3>
+        <p>Un mesaj cu ce ai a doua zi, la ora aleasă de tine, implicit 20:00. Se poate opri.</p>
+      </div>
+      <div class="bloc">
+        <h3>Cum le pornești</h3>
+        <p>Clopoțelul 🔔 din antet, apoi <strong>Notificări push</strong> pe ON și accepți permisiunea. Ai nevoie de numărul de serviciu trecut.</p>
+      </div>
+      <div class="bloc">
+        <h3>Pe iPhone</h3>
+        <p>Notificările merg doar cu aplicația pusă pe ecranul principal, din Safari. Din browser, iPhone-ul nu le permite.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROGRAMUL COLEGILOR -->
+<section id="colegi">
+  <div class="wrap">
+    <h2>Programul colegilor, cu acordul lor</h2>
+    <p class="intro">Vrei să știi când lucrează colegul cu care faci schimb, sau familia vrea să-ți vadă programul? Se cere voie, iar programul se vede, fără să poată fi modificat.</p>
+
+    <ol class="pasi">
+      <li><h3>Ceri voie</h3><p>Din ecranul 💾 Cloud, la <strong>Vreau programul unui coleg</strong>, scrii numărul lui de serviciu.</p></li>
+      <li><h3>El acceptă</h3><p>Colegul primește cererea și o acceptă sau o refuză. Oricând poate să-ți taie accesul din <strong>Cine îmi vede programul</strong>.</p></li>
+      <li><h3>Treci de la un program la altul</h3><p>Lângă depou apare butonul 👥. Apeși și alegi: programul tău sau al colegului.</p></li>
+    </ol>
+
+    <div class="pastila-demo" aria-hidden="true">
+      <span class="pd">🚃 Dudești · 🔄</span><span class="pd" style="color:#fff">👥 ▾</span>
+    </div>
+    <div class="meniu" aria-hidden="true">
+      <div class="ales">👤 Programul meu <span style="float:right;color:var(--teal)">✓</span></div>
+      <div>👁 10154<small>Giurgiu</small></div>
+      <div>👁 32430<small>Autobuze</small></div>
+    </div>
+
+    <p style="margin-top:18px">Când colegul își schimbă o zi, o vezi și tu în mai puțin de un minut. Programul lui stă separat de al tău: nu ți-l înlocuiește și nu ajunge în backup-ul tău.</p>
+  </div>
+</section>
+
+<!-- CLOUD -->
+<section id="cloud">
+  <div class="wrap">
+    <h2>Programul tău nu se pierde</h2>
+    <p class="intro">Cu numărul de serviciu trecut, tot ce completezi pleacă singur în cloud, la câteva secunde după fiecare modificare.</p>
+    <ul class="lista">
+      <li><span>📲</span><p><strong>Telefon nou:</strong> pui numărul de serviciu și programul se întoarce, cu toate lunile.</p></li>
+      <li><span>⚡</span><p><strong>Salvează și când închizi aplicația,</strong> iar dacă nu era internet, salvează la următoarea deschidere.</p></li>
+      <li><span>🔀</span><p><strong>Două telefoane, un singur program:</strong> modificările de pe unul ajung pe celălalt. O zi veche nu poate șterge una mai nouă.</p></li>
+      <li><span>🕘</span><p><strong>Copie de siguranță pe zi,</strong> păstrată 7 zile. Dacă se strică ceva, programul se poate readuce la ziua de ieri.</p></li>
+      <li><span>🔒</span><p><strong>Doar telefonul tău scrie în programul tău.</strong> Cine îți știe numărul de serviciu nu îl poate modifica.</p></li>
+    </ul>
+
+    <div class="doua">
+      <div class="bloc">
+        <h3>Chat cu colegii</h3>
+        <p>O cameră comună pentru toți cei care folosesc aplicația. Primești notificare când scrie cineva și o poți opri oricând.</p>
+      </div>
+      <div class="bloc">
+        <h3>Temă întunecată sau luminoasă</h3>
+        <p>Din ☀️ / 🌙 în antet. Cea întunecată e mai odihnitoare la tura de noapte.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL -->
+<footer id="incepe">
+  <div class="wrap">
+    <h2>Pune-o pe telefon</h2>
+    <p>Gratuit, fără reclame. Dacă îți e de folos, dă mai departe colegilor de la depou.</p>
+    <div class="qr-card">
+      <div class="qr-box" id="qr"></div>
+      <div class="qr-txt">
+        <div class="disp" style="font-size:1.5rem">Scanează cu camera</div>
+        <p>Deschide camera telefonului și îndreapt-o spre cod.</p>
+        <a href="https://programstb.com/" class="mono">programstb.com</a>
+      </div>
+    </div>
+    <a class="buton" href="https://programstb.com/">Deschide aplicația</a>
+    <p class="semnatura">Făcută de un coleg, pentru colegi. Aproape tot ce s-a adăugat a pornit de la ce ați cerut voi în chat.<br>Nu este o aplicație oficială STB.</p>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+  var el = document.getElementById('qr');
+  if(!el) return;
+  if(typeof QRCode === 'undefined'){
+    el.innerHTML = '<div style="font:600 .8rem/1.4 \'IBM Plex Sans\',sans-serif;color:#55606f;text-align:center">Deschide<br>programstb.com</div>';
+    return;
+  }
+  new QRCode(el, {
+    text: 'https://programstb.com/', width: 340, height: 340,
+    colorDark: '#07101d', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+  });
+})();
+</script>
+</body>
+</html>
