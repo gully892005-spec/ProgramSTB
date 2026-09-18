@@ -3,7 +3,7 @@
 // Funcții: Cache offline, Notificări tură, Widget zilnic
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'stb-2026-v37';   // [v19.13] poza din antet, întreagă
+const CACHE_NAME = 'stb-2026-v38';   // [v3.7] poza corectată: „pentru un București mai bun!"
 // [v15.8] Caile erau scrise fix, cu /ProgramSTB/. Pe programstb.com aplicatia
 // sta in radacina, deci nu exista acolo nimic: cache-ul ramanea gol, iar
 // manifestul si service worker-ul nu se incarcau. Relativ merge pe ambele
