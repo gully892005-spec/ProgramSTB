@@ -390,12 +390,12 @@ async function trimiteTure(env, toti, numere, now, vapid) {
         title: `🚃 Tură în ${cat}`,
         body: t.text ? `${t.text}\nPregătește-te!` : `Plecare la ${t.start}. Pregătește-te!`,
         tag: 'tura-' + t.data,
-        url: '/ProgramSTB/'
+        url: './'
       } : {
         title: `🚃 Tura ta a început`,
         body: t.text || `Plecare la ${t.start}`,
         tag: 'tura-' + t.data,
-        url: '/ProgramSTB/'
+        url: './'
       });
 
       try {
@@ -462,7 +462,7 @@ async function trimiteChat(env, toti, numere, vapid) {
       // rețea la scriere ieșea din try și notificarea de chat se repeta la
       // fiecare rulare de cinci minute.
       const rez = await trimiteToate(env, nr, u, JSON.stringify({
-        title: '💬 Chat STB', body, tag: 'chat', urgent: false, url: '/ProgramSTB/'
+        title: '💬 Chat STB', body, tag: 'chat', urgent: false, url: './'
       }), { TTL: 1800, urgency: 'normal' }, vapid);
       if (!rez.trimise) return;
       await fetch(`${env.FB_URL}/push/${nr}/chatNotificat.json`, {
@@ -533,7 +533,7 @@ async function trimiteSarbatori(env, toti, numere, now, vapid) {
         title: `🎉 ${nume}`,
         body: corp,
         tag: 'sarb-' + now.data,
-        url: '/ProgramSTB/'
+        url: './'
       }), { TTL: 43200, urgency: 'normal' }, vapid);
       if (!rez.trimise) return;
 
@@ -618,7 +618,7 @@ async function trimiteSeara(env, toti, numere, now, vapid) {
         title: `🌙 Mâine — ${maine.zi} ${maine.numar}`,
         body: descriere,
         tag: 'seara-' + maine.iso,
-        url: '/ProgramSTB/'
+        url: './'
         // [FIX v14.3] Era `urgency: 'normal'`. Android pune deoparte
         // notificările de prioritate normală cât timp telefonul doarme (Doze)
         // și le livrează abia la următoarea fereastră de trezire — de aici
@@ -703,7 +703,7 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
           body: a.text || '',
           tag: 'anunt-' + a.t,
           urgent: true,
-          url: '/ProgramSTB/'
+          url: './'
         }), { TTL: 86400, urgency: 'high' }, vapid).then(r => {
           // [FIX v12.6] marcajul `broadcastNotificat` se punea și când toate
           // abonamentele erau moarte, deci anunțul se pierdea definitiv pentru
@@ -1020,8 +1020,17 @@ export default {
       });
     }
 
+    // [SECURITATE v4.5] Oricine deschidea adresa workerului pornea o rulare
+    // completă și vedea raportul — inclusiv numerele colegilor blocați. Deschisă
+    // de multe ori la rând, putea consuma și cota gratuită Firebase. Rularea
+    // manuală cere acum parola de admin: .../?cheie=PAROLA
+    const cheie = url.searchParams.get('cheie') || '';
+    if (!env.ADMIN_PASS || !paroleEgale(cheie, String(env.ADMIN_PASS))) {
+      return new Response('Program STB · worker activ.\nRularea manuală: adaugă ?cheie=<parola de admin> la adresă.',
+        { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
     const raport = await ruleaza(env);
-    return new Response(raport, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    return new Response(raport, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
   }
 };
 
@@ -1112,7 +1121,7 @@ async function testPush(request, env) {
     title: titlu || '✅ Notificare de probă',
     body: mesaj || `Merge. În cloud sunt ${cateTure} ture pe următoarele 10 zile.`,
     tag: 'test-' + Date.now(),
-    url: '/ProgramSTB/'
+    url: './'
   });
 
   let r;
@@ -1284,8 +1293,18 @@ async function backup(request, env) {
     let deScris = c.backup;
     const acumMs = Date.now();
     let vechiBackup = null;
+    // [FIX v4.5] PIERDERE DE DATE. Dacă citirea backupului existent eșua (o
+    // sughițare a Firebase), `catch`-ul de mai jos lăsa scrierea să plece
+    // fără îmbinare — adică exact înlocuirea pe care îmbinarea trebuia s-o
+    // împiedice: un telefon cu două zile putea acoperi luni întregi. Acum,
+    // fără citire reușită nu scriem nimic; aplicația reîncearcă singură.
+    let vechiCitit;
+    try { vechiCitit = await getJSON(cale); }
+    catch (e) {
+      return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi backupul existent. Reîncerc mai târziu.' } };
+    }
     try {
-      const vechi = await getJSON(cale);
+      const vechi = vechiCitit;
       vechiBackup = vechi;
       if (vechi && vechi.data && c.backup.data) {
         const dataNoua = Object.assign({}, vechi.data, c.backup.data);
@@ -1642,7 +1661,7 @@ async function _accesAnuntaTaiere(env, catreNr, deLaNr) {
     title: 'Acces oprit',
     body: `${deLaNr} nu îți mai partajează programul. Poți să-i ceri din nou.`,
     tag: 'acces-taiat-' + deLaNr,
-    url: '/ProgramSTB/'
+    url: './'
   });
   const vapid = {
     subject: 'mailto:programstb@example.com',
@@ -1668,7 +1687,7 @@ async function _accesAnuntaRaspuns(env, catreNr, deLaNr, da) {
       ? `${deLaNr} ți-a dat voie la programul lui. Deschide aplicația ca să-l iei.`
       : `${deLaNr} nu ți-a dat voie la programul lui.`,
     tag: 'acces-raspuns-' + deLaNr,
-    url: '/ProgramSTB/'
+    url: './'
   });
   const vapid = {
     subject: 'mailto:programstb@example.com',
@@ -1691,7 +1710,7 @@ async function _accesAnunta(env, nrTinta, inreg) {
     title: '👀 Cerere de acces la programul tău',
     body: `${cine}${nume} vrea să îți vadă programul${mes}. Deschide aplicația ca să răspunzi.`,
     tag: 'acces-' + inreg.cine,
-    url: '/ProgramSTB/'
+    url: './'
   });
   // [FIX v15.4] Aici scria 'mailto:admin@programstb' — nu e o adresă validă,
   // n-are domeniu, iar serviciul de push respinge cererea. De asta cererile de
@@ -1876,7 +1895,9 @@ async function admin(request, env) {
 
   // Un jeton nu poate crea alte jetoane: pentru asta trebuie parola.
   if (cerere.actiune === 'jetonNou' && !cuParola) {
-    return { status: 401, corp: { ok: false, eroare: 'Pentru asta trebuie parola.' } };
+    // [v4.5] `cerereParola`: aplicația știe că nu e o respingere a accesului și
+    // nu mai scoate toată sesiunea de amprentă din cauza unei singure acțiuni.
+    return { status: 401, corp: { ok: false, cerereParola: true, eroare: 'Pentru asta trebuie parola.' } };
   }
 
   switch (cerere.actiune) {
