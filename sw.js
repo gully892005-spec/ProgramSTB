@@ -3,7 +3,7 @@
 // Funcții: Cache offline, Notificări tură, Widget zilnic
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'stb-2026-v38';   // [v3.7] poza corectată: „pentru un București mai bun!"
+const CACHE_NAME = 'stb-2026-v39';   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
 // [v15.8] Caile erau scrise fix, cu /ProgramSTB/. Pe programstb.com aplicatia
 // sta in radacina, deci nu exista acolo nimic: cache-ul ramanea gol, iar
 // manifestul si service worker-ul nu se incarcau. Relativ merge pe ambele
@@ -237,13 +237,27 @@ async function sendDailyUpdate() {
   }
 }
 
+// [FIX v4.5] Workerul trimitea în notificări adresa „/ProgramSTB/", rămasă de pe
+// github.io. Pe programstb.com aplicația stă în rădăcină, deci atingerea unei
+// notificări cu aplicația închisă deschidea o pagină inexistentă (404).
+// Orice adresă din afara aplicației devine adresa aplicației.
+function _adresaSigura(u){
+  try{
+    const sc = new URL(self.registration.scope);
+    const x  = new URL(u || './', sc);
+    // Doar pagina aplicației (cu eventuale ?parametri), nimic altceva.
+    const ok = x.origin === sc.origin && (x.pathname === sc.pathname || x.pathname === sc.pathname + 'index.html');
+    return ok ? x.href : sc.href;
+  }catch(e){ return self.registration.scope; }
+}
+
 // ── Click pe notificare ──
 self.addEventListener('notificationclick', e => {
   e.notification.close();
 
   if (e.action === 'dismiss') return;
 
-  const url = (e.notification.data && e.notification.data.url) || self.registration.scope;
+  const url = _adresaSigura(e.notification.data && e.notification.data.url);
 
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
@@ -285,7 +299,7 @@ self.addEventListener('push', e => {
       { action: 'open', title: '📅 Deschide' },
       { action: 'dismiss', title: 'OK' }
     ],
-    data: { url: data.url || self.registration.scope }
+    data: { url: _adresaSigura(data.url) }
   };
 
   e.waitUntil(self.registration.showNotification(title, opts));
