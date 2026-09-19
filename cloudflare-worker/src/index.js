@@ -2317,6 +2317,17 @@ async function admin(request, env) {
       } catch (e) {}
       const nou = Object.assign({}, copie, { ts: Date.now(), dev: 'admin-readucere', updated: new Date().toISOString() });
       delete nou.copiatLa;
+      // [v4.7] Zilele readuse primesc ora de acum: la îmbinarea cu un telefon
+      // care încă are versiunea stricată, ele trebuie să câștige.
+      const acumR = Date.now();
+      for (const [k, v] of Object.entries(nou.data || {})) {
+        if (!k.startsWith('p2026_') || typeof v !== 'string' || !v.startsWith('{')) continue;
+        try {
+          const o = JSON.parse(v);
+          for (const z of Object.values(o)) if (z && typeof z === 'object') z._m = acumR;
+          nou.data[k] = JSON.stringify(o);
+        } catch (e) {}
+      }
       const r = await fetch(urlBroadcast(env, `backup/${nr}.json`), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nou)
       });
@@ -2594,6 +2605,112 @@ async function admin(request, env) {
       });
       if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
       return { status: 200, corp: { ok: true, tel } };
+    }
+
+    // ── [v4.7] CĂUTARE: după număr de serviciu (bucăți din el) sau după nume ──
+    // Numele vin din agendă; numerele din toate locurile în care apare cineva
+    // (program salvat, statistică, notificări, telefoane înregistrate).
+    case 'cauta': {
+      const q = String(cerere.q || '').trim().slice(0, 40);
+      if (!q) return { status: 400, corp: { ok: false, eroare: 'Scrie un număr sau un nume' } };
+      const sh = async (cale) => {
+        try { const u = urlBroadcast(env, cale + '.json'); return await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true') || {}; }
+        catch (e) { return {}; }
+      };
+      const [b, st, pu, pr] = await Promise.all([sh('backup'), sh('stats'), sh('push'), sh('proprietar')]);
+      let agenda = {}, stats = {};
+      try { agenda = await getJSON(urlBroadcast(env, 'agenda.json')) || {}; } catch (e) {}
+      try { stats = await getJSON(urlBroadcast(env, 'stats.json')) || {}; } catch (e) {}
+      const blocatiC = await citesteBlocati(env);
+      const toate = new Set([...Object.keys(b), ...Object.keys(st), ...Object.keys(pu), ...Object.keys(pr), ...Object.keys(agenda)]);
+      const fara = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const cifre = q.replace(/[^0-9]/g, '');
+      const cuvinte = fara(q).split(/\s+/).filter(Boolean);
+      const gasite = [];
+      for (const nr of toate) {
+        const nume = (agenda[nr] && agenda[nr].nume) || '';
+        const dupaNr = cifre && cifre.length === q.replace(/\s/g, '').length && nr.includes(cifre);
+        const dupaNume = !cifre && nume && cuvinte.every(c => fara(nume).includes(c));
+        if (!dupaNr && !dupaNume) continue;
+        gasite.push({ nr, nume, depot: (stats[nr] && stats[nr].depot) || null,
+          areProgram: !!b[nr], areNotificari: !!pu[nr], blocat: !!blocatiC[nr], exact: nr === cifre });
+      }
+      gasite.sort((x, y) => (y.exact - x.exact) || x.nr.localeCompare(y.nr));
+      return { status: 200, corp: { ok: true, total: gasite.length, lista: gasite.slice(0, 30) } };
+    }
+
+    // ── [v4.7] FIȘA COMPLETĂ a unui număr: tot ce se știe despre el ──
+    case 'fisa': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      const ia = async (cale) => { try { return await getJSON(urlBroadcast(env, cale + '.json')); } catch (e) { return null; } };
+      const [b, st, pu, prBrut, bl, ag, acc] = await Promise.all([
+        ia(`backup/${nr}`), ia(`stats/${nr}`), ia(`push/${nr}`), ia(`proprietar/${nr}`),
+        ia(`blocati/${nr}`), ia(`agenda/${nr}`), ia(`acces/${nr}`)
+      ]);
+      let copii = {};
+      try { const u = urlBroadcast(env, `backupIstoric/${nr}.json`); copii = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true') || {}; } catch (e) {}
+
+      // Programul: câte zile, pe ce depouri, pe ce luni, ce tipuri, ce urmează
+      const acum = acumRo().data;                         // AAAA-LL-ZZ, ora României
+      const iso = k => { const p = k.split('-').map(Number); return p.length === 3 ? `${p[0]}-${String(p[1]).padStart(2, '0')}-${String(p[2]).padStart(2, '0')}` : ''; };
+      const program = { zile: 0, depouri: {}, tipuri: {}, luni: {}, ultimele: [], urmatoarele: [], prima: null, ultima: null };
+      const d = (b && b.data) || {};
+      for (const dep of DEPOURI) {
+        const k = 'p2026_' + dep;
+        if (!d[k]) continue;
+        let o; try { o = typeof d[k] === 'string' ? JSON.parse(d[k]) : d[k]; } catch (e) { continue; }
+        if (!o || typeof o !== 'object') continue;
+        let nrZile = 0;
+        for (const [zi, v] of Object.entries(o)) {
+          if (!v || typeof v !== 'object' || !v.t || v.t === 'gol') continue;
+          const z = iso(zi); if (!z) continue;
+          nrZile++; program.zile++;
+          program.tipuri[v.t] = (program.tipuri[v.t] || 0) + 1;
+          const luna = z.slice(0, 7); program.luni[luna] = (program.luni[luna] || 0) + 1;
+          if (!program.prima || z < program.prima) program.prima = z;
+          if (!program.ultima || z > program.ultima) program.ultima = z;
+          const rand = { zi: z, depou: dep, t: v.t, r: v.r || (v._manual && (v._manual.tur ? v._manual.tur + '/' + (v._manual.linie || '') : '')) || '', s: v.s || null,
+            ore: (v._oreManuale && v._oreManuale.i) ? v._oreManuale.i + '–' + v._oreManuale.r : (v._manual && v._manual.i) ? v._manual.i + '–' + v._manual.r : (v._snap && v._snap.i) ? v._snap.i + '–' + v._snap.r : (v.rezerva && v.rezerva.i) ? v.rezerva.i + '–' + v.rezerva.r : '',
+            m: Number(v._m) || null };
+          if (z >= acum) program.urmatoarele.push(rand); else program.ultimele.push(rand);
+        }
+        program.depouri[dep] = nrZile;
+      }
+      program.urmatoarele.sort((x, y) => x.zi.localeCompare(y.zi)); program.urmatoarele = program.urmatoarele.slice(0, 10);
+      program.ultimele.sort((x, y) => y.zi.localeCompare(x.zi)); program.ultimele = program.ultimele.slice(0, 7);
+
+      // Notificări: pe câte telefoane, prin ce serviciu, ce setări
+      let notificari = null;
+      if (pu) {
+        const serv = ep => { try { const h = new URL(ep).host; return /apple/.test(h) ? 'iPhone (Apple)' : /google|fcm/.test(h) ? 'Android (Google)' : /mozilla/.test(h) ? 'Firefox' : /windows|notify/.test(h) ? 'Windows' : h; } catch (e) { return '?'; } };
+        const tel = abonamentele(pu).map(x => ({ id: x.id, serviciu: serv(x.sub && x.sub.endpoint) }));
+        const ture = Array.isArray(pu.ture) ? pu.ture : [];
+        notificari = {
+          telefoane: tel, pushDin: pu.pushDin || null, updat: pu.updat || null, depot: pu.depot || null,
+          notifSeara: !!pu.notifSeara, oraSeara: Number.isFinite(Number(pu.oraSeara)) ? Number(pu.oraSeara) : null,
+          chatMute: pu.chatMute === true, chatSeen: pu.chatSeen || null,
+          ture: ture.length, urmatoareaTura: ture.filter(t => t && t.data >= acum).sort((a, b2) => (a.data + a.start).localeCompare(b2.data + b2.start))[0] || null,
+          ultimaAlerta: Array.isArray(pu.trimise) ? pu.trimise[pu.trimise.length - 1] : (pu.trimis || null),
+          searaTrimis: pu.searaTrimis || null, broadcastNotificat: pu.broadcastNotificat || null
+        };
+      }
+      const { locuri, disp } = _normalizeaza(prBrut);
+      const permise = Object.entries(acc || {}).filter(([, v]) => v && v.stare === 'da').map(([cheie, v]) => ({ cheie, cine: v.cine || '', tip: v.tip || '', nume: v.nume || '', raspuns: v.raspuns || v.creat || null }));
+      const asteapta = Object.values(acc || {}).filter(v => v && v.stare === 'asteapta').length;
+      const setari = {};
+      for (const k of ['p2026_depot', 'p2026_sch', 'p2026_chatname', 'p2026_push_on', 'p2026_notif_maine', 'p2026_reminder_active']) if (d[k] !== undefined) setari[k.replace('p2026_', '')] = d[k];
+
+      return { status: 200, corp: { ok: true, nr,
+        nume: (ag && ag.nume) || '', tel: (ag && ag.tel) || '',
+        exista: !!(b || st || pu || prBrut || ag),
+        backup: b ? { ts: Number(b.ts) || null, updated: b.updated || null, dev: b.dev || null, depotPropriu: b.depotPropriu || null,
+          depotLucru: b.depotLucru || null, depots: b.depots || [], zile: b.zile || 0, setari } : null,
+        program, statistica: st || null, notificari,
+        dispozitive: { locuri, lista: Object.entries(disp).map(([id, v]) => ({ id, la: (v && v.la) || null, ultima: (v && v.ultima) || null })) },
+        blocat: bl || null, acces: { permise, asteapta },
+        copii: Object.keys(copii).sort().reverse()
+      } };
     }
 
     case 'blocati': {
