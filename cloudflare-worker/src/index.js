@@ -1725,6 +1725,13 @@ async function _accesAnunta(env, nrTinta, inreg) {
   return r.trimise || 0;
 }
 
+function _adresaCerere(request) {
+  try {
+    const o = request.headers.get('Origin') || request.headers.get('Referer') || '';
+    return o ? new URL(o).host.slice(0, 80) : '';
+  } catch (e) { return ''; }
+}
+
 async function revendica(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
 
@@ -1746,15 +1753,19 @@ async function revendica(request, env) {
 
   const { locuri, disp } = _normalizeaza(brut);
   const acum = Date.now();
+  // [v5.1] De pe ce adresă rulează aplicația telefonului. Colegii rămași pe
+  // vechea github.io, cu o versiune de dinainte de ecranul de mutare, rulează
+  // la nesfârșit copia veche din memoria telefonului — fișa trebuie să arate asta.
+  const adresa = _adresaCerere(request);
 
   // Dispozitiv cunoscut: îl lăsăm să intre. Actualizăm data ultimei intrări
   // cel mult o dată pe zi, ca să nu scriem în bază la fiecare deschidere.
   if (disp[dev]) {
     const ultima = Number(disp[dev].ultima) || 0;
-    if (acum - ultima > 24 * 3600 * 1000) {
-      await fetch(urlBroadcast(env, `proprietar/${nr}/disp/${dev}/ultima.json`), {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(acum)
+    if (acum - ultima > 24 * 3600 * 1000 || (adresa && disp[dev].adresa !== adresa)) {
+      await fetch(urlBroadcast(env, `proprietar/${nr}/disp/${dev}.json`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adresa ? { ultima: acum, adresa } : { ultima: acum })
       }).catch(() => {});
     }
     return { status: 200, corp: { ok: true, stare: 'al tau' } };
@@ -1768,7 +1779,7 @@ async function revendica(request, env) {
     return { status: 200, corp: { ok: false, stare: 'ocupat', tel: String(tel || ''), locuri, ocupate } };
   }
 
-  disp[dev] = { la: acum, ultima: acum };
+  disp[dev] = adresa ? { la: acum, ultima: acum, adresa } : { la: acum, ultima: acum };
   const r = await fetch(urlBroadcast(env, `proprietar/${nr}.json`), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ locuri: Math.max(locuri, Object.keys(disp).length), disp })
@@ -2718,7 +2729,7 @@ async function admin(request, env) {
         backup: b ? { ts: Number(b.ts) || null, updated: b.updated || null, dev: b.dev || null, depotPropriu: b.depotPropriu || null,
           depotLucru: b.depotLucru || null, depots: b.depots || [], zile: b.zile || 0, setari } : null,
         program, statistica: st || null, notificari,
-        dispozitive: { locuri, lista: Object.entries(disp).map(([id, v]) => ({ id, la: (v && v.la) || null, ultima: (v && v.ultima) || null })) },
+        dispozitive: { locuri, lista: Object.entries(disp).map(([id, v]) => ({ id, la: (v && v.la) || null, ultima: (v && v.ultima) || null, adresa: (v && v.adresa) || null })) },
         blocat: bl || null, acces: { permise, asteapta },
         copii: Object.keys(copii).sort().reverse()
       } };
