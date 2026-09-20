@@ -2651,34 +2651,45 @@ async function admin(request, env) {
       let copii = {};
       try { const u = urlBroadcast(env, `backupIstoric/${nr}.json`); copii = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true') || {}; } catch (e) {}
 
-      // Programul: câte zile, pe ce depouri, pe ce luni, ce tipuri, ce urmează
-      const acum = acumRo().data;                         // AAAA-LL-ZZ, ora României
+      // Programul, PE DEPOURI. [v4.8] Telefonul ține programul fiecărui depou pe
+      // care s-a completat ceva — teste, programe văzute de la colegi cu versiuni
+      // vechi — și toate ajung în backup. Adunate la un loc, dădeau cifre fără
+      // sens (585 de zile, câte 3 intrări pe zi). Acum fiecare depou separat, iar
+      // fișa îl pune în față pe cel în care lucrează omul.
       const iso = k => { const p = k.split('-').map(Number); return p.length === 3 ? `${p[0]}-${String(p[1]).padStart(2, '0')}-${String(p[2]).padStart(2, '0')}` : ''; };
-      const program = { zile: 0, depouri: {}, tipuri: {}, luni: {}, ultimele: [], urmatoarele: [], prima: null, ultima: null };
+      const acum = acumRo().data;                         // AAAA-LL-ZZ, ora României
+      const program = { depouri: {}, depotLucru: null };
       const d = (b && b.data) || {};
       for (const dep of DEPOURI) {
         const k = 'p2026_' + dep;
         if (!d[k]) continue;
         let o; try { o = typeof d[k] === 'string' ? JSON.parse(d[k]) : d[k]; } catch (e) { continue; }
         if (!o || typeof o !== 'object') continue;
-        let nrZile = 0;
+        const x = { zile: 0, prima: null, ultima: null, luni: {}, ultimaModificare: null };
         for (const [zi, v] of Object.entries(o)) {
           if (!v || typeof v !== 'object' || !v.t || v.t === 'gol') continue;
           const z = iso(zi); if (!z) continue;
-          nrZile++; program.zile++;
-          program.tipuri[v.t] = (program.tipuri[v.t] || 0) + 1;
-          const luna = z.slice(0, 7); program.luni[luna] = (program.luni[luna] || 0) + 1;
-          if (!program.prima || z < program.prima) program.prima = z;
-          if (!program.ultima || z > program.ultima) program.ultima = z;
-          const rand = { zi: z, depou: dep, t: v.t, r: v.r || (v._manual && (v._manual.tur ? v._manual.tur + '/' + (v._manual.linie || '') : '')) || '', s: v.s || null,
-            ore: (v._oreManuale && v._oreManuale.i) ? v._oreManuale.i + '–' + v._oreManuale.r : (v._manual && v._manual.i) ? v._manual.i + '–' + v._manual.r : (v._snap && v._snap.i) ? v._snap.i + '–' + v._snap.r : (v.rezerva && v.rezerva.i) ? v.rezerva.i + '–' + v.rezerva.r : '',
-            m: Number(v._m) || null };
-          if (z >= acum) program.urmatoarele.push(rand); else program.ultimele.push(rand);
+          x.zile++;
+          const luna = z.slice(0, 7); x.luni[luna] = (x.luni[luna] || 0) + 1;
+          if (!x.prima || z < x.prima) x.prima = z;
+          if (!x.ultima || z > x.ultima) x.ultima = z;
+          const m = Number(v._m) || 0; if (m && (!x.ultimaModificare || m > x.ultimaModificare)) x.ultimaModificare = m;
         }
-        program.depouri[dep] = nrZile;
+        if (x.zile) program.depouri[dep] = x;
       }
-      program.urmatoarele.sort((x, y) => x.zi.localeCompare(y.zi)); program.urmatoarele = program.urmatoarele.slice(0, 10);
-      program.ultimele.sort((x, y) => y.zi.localeCompare(x.zi)); program.ultimele = program.ultimele.slice(0, 7);
+      // Depoul în care lucrează: cel marcat de telefon; altfel cel cu cele mai
+      // multe zile completate în ultimele 60 de zile.
+      const marcat = b && (b.depotLucru || b.depotPropriu);
+      if (marcat && program.depouri[marcat]) program.depotLucru = marcat;
+      else {
+        const prag = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 7);
+        let best = null, bestN = -1;
+        for (const [dep, x] of Object.entries(program.depouri)) {
+          const n = Object.entries(x.luni).filter(([l]) => l >= prag).reduce((a, [, v]) => a + v, 0);
+          if (n > bestN) { best = dep; bestN = n; }
+        }
+        program.depotLucru = best;
+      }
 
       // Notificări: pe câte telefoane, prin ce serviciu, ce setări
       let notificari = null;
