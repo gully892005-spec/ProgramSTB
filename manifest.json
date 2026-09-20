@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "fullscreen",
   "orientation": "portrait",
-  "background_color": "#032652",
-  "theme_color": "#032652",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "lang": "ro",
   "categories": [
     "productivity",
