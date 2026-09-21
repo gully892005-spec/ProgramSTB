@@ -4,7 +4,7 @@
   "description": "Program de lucru STB 2026 - Depoul Dudești, Giurgiu, Militari, Victoria, Colentina",
   "start_url": "./?pwa=1",
   "scope": "./",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "portrait",
   "background_color": "#000000",
   "theme_color": "#000000",
@@ -48,8 +48,8 @@
     }
   ],
   "display_override": [
-    "fullscreen",
-    "standalone"
+    "standalone",
+    "minimal-ui"
   ],
   "related_applications": [
     {

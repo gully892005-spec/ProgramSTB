@@ -3,7 +3,7 @@
 // Funcții: Cache offline, Notificări tură, Widget zilnic
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'stb-2026-v55';   // [v6.9] VMA în card și în pontaj   // [v6.8] site curat, un singur buton   // [v6.7] instalare dintr-o apăsare   // [v6.6] fereastra de instalare revine pe site   // [v6.5] numărul se cere doar instalat   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
+const CACHE_NAME = 'stb-2026-v57';   // [v7.1] standalone   // [v7.0] refresh fără salt pe prima pagină   // [v6.9] VMA în card și în pontaj   // [v6.8] site curat, un singur buton   // [v6.7] instalare dintr-o apăsare   // [v6.6] fereastra de instalare revine pe site   // [v6.5] numărul se cere doar instalat   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
 // [v15.8] Caile erau scrise fix, cu /ProgramSTB/. Pe programstb.com aplicatia
 // sta in radacina, deci nu exista acolo nimic: cache-ul ramanea gol, iar
 // manifestul si service worker-ul nu se incarcau. Relativ merge pe ambele
@@ -53,7 +53,12 @@ self.addEventListener('fetch', e => {
   // ramura cache-first, unde potrivirea se face exact, nu găsea nimic și
   // aplicația nu se mai deschidea fără internet.
   const urlCurat = url.split('?')[0].split('#')[0];
-  const isCore = urlCurat === self.registration.scope || urlCurat.includes('index.html') || urlCurat.includes('sw.js');
+  // [v7.1] `manifest.json` trecea pe ramura cache-first, deci telefonul putea
+  // citi luni la rând vechea variantă din memorie — iar manifestul e cel care
+  // spune cum pornește aplicația (acum `standalone`). Îl luăm de pe net întâi,
+  // cu copia locală drept plasă de siguranță.
+  const isCore = urlCurat === self.registration.scope || urlCurat.includes('index.html')
+              || urlCurat.includes('sw.js') || urlCurat.includes('manifest.json');
 
   // [FIX] db.json — rețea întâi, dar păstrăm ultima copie bună pentru offline
   if (url.includes('db.json')) {
