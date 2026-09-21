@@ -3,7 +3,7 @@
 // Funcții: Cache offline, Notificări tură, Widget zilnic
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'stb-2026-v51';   // [v6.5] numărul se cere doar instalat   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
+const CACHE_NAME = 'stb-2026-v52';   // [v6.6] fereastra de instalare revine pe site   // [v6.5] numărul se cere doar instalat   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
 // [v15.8] Caile erau scrise fix, cu /ProgramSTB/. Pe programstb.com aplicatia
 // sta in radacina, deci nu exista acolo nimic: cache-ul ramanea gol, iar
 // manifestul si service worker-ul nu se incarcau. Relativ merge pe ambele
