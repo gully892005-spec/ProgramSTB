@@ -50,5 +50,12 @@
   "display_override": [
     "fullscreen",
     "standalone"
-  ]
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://programstb.com/manifest.json"
+    }
+  ],
+  "prefer_related_applications": false
 }
