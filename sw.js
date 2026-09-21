@@ -3,7 +3,7 @@
 // Funcții: Cache offline, Notificări tură, Widget zilnic
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'stb-2026-v49';   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
+const CACHE_NAME = 'stb-2026-v50';   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
 // [v15.8] Caile erau scrise fix, cu /ProgramSTB/. Pe programstb.com aplicatia
 // sta in radacina, deci nu exista acolo nimic: cache-ul ramanea gol, iar
 // manifestul si service worker-ul nu se incarcau. Relativ merge pe ambele
@@ -47,7 +47,13 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
   const url = e.request.url;
-  const isCore = url === self.registration.scope || url.includes('index.html') || url.includes('sw.js');
+  // [v6.4] `start_url` are acum marcajul `?pwa=1` (ca telefonul să știe că
+  // aplicația a pornit de pe ecran, nu din browser). Fără curățarea de mai jos,
+  // adresa cu semnul de întrebare nu mai era „pagina principală": cădea pe
+  // ramura cache-first, unde potrivirea se face exact, nu găsea nimic și
+  // aplicația nu se mai deschidea fără internet.
+  const urlCurat = url.split('?')[0].split('#')[0];
+  const isCore = urlCurat === self.registration.scope || urlCurat.includes('index.html') || urlCurat.includes('sw.js');
 
   // [FIX] db.json — rețea întâi, dar păstrăm ultima copie bună pentru offline
   if (url.includes('db.json')) {
@@ -72,7 +78,8 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
         }
         return resp;
-      }).catch(() => caches.match(e.request))
+      }).catch(() => caches.match(e.request, { ignoreSearch: true })
+                       .then(c => c || caches.match('./', { ignoreSearch: true })))
     );
   } else {
     // Cache-first pentru resurse statice (fonturi, icoane etc.)

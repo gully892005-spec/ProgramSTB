@@ -2,7 +2,7 @@
   "name": "Program STB 2026",
   "short_name": "ProgramSTB",
   "description": "Program de lucru STB 2026 - Depoul Dudești, Giurgiu, Militari, Victoria, Colentina",
-  "start_url": "./",
+  "start_url": "./?pwa=1",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "portrait",
