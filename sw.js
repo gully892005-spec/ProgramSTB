@@ -3,7 +3,7 @@
 // Funcții: Cache offline, Notificări tură, Widget zilnic
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'stb-2026-v73';   // [v8.7] zilele se văd + weekend în pontaj   // [v8.6] zile plătite dublu   // [v8.5] înapoi la rezumatul lunii   // [v8.4] zile necompletate + starea repartizării   // [v8.3] bara lunii pe un rând   // [v8.2] fără eticheta de procent   // [v8.1] ore de noapte + blocări S+D   // [v8.0] orele cu spor pe cerc   // [v7.9] vizitatorul nu vede statistici   // [v7.8] rămase = neluate   // [v7.7] CM nu mai consumă din CO   // [v7.6] planificarea concediului   // [v7.5] concediu pe fiecare an   // [v7.4] sărbătorile cu nume și indicatori de weekend   // [v7.3] săptămâna desfăcută la pornire   // [v7.2] ștergere și din cloud   // [v7.1] standalone   // [v7.0] refresh fără salt pe prima pagină   // [v6.9] VMA în card și în pontaj   // [v6.8] site curat, un singur buton   // [v6.7] instalare dintr-o apăsare   // [v6.6] fereastra de instalare revine pe site   // [v6.5] numărul se cere doar instalat   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
+const CACHE_NAME = 'stb-2026-v74';   // [v8.8] nicio cerere nu mai atârnă · foaia rămâne în telefon · chat corectat   // [v8.7] zilele se văd + weekend în pontaj   // [v8.6] zile plătite dublu   // [v8.5] înapoi la rezumatul lunii   // [v8.4] zile necompletate + starea repartizării   // [v8.3] bara lunii pe un rând   // [v8.2] fără eticheta de procent   // [v8.1] ore de noapte + blocări S+D   // [v8.0] orele cu spor pe cerc   // [v7.9] vizitatorul nu vede statistici   // [v7.8] rămase = neluate   // [v7.7] CM nu mai consumă din CO   // [v7.6] planificarea concediului   // [v7.5] concediu pe fiecare an   // [v7.4] sărbătorile cu nume și indicatori de weekend   // [v7.3] săptămâna desfăcută la pornire   // [v7.2] ștergere și din cloud   // [v7.1] standalone   // [v7.0] refresh fără salt pe prima pagină   // [v6.9] VMA în card și în pontaj   // [v6.8] site curat, un singur buton   // [v6.7] instalare dintr-o apăsare   // [v6.6] fereastra de instalare revine pe site   // [v6.5] numărul se cere doar instalat   // [v6.4] recunoaște aplicația instalată   // [v6.3] total utilizatori   // [v6.2] blocările peste program   // [v6.1] repartizarea nu trece peste ce a scris omul   // [v6.0] repartizarea intră singură   // [v5.9] doar rubricile completate   // [v4.5] link corect la atingerea notificării   // [v3.7] poza corectată: „pentru un București mai bun!"
 // [v15.8] Caile erau scrise fix, cu /ProgramSTB/. Pe programstb.com aplicatia
 // sta in radacina, deci nu exista acolo nimic: cache-ul ramanea gol, iar
 // manifestul si service worker-ul nu se incarcau. Relativ merge pe ambele
@@ -43,6 +43,59 @@ self.addEventListener('activate', e => {
 });
 
 // ── FETCH: network-first pentru HTML/JS, cache-first pentru rest ──
+// ══════════════════════════════════════════════════════════════
+// [v8.8] REȚEAUA NU MAI POATE ȚINE APLICAȚIA ÎNCHISĂ
+//
+// Până acum, pentru fișierele aplicației se cerea ÎNTÂI rețeaua, iar copia
+// din telefon era folosită doar dacă cererea eșua. Problema: pe semnal prost
+// cererea nu eșuează, ci atârnă — uneori un minut. În tot timpul ăla omul se
+// uita la ecran alb, deși aplicația întreagă era deja în telefon.
+//
+// Acum punem rețeaua la întrecere cu un ceas. Dacă rețeaua nu răspunde în
+// câteva secunde, pornim din copia locală și gata. Cererea de rețea NU e
+// anulată: merge mai departe în fundal și, dacă ajunge, împrospătează copia
+// pentru data viitoare. Deci: pornire instant acum, versiune nouă la
+// următoarea deschidere.
+// ══════════════════════════════════════════════════════════════
+const RABDARE_RETEA = 3500;   // cât așteptăm rețeaua pentru fișierele aplicației
+const RABDARE_DB    = 3000;   // pentru db.json (indicatoarele)
+
+function _dinCache(req, cuPaginaPrincipala){
+  return caches.match(req, { ignoreSearch: true }).then(c => {
+    if(c) return c;
+    return cuPaginaPrincipala ? caches.match('./', { ignoreSearch: true }) : null;
+  });
+}
+
+function reteaSauCopie(req, ms, cuPaginaPrincipala){
+  return new Promise(resolve => {
+    let raspuns = false;
+    const dau = r => { if(!raspuns && r){ raspuns = true; resolve(r); } };
+
+    const ceas = setTimeout(() => {
+      if(raspuns) return;
+      _dinCache(req, cuPaginaPrincipala).then(dau);
+    }, ms);
+
+    fetch(req).then(resp => {
+      // Copia se împrospătează chiar dacă între timp am pornit din cache.
+      if(resp && resp.status === 200){
+        const clona = resp.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, clona)).catch(()=>{});
+      }
+      clearTimeout(ceas);
+      dau(resp);
+    }).catch(() => {
+      clearTimeout(ceas);
+      if(raspuns) return;
+      _dinCache(req, cuPaginaPrincipala).then(c => {
+        if(c) dau(c);
+        else if(!raspuns){ raspuns = true; resolve(Response.error()); }
+      });
+    });
+  });
+}
+
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
@@ -62,30 +115,13 @@ self.addEventListener('fetch', e => {
 
   // [FIX] db.json — rețea întâi, dar păstrăm ultima copie bună pentru offline
   if (url.includes('db.json')) {
-    e.respondWith(
-      fetch(e.request).then(resp => {
-        if (resp && resp.status === 200) {
-          const clone = resp.clone();
-          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-        }
-        return resp;
-      }).catch(() => caches.match(e.request, { ignoreSearch: true }))
-    );
+    e.respondWith(reteaSauCopie(e.request, RABDARE_DB, false));
     return;
   }
 
   if (isCore) {
     // Network-first: încearcă rețeaua, fallback la cache dacă offline
-    e.respondWith(
-      fetch(e.request).then(resp => {
-        if (resp && resp.status === 200) {
-          const clone = resp.clone();
-          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-        }
-        return resp;
-      }).catch(() => caches.match(e.request, { ignoreSearch: true })
-                       .then(c => c || caches.match('./', { ignoreSearch: true })))
-    );
+    e.respondWith(reteaSauCopie(e.request, RABDARE_RETEA, true));
   } else {
     // Cache-first pentru resurse statice (fonturi, icoane etc.)
     e.respondWith(
