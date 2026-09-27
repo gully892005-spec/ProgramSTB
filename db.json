@@ -8799,13 +8799,13 @@
         "s1": {
           "i": "05:00",
           "r": "13:12",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": true
         },
         "s2": {
           "i": "13:12",
           "r": "21:48",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": false
         }
       },
@@ -8814,13 +8814,13 @@
         "s1": {
           "i": "05:04",
           "r": "13:18",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": true
         },
         "s2": {
           "i": "13:18",
           "r": "21:52",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": false
         }
       },
@@ -8829,13 +8829,13 @@
         "s1": {
           "i": "05:08",
           "r": "13:24",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": true
         },
         "s2": {
           "i": "13:24",
           "r": "21:56",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": false
         }
       },
@@ -8844,13 +8844,13 @@
         "s1": {
           "i": "05:11",
           "r": "13:30",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": true
         },
         "s2": {
           "i": "13:30",
           "r": "22:00",
-          "c": "Ghencea",
+          "c": "Piața Presei",
           "d": false
         }
       },
