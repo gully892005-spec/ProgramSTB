@@ -18233,7 +18233,7 @@
     "_ore": {
       "_info": "Orele turelor de troleibuz (Bujoreni), din indicatorii de ore. l = zi lucrătoare, s = sâmbătă, d = duminică/sărbătoare. Cheie: tur/linie → schimb (1, 2 sau 0 = oricare) → [început, sfârșit].",
       "_surse": {
-        "bujoreni": "61, 62, 63, 93, 96: zi lucr. 01–30.09.2026 · 69: zi lucr. 01.09.2026 · weekend: 61, 63, 69, 93 din aceleași foi, 62 din 20/21.06.2026, 96 din 01–31.08.2026 · 93: foaia de sâmbătă pusă și duminica · 515 (noapte): 01–30.04.2026 · 368: zi lucr. din foaia 21–31.07.2025 (turele 10, 11, 13 se potrivesc cu repartizarea din octombrie)"
+        "bujoreni": "61, 62, 63, 93, 96: zi lucr. 01–30.09.2026 · 69: zi lucr. 01.09.2026 · weekend: 61, 63, 69, 93 din aceleași foi, 62 din 20/21.06.2026, 96 din 01–31.08.2026 · 93: foaia de sâmbătă pusă și duminica · 515 (noapte): 01–30.04.2026 · 368: zi lucr. 10, 11, 13 · sâmbătă 1, 2 · duminică 1, 8 — confirmate de foaia recapitulativă de la avizier (sept. 2026)"
       },
       "l": {
         "1/61": {
@@ -19513,6 +19513,26 @@
             "23:15",
             "05:44"
           ]
+        },
+        "1/368": {
+          "1": [
+            "04:54",
+            "13:17"
+          ],
+          "2": [
+            "13:17",
+            "21:59"
+          ]
+        },
+        "2/368": {
+          "1": [
+            "07:27",
+            "15:21"
+          ],
+          "2": [
+            "15:21",
+            "23:21"
+          ]
         }
       },
       "d": {
@@ -19988,6 +20008,26 @@
           "0": [
             "23:15",
             "05:44"
+          ]
+        },
+        "1/368": {
+          "1": [
+            "04:54",
+            "13:10"
+          ],
+          "2": [
+            "13:10",
+            "21:11"
+          ]
+        },
+        "8/368": {
+          "1": [
+            "07:14",
+            "16:04"
+          ],
+          "2": [
+            "16:04",
+            "23:25"
           ]
         }
       },
