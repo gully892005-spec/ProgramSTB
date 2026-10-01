@@ -1012,6 +1012,14 @@ export default {
       });
     }
 
+    if (url.pathname === '/numar-nou') {
+      const r = await numarNou(request, env);
+      return new Response(JSON.stringify(r.corp), {
+        status: r.status,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors }
+      });
+    }
+
     if (url.pathname === '/admin') {
       const r = await admin(request, env);
       return new Response(JSON.stringify(r.corp), {
@@ -1789,6 +1797,63 @@ async function revendica(request, env) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// [v11.17] CEREREA DE NUMĂR NOU, DE PE ECRANUL DE BLOCARE
+//
+// Cel blocat pentru că și-a scris alt număr (0000) cere să treacă pe numărul
+// lui real. NU se deblochează singur — altfel oricine, blocat pentru orice,
+// putea scăpa luând numărul unui coleg care nu folosește aplicația. Cererea
+// stă în /blocati/<vechi>/cerere până o aprobă adminul; atunci telefonul își
+// mută singur numărul și anunță („gata"), iar blocarea vechiului număr se
+// șterge, cu tot cu abonamentul de notificări de pe el.
+// ══════════════════════════════════════════════════════════════
+async function numarNou(request, env) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  let c;
+  try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr  = nrCurat(c.nr);
+  const dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!nr || !dev) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul sau telefonul' } };
+
+  let b = null;
+  try { b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)); }
+  catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica. Încearcă din nou.' } }; }
+  if (!b) return { status: 200, corp: { ok: false, stare: 'neblocat', eroare: 'Numărul nu mai e blocat.' } };
+  if (!(await _telefonulAreVoie(env, nr, dev))) {
+    await new Promise(r => setTimeout(r, 400));
+    return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
+  }
+
+  if (c.tip === 'gata') {
+    // Telefonul s-a mutat pe numărul aprobat: curățăm numărul vechi.
+    if (!b.aprobat || b.aprobat.dev !== dev) return { status: 200, corp: { ok: false, eroare: 'Nicio mutare aprobată' } };
+    await fetch(urlBroadcast(env, `blocati/${nr}.json`), { method: 'DELETE' }).catch(() => {});
+    await fetch(urlBroadcast(env, `push/${nr}.json`), { method: 'DELETE' }).catch(() => {});
+    await fetch(urlBroadcast(env, `proprietar/${nr}/disp/${dev}.json`), { method: 'DELETE' }).catch(() => {});
+    return { status: 200, corp: { ok: true } };
+  }
+
+  // tip: 'cere'
+  const nou = nrCurat(c.nou);
+  if (!nou || nou.length < 4 || nou.length > 6 || nou === nr) return { status: 400, corp: { ok: false, eroare: 'Număr nou greșit' } };
+  if (b.aprobat) return { status: 200, corp: { ok: false, eroare: 'Ai deja o mutare aprobată. Deschide aplicația din nou.' } };
+  let bNou = null;
+  try { bNou = await getJSON(urlBroadcast(env, `blocati/${nou}.json`)); } catch (e) {}
+  if (bNou) return { status: 200, corp: { ok: false, eroare: `Și ${nou} e blocat.` } };
+  let prop = null;
+  try { prop = await getJSON(urlBroadcast(env, `proprietar/${nou}.json`)); } catch (e) {}
+  const { locuri, disp } = _normalizeaza(prop);
+  if (!disp[dev] && Object.keys(disp).length >= locuri && Object.keys(disp).length > 0) {
+    return { status: 200, corp: { ok: false, stare: 'ocupat', eroare: `${nou} e deja folosit pe alt telefon.` } };
+  }
+  const cerere = { nr: nou, la: Date.now(), dev };
+  const r = await fetch(urlBroadcast(env, `blocati/${nr}/cerere.json`), {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cerere)
+  });
+  if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Nu am putut salva cererea' } };
+  return { status: 200, corp: { ok: true, cerere } };
+}
+
+// ══════════════════════════════════════════════════════════════
 // PANOUL DE ADMIN — verificarea se face AICI, nu în telefon
 //
 // Până acum parola era scrisă în index.html, fișier public pe GitHub:
@@ -2155,6 +2220,43 @@ async function admin(request, env) {
         return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
       }
       return { status: 200, corp: { ok: true, nr, inreg } };
+    }
+
+    // [v11.17] Cererea celui blocat de a trece pe alt număr
+    case 'aprobaNumar': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      let b = null;
+      try { b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)); } catch (e) {}
+      if (!b || !b.cerere || !b.cerere.nr) return { status: 400, corp: { ok: false, eroare: 'Nu are nicio cerere.' } };
+      const nou = nrCurat(b.cerere.nr), dev = String(b.cerere.dev || '');
+      // Îi facem loc pe numărul nou chiar acum, ca telefonul să nu dea de „număr deja folosit".
+      let prop = null;
+      try { prop = await getJSON(urlBroadcast(env, `proprietar/${nou}.json`)); } catch (e) {}
+      const { locuri, disp } = _normalizeaza(prop);
+      if (!disp[dev]) {
+        if (Object.keys(disp).length >= locuri && Object.keys(disp).length > 0) {
+          return { status: 409, corp: { ok: false, eroare: `${nou} e deja pe alt telefon. Eliberează-l întâi din fișa lui ${nou}.` } };
+        }
+        disp[dev] = { la: Date.now(), ultima: Date.now() };
+        await fetch(urlBroadcast(env, `proprietar/${nou}.json`), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locuri: Math.max(locuri, Object.keys(disp).length), disp })
+        });
+      }
+      const aprobat = { nr: nou, dev, la: Date.now(), de: String(cerere.de || 'admin').slice(0, 60) };
+      const r = await fetch(urlBroadcast(env, `blocati/${nr}.json`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aprobat, cerere: null })
+      });
+      if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+      return { status: 200, corp: { ok: true, nr, nou } };
+    }
+    case 'respingeNumar': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      await fetch(urlBroadcast(env, `blocati/${nr}/cerere.json`), { method: 'DELETE' });
+      return { status: 200, corp: { ok: true, nr } };
     }
 
     case 'deblocheaza': {
