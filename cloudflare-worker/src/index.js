@@ -2735,6 +2735,29 @@ async function admin(request, env) {
       } };
     }
 
+    // [v11.9] Programul unui om, zi cu zi, ca să-l vezi din panoul de admin.
+    // Doar cheile de program (p2026_<depou>) din backup — nimic altceva.
+    case 'programBrut': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      let b = null;
+      try { b = await getJSON(urlBroadcast(env, `backup/${nr}.json`)); } catch (e) {}
+      if (!b) return { status: 200, corp: { ok: true, nr, exista: false, depouri: {} } };
+      const d = b.data || {};
+      const depouri = {};
+      for (const dep of DEPOURI) {
+        const k = 'p2026_' + dep;
+        if (!d[k]) continue;
+        let o; try { o = typeof d[k] === 'string' ? JSON.parse(d[k]) : d[k]; } catch (e) { continue; }
+        if (!o || typeof o !== 'object') continue;
+        const zile = {};
+        for (const [zi, v] of Object.entries(o)) if (v && typeof v === 'object' && v.t && v.t !== 'gol') zile[zi] = v;
+        if (Object.keys(zile).length) depouri[dep] = zile;
+      }
+      return { status: 200, corp: { ok: true, nr, exista: true, ts: Number(b.ts) || null,
+        depotLucru: b.depotLucru || b.depotPropriu || d.p2026_depot || null, sch: d.p2026_sch || null, depouri } };
+    }
+
     case 'blocati': {
       const lista = await citesteBlocati(env);
       return { status: 200, corp: { ok: true, blocati: lista } };
