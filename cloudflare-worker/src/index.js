@@ -1817,6 +1817,37 @@ async function hashJeton(j) {
 
 function idJeton(j) { return j.slice(0, 16); }
 
+// ══════════════════════════════════════════════════════════════
+// [v11.13] RESPONSABILI DE REPARTIZARE
+//
+// Câte un om de la fiecare depou poate urca singur repartizarea lunară, fără
+// parola de admin. Primește un cod scurt (ex. K7M2-Q9XP), legat de numărul
+// lui și de depourile lui. Cu codul poate face DOAR două lucruri: să intre
+// (verifica) și să urce repartizarea pentru depourile lui — fără ștergere.
+// În Firebase stă doar amprenta (hash) codului, în /repartitori/<id>.
+// Regula Firebase: "repartitori": { ".read": false, ".write": false }.
+// ══════════════════════════════════════════════════════════════
+const REP_ALFABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function codRepCurat(x) {
+  const c = String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z0-9]{8}$/.test(c) ? c : null;
+}
+async function idRep(cod) { return (await hashJeton('rep:' + cod)).slice(0, 16); }
+async function repartitorValid(env, cod) {
+  try {
+    const id = await idRep(cod);
+    const r = await fetch(urlBroadcast(env, `repartitori/${id}.json`), { headers: { 'Cache-Control': 'no-cache' } });
+    if (!r.ok) return 'necunoscut';
+    const d = await r.json().catch(() => null);
+    if (!d || !d.hash) return 'nu';
+    if (!paroleEgale(await hashJeton('rep:' + cod), String(d.hash))) return 'nu';
+    fetch(urlBroadcast(env, `repartitori/${id}/ultima.json`), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Date.now())
+    }).catch(() => {});
+    return { id, nr: d.nr || '', nume: d.nume || '', depouri: Array.isArray(d.depouri) ? d.depouri : [] };
+  } catch (e) { return 'necunoscut'; }
+}
+
 // [FIX v12.9] Întoarce 'da' / 'nu' / 'necunoscut', nu doar adevărat-fals.
 // Înainte, ORICE eșec — Firebase pică o secundă, rețeaua sughiță — ieșea ca
 // „jeton invalid", aplicația primea 401 și ȘTERGEA jetonul din telefon pe
@@ -1889,7 +1920,33 @@ async function admin(request, env) {
       eroare: 'Nu am putut verifica jetonul' + (_motivJeton ? ': ' + _motivJeton : '. Încearcă din nou.') } };
   }
 
+  // [v11.13] Responsabil de repartizare: intră cu codul lui (trimis ca `rep`,
+  // sau scris în câmpul de parolă). Are voie doar la urcarea repartizării.
+  let rep = null;
   if (!cuParola && !cuJeton) {
+    const cod = codRepCurat(cerere.rep || cerere.parola);
+    if (cod) {
+      const v = await repartitorValid(env, cod);
+      if (v === 'necunoscut') return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica codul. Încearcă din nou.' } };
+      if (v && v !== 'nu') rep = v;
+    }
+  }
+  if (rep) {
+    if (cerere.actiune === 'verifica') {
+      return { status: 200, corp: { ok: true, rol: 'repartitor', nr: rep.nr, nume: rep.nume, depouri: rep.depouri } };
+    }
+    if (cerere.actiune !== 'repartizare') {
+      return { status: 403, corp: { ok: false, eroare: 'Cu codul de repartizare poți doar să urci repartizarea.' } };
+    }
+    const dep = String(cerere.depou || '').trim().toLowerCase();
+    if (!rep.depouri.includes(dep)) {
+      return { status: 403, corp: { ok: false, eroare: `Poți urca doar pentru: ${rep.depouri.join(', ') || '—'}.` } };
+    }
+    cerere.inlocuieste = false;          // responsabilul nu poate șterge luna
+    cerere._urcatDe = rep.nr || rep.id;
+  }
+
+  if (!cuParola && !cuJeton && !rep) {
     // Mică întârziere, ca încercările repetate să nu fie ieftine
     await new Promise(r => setTimeout(r, 400));
     // `jetonAnulat` spune limpede aplicației că jetonul chiar nu mai e bun și
@@ -1957,6 +2014,40 @@ async function admin(request, env) {
 
     case 'verifica':
       return { status: 200, corp: { ok: true } };
+
+    // ── [v11.13] Responsabili de repartizare ──
+    case 'repartitorNou': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Scrie numărul de serviciu.' } };
+      const depouri = (Array.isArray(cerere.depouri) ? cerere.depouri : []).map(x => String(x).toLowerCase()).filter(x => DEPOURI.includes(x));
+      if (!depouri.length) return { status: 400, corp: { ok: false, eroare: 'Alege cel puțin un depou.' } };
+      const b = crypto.getRandomValues(new Uint8Array(8));
+      const cod = [...b].map(x => REP_ALFABET[x % REP_ALFABET.length]).join('');
+      const id = await idRep(cod);
+      const r = await fetch(urlBroadcast(env, `repartitori/${id}.json`), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: await hashJeton('rep:' + cod), nr, nume: String(cerere.nume || '').slice(0, 40),
+          depouri, creat: Date.now(), ultima: 0 })
+      });
+      if (!r.ok) { const d = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } }; }
+      // Codul în clar se întoarce O SINGURĂ DATĂ.
+      return { status: 200, corp: { ok: true, id, cod: cod.slice(0, 4) + '-' + cod.slice(4), nr, depouri } };
+    }
+    case 'repartitori': {
+      const r = await fetch(urlBroadcast(env, 'repartitori.json'), { headers: { 'Cache-Control': 'no-cache' } });
+      const d = r.ok ? (await r.json().catch(() => null)) : null;
+      const lista = Object.entries(d || {}).map(([id, v]) => ({ id, nr: (v && v.nr) || '', nume: (v && v.nume) || '',
+        depouri: (v && v.depouri) || [], creat: (v && v.creat) || 0, ultima: (v && v.ultima) || 0 }))
+        .sort((a, b2) => String(a.nr).localeCompare(String(b2.nr)));
+      return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'repartitorSterge': {
+      const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
+      if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      const r = await fetch(urlBroadcast(env, `repartitori/${id}.json`), { method: 'DELETE' });
+      if (!r.ok) { const d = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } }; }
+      return { status: 200, corp: { ok: true, id } };
+    }
 
     // Anunțul se scrie AICI, nu din telefon. Aplicația trimite doar textul;
     // singura cale către notificările colegilor trece prin parola de admin.
@@ -2123,7 +2214,7 @@ async function admin(request, env) {
       };
 
       try {
-        await scrie(baza, { luna, depou, urcat: Date.now() }, 'PATCH');
+        await scrie(baza, { luna, depou, urcat: Date.now(), urcatDe: cerere._urcatDe || 'admin' }, 'PATCH');
         if (Object.keys(lunara).length)  await scrie(`${baza}/lunara`,  lunara,  'PATCH');
         if (Object.keys(schimb).length)  await scrie(`${baza}/schimb`,  schimb,  'PATCH');
         if (Object.keys(ore).length)     await scrie(`${baza}/ore`,     ore,     'PATCH');
