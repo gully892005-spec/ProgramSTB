@@ -1841,9 +1841,13 @@ async function repartitorValid(env, cod) {
     const d = await r.json().catch(() => null);
     if (!d || !d.hash) return 'nu';
     if (!paroleEgale(await hashJeton('rep:' + cod), String(d.hash))) return 'nu';
-    fetch(urlBroadcast(env, `repartitori/${id}/ultima.json`), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Date.now())
-    }).catch(() => {});
+    // [v11.15] Cu `await`: un fetch lăsat neașteptat se taie în Cloudflare
+    // când pleacă răspunsul, deci „folosit ultima oară" nu se scria niciodată.
+    try {
+      await fetch(urlBroadcast(env, `repartitori/${id}/ultima.json`), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Date.now())
+      });
+    } catch (e) {}
     return { id, nr: d.nr || '', nume: d.nume || '', depouri: Array.isArray(d.depouri) ? d.depouri : [] };
   } catch (e) { return 'necunoscut'; }
 }
