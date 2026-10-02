@@ -1806,6 +1806,28 @@ async function revendica(request, env) {
 // mută singur numărul și anunță („gata"), iar blocarea vechiului număr se
 // șterge, cu tot cu abonamentul de notificări de pe el.
 // ══════════════════════════════════════════════════════════════
+// [v11.18] Notificare către admin(i): numerele trecute în /config/adminNotif.
+// Folosită când un blocat cere aprobarea unui număr nou (și, mai târziu, la alte cereri).
+async function _anuntaAdminii(env, titlu, text, tag) {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return 0;
+  let lista = null;
+  try { lista = await getJSON(urlBroadcast(env, 'config/adminNotif.json')); } catch (e) { return 0; }
+  if (!lista || typeof lista !== 'object') return 0;
+  const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
+  const payload = JSON.stringify({ title: titlu, body: text, tag: tag || 'admin', url: './' });
+  let trimise = 0;
+  for (const nr of Object.keys(lista)) {
+    if (!lista[nr]) continue;
+    try {
+      const u = await getJSON(urlBroadcast(env, `push/${nr}.json`));
+      if (!u) continue;
+      const r = await trimiteToate(env, nr, u, payload, { TTL: 86400, urgency: 'high' }, vapid);
+      trimise += r.trimise || 0;
+    } catch (e) {}
+  }
+  return trimise;
+}
+
 async function numarNou(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
   let c;
@@ -1850,6 +1872,11 @@ async function numarNou(request, env) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cerere)
   });
   if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Nu am putut salva cererea' } };
+  // Adminul află pe loc — altfel cererea putea sta zile întregi neobservată.
+  try {
+    await _anuntaAdminii(env, '🔒 Cerere de aprobare',
+      `${nr} (blocat) cere să treacă pe numărul ${nou}. Deschide panoul de admin → Colegi blocați.`, 'cerere-nr-' + nr);
+  } catch (e) {}
   return { status: 200, corp: { ok: true, cerere } };
 }
 
@@ -2220,6 +2247,105 @@ async function admin(request, env) {
         return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
       }
       return { status: 200, corp: { ok: true, nr, inreg } };
+    }
+
+    // [v11.19] Programele tuturor, pe scurt, pentru comparația cu repartizarea.
+    // Doar zilele scrise de om (fără cele puse automat din foaie — alea ar
+    // semăna mereu cu rândul numărului lui, chiar dacă numărul e al altcuiva).
+    case 'programeLuni': {
+      const luni = (Array.isArray(cerere.luni) ? cerere.luni : []).map(x => String(x)).filter(x => /^\d{4}-\d{2}$/.test(x)).slice(0, 4);
+      const prefixe = luni.map(l => { const [a, m] = l.split('-').map(Number); return a + '-' + m + '-'; });
+      let backup = null, push = null;
+      try { backup = await getJSON(urlBroadcast(env, 'backup.json')); } catch (e) {}
+      try { push = await getJSON(urlBroadcast(env, 'push.json')); } catch (e) {}
+      const tok = v => {
+        if (!v || typeof v !== 'object' || v._auto) return null;
+        const s = (v.s === 1 || v.s === 2) ? '@' + v.s : '';
+        switch (v.t) {
+          case 'liber': return 'L';
+          case 'co': return 'CO';
+          case 'cm': return 'CM';
+          case 'rezerva': return 'R';
+          case 'vma': return 'VMA';
+          case 'zl': case 'we':
+            if (v.r) return String(v.r).toUpperCase() + s;
+            if (v._manual && v._manual.tur && v._manual.linie) return (v._manual.tur + '/' + v._manual.linie).toUpperCase() + s;
+        }
+        return null;
+      };
+      const programe = {};
+      for (const [nr, b] of Object.entries(backup || {})) {
+        const d = (b && b.data) || {};
+        const out = {};
+        for (const dep of DEPOURI) {
+          const k = 'p2026_' + dep;
+          if (!d[k]) continue;
+          let o; try { o = typeof d[k] === 'string' ? JSON.parse(d[k]) : d[k]; } catch (e) { continue; }
+          if (!o || typeof o !== 'object') continue;
+          const z = {};
+          for (const [zi, v] of Object.entries(o)) {
+            if (!prefixe.some(p => zi.startsWith(p))) continue;
+            const t = tok(v); if (t) z[zi] = t;
+          }
+          if (Object.keys(z).length) out[dep] = z;
+        }
+        if (Object.keys(out).length) programe[nr] = { depot: d.p2026_depot || null, z: out };
+      }
+      const propuneri = {};
+      for (const [nr, u] of Object.entries(push || {})) if (u && u.propunere) propuneri[nr] = u.propunere;
+      return { status: 200, corp: { ok: true, programe, propuneri } };
+    }
+
+    // [v11.19] Adminul îi propune omului numărul pe care pare să-l aibă de fapt.
+    // Stă în /push/<nr>/propunere (nod pe care aplicația îl citește oricum);
+    // omul confirmă din aplicație cu un apăsat. `nou: null` retrage propunerea.
+    case 'propuneNumar': {
+      const nr = nrCurat(cerere.nr), nou = nrCurat(cerere.nou);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      if (!nou) {
+        await fetch(urlBroadcast(env, `push/${nr}/propunere.json`), { method: 'DELETE' });
+        return { status: 200, corp: { ok: true, nr } };
+      }
+      if (nou === nr) return { status: 400, corp: { ok: false, eroare: 'E același număr' } };
+      const prop = { nou, la: Date.now(), de: String(cerere.de || 'admin').slice(0, 60), scor: String(cerere.scor || '').slice(0, 60) };
+      const r = await fetch(urlBroadcast(env, `push/${nr}/propunere.json`), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prop)
+      });
+      if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+      let trimise = 0;
+      try {
+        if (env.VAPID_PUBLIC && env.VAPID_PRIVATE) {
+          const u = await getJSON(urlBroadcast(env, `push/${nr}.json`));
+          const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
+          const payload = JSON.stringify({ title: '🔎 Verifică numărul de serviciu',
+            body: `Numărul tău de serviciu pare să fie ${nou}, nu ${nr}. Deschide aplicația ca să-l corectezi.`, tag: 'propunere-nr', url: './' });
+          if (u) trimise = (await trimiteToate(env, nr, u, payload, { TTL: 86400 * 3, urgency: 'normal' }, vapid)).trimise || 0;
+        }
+      } catch (e) {}
+      return { status: 200, corp: { ok: true, nr, prop, trimise } };
+    }
+
+    // [v11.18] Pe ce numere primește adminul notificările de admin
+    case 'adminNotif': {
+      const nr = nrCurat(cerere.nr);
+      if (nr && cerere.pornit !== undefined) {
+        await fetch(urlBroadcast(env, `config/adminNotif/${nr}.json`), {
+          method: cerere.pornit ? 'PUT' : 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: cerere.pornit ? 'true' : undefined
+        });
+      }
+      let lista = null;
+      try { lista = await getJSON(urlBroadcast(env, 'config/adminNotif.json')); } catch (e) {}
+      const numere = Object.keys(lista || {}).filter(k => lista[k]);
+      const cuTel = {};
+      for (const n of numere) {
+        try { cuTel[n] = abonamentele(await getJSON(urlBroadcast(env, `push/${n}.json`))).length; } catch (e) { cuTel[n] = 0; }
+      }
+      return { status: 200, corp: { ok: true, numere, telefoane: cuTel } };
+    }
+    case 'adminNotifProba': {
+      const n = await _anuntaAdminii(env, '🔔 Probă', 'Așa arată notificările de admin. Le primești când cineva cere aprobare.', 'admin-proba');
+      return { status: 200, corp: { ok: true, trimise: n } };
     }
 
     // [v11.17] Cererea celui blocat de a trece pe alt număr
