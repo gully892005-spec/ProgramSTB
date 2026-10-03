@@ -2201,7 +2201,7 @@ async function admin(request, env) {
       const doc = {
         titlu, text,
         target: tinte.length ? tinte : ['all'],
-        tip: ['info', 'atentie', 'urgent'].includes(cerere.tip) ? cerere.tip : 'info',
+        tip: ['info', 'update', 'atentie', 'urgent'].includes(cerere.tip) ? cerere.tip : 'info',
         creat: Date.now(),
         de: String(cerere.de || 'admin').slice(0, 60)
       };
