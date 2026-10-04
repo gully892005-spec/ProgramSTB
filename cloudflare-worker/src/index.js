@@ -1867,7 +1867,7 @@ function _indCurataTabel(t, tip) {
 }
 function _indNumar(p) {
   let n = 0;
-  for (const t of ['zl', 'we', 'l']) if (p[t]) n += Object.keys(p[t].set || {}).length + (p[t].del || []).length;
+  for (const t of ['zl', 'we', 'l', 's', 'd']) if (p[t]) n += Object.keys(p[t].set || {}).length + (p[t].del || []).length;
   return n;
 }
 function _indDataRo(iso) { const [a, l, z] = String(iso).split('-'); return `${z}.${l}.${a}`; }
@@ -1886,7 +1886,7 @@ function _indDesface(p) {
 }
 function _indDeScris(p) {
   const o = Object.assign({}, p), t = {};
-  for (const k of ['zl', 'we', 'l']) if (o[k]) { t[k] = o[k]; delete o[k]; }
+  for (const k of ['zl', 'we', 'l', 's', 'd']) if (o[k]) { t[k] = o[k]; delete o[k]; }
   o.tabele = JSON.stringify(t);
   return o;
 }
@@ -1945,7 +1945,12 @@ async function indicatoriActiune(env, cerere, cine) {
     const p = { id, dep, tip, valabilDin: v, cand: Date.now(), nota: String(cerere.nota || '').slice(0, 300) };
     if (baza) { p.baza = baza; p.bazaNume = String(cerere.bazaNume || baza).slice(0, 40); }
     if (tip === 'tram') { p.zl = _indCurataTabel(cerere.zl, 'tram'); p.we = _indCurataTabel(cerere.we, 'tram'); }
-    else { p.l = _indCurataTabel(cerere.l, 'ore'); p.we = _indCurataTabel(cerere.we, 'ore'); }
+    else {
+      // [v11.36] sâmbăta (s) și duminica (d) separat; aplicațiile vechi trimit un singur `we`
+      p.l = _indCurataTabel(cerere.l, 'ore');
+      if (cerere.s || cerere.d) { p.s = _indCurataTabel(cerere.s, 'ore'); p.d = _indCurataTabel(cerere.d, 'ore'); }
+      else p.we = _indCurataTabel(cerere.we, 'ore');
+    }
     const n = _indNumar(p);
     if (!n) return { status: 400, corp: { ok: false, eroare: 'Nicio modificare de trimis.' } };
     if (JSON.stringify(p).length > 250000) return { status: 400, corp: { ok: false, eroare: 'Modificarea e prea mare.' } };
