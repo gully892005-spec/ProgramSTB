@@ -1012,6 +1012,14 @@ export default {
       });
     }
 
+    if (url.pathname === '/indicatori') {
+      const r = await indicatoriPublic(env);
+      return new Response(JSON.stringify(r.corp), {
+        status: r.status,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors }
+      });
+    }
+
     if (url.pathname === '/numar-nou') {
       const r = await numarNou(request, env);
       return new Response(JSON.stringify(r.corp), {
@@ -1806,6 +1814,163 @@ async function revendica(request, env) {
 // mută singur numărul și anunță („gata"), iar blocarea vechiului număr se
 // șterge, cu tot cu abonamentul de notificări de pe el.
 // ══════════════════════════════════════════════════════════════
+// [v11.29] Ce poate face un responsabil cu cod: urca repartizarea și/sau
+// modifica indicatorii de ore. Codurile vechi (fără câmp) = doar repartizare.
+function _drepturi(d) {
+  if (!d || typeof d !== 'object') return { rep: true, ind: false };
+  return { rep: !!d.rep, ind: !!d.ind };
+}
+
+// ══════════════════════════════════════════════════════════════
+// [v11.29] INDICATORII DE ORE, MODIFICAȚI DIN APLICAȚIE
+//
+// Responsabilul de depou (cod cu dreptul „ind") sau adminul trimite o
+// MODIFICARE (doar turele schimbate / noi / scoase) cu data de la care intră
+// în vigoare. A responsabilului stă „în așteptare" până o aprobă adminul;
+// a adminului intră direct. Aplicațiile citesc modificările aprobate de la
+// GET /indicatori și le pun peste db.json, cu tabelul vechi păstrat pentru
+// zilele dinainte de dată. Totul stă în /indicatori/<id>.
+// ══════════════════════════════════════════════════════════════
+const IND_ORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+const IND_CHEIE = /^\d{1,3}\/[A-Za-z0-9]{1,6}$/;
+function _indCurataTabel(t, tip) {
+  const out = { set: {}, del: [] };
+  if (!t || typeof t !== 'object') return out;
+  const set = (t.set && typeof t.set === 'object') ? t.set : {};
+  for (const [k, v] of Object.entries(set).slice(0, 900)) {
+    if (!IND_CHEIE.test(k) || !v || typeof v !== 'object') continue;
+    if (tip === 'tram') {
+      const sch = x => (x && IND_ORA.test(x.i) && IND_ORA.test(x.r)) ? { i: x.i, r: x.r, c: String(x.c || '').slice(0, 40) } : null;
+      const s1 = sch(v.s1), s2 = sch(v.s2);
+      if (!s1 && !s2) continue;
+      const o = { linie: String(v.linie || k.split('/')[1]).slice(0, 6) };
+      if (s1) { o.s1 = s1; if (v.s1 && v.s1.d) o.s1.d = true; }
+      if (s2) { o.s2 = s2; o.s2.d = !!(v.s2 && v.s2.d); }
+      out.set[k] = o;
+    } else {
+      const o = {};
+      for (const sc of ['1', '2', '0']) {
+        const x = v[sc];
+        if (Array.isArray(x) && x.length === 2 && IND_ORA.test(x[0]) && IND_ORA.test(x[1])) o[sc] = [x[0], x[1]];
+      }
+      if (Object.keys(o).length) out.set[k] = o;
+    }
+  }
+  out.del = (Array.isArray(t.del) ? t.del : []).filter(k => IND_CHEIE.test(String(k))).slice(0, 900).map(String);
+  return out;
+}
+function _indNumar(p) {
+  let n = 0;
+  for (const t of ['zl', 'we', 'l']) if (p[t]) n += Object.keys(p[t].set || {}).length + (p[t].del || []).length;
+  return n;
+}
+function _indDataRo(iso) { const [a, l, z] = String(iso).split('-'); return `${z}.${l}.${a}`; }
+const IND_NUME = { dudesti: 'Depoul Dudești', giurgiu: 'Depoul Giurgiu', victoria: 'Depoul Victoria', titan: 'Depoul Titan',
+  alexandria: 'Depoul Alexandria', colentina: 'Depoul Colentina', militari: 'Depoul Militari', budesti: 'Depoul București Noi',
+  autobuze: 'Autobuze', troleibuze: 'Troleibuze' };
+async function _indCiteste(env) {
+  try { return (await getJSON(urlBroadcast(env, 'indicatori.json'))) || {}; } catch (e) { return null; }
+}
+async function _indAnuntaColegii(env, p) {
+  const doc = {
+    titlu: '⏱ Indicatori de ore noi',
+    text: `${IND_NUME[p.dep] || p.dep}: indicatorii de ore se schimbă din ${_indDataRo(p.valabilDin)} (${_indNumar(p)} ture). Orele din aplicație se actualizează singure de la data asta.${p.nota ? '\n' + p.nota : ''}`,
+    target: [p.dep], tip: 'update', creat: Date.now(), de: 'indicatori',
+    expira: Date.parse(p.valabilDin + 'T00:00:00Z') + 7 * 86400000
+  };
+  try {
+    await fetch(urlBroadcast(env, 'anunturi.json'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+  } catch (e) {}
+}
+// GET /indicatori — public: doar modificările aprobate, cât să le pună aplicația peste db.json.
+async function indicatoriPublic(env) {
+  const toate = await _indCiteste(env);
+  if (toate === null) return { status: 503, corp: { ok: false, eroare: 'Firebase indisponibil' } };
+  const aprobate = {};
+  for (const [id, p] of Object.entries(toate)) {
+    if (!p || p.stare !== 'aprobat') continue;
+    const { de, motiv, ...rest } = p;
+    aprobate[id] = rest;
+  }
+  return { status: 200, corp: { ok: true, aprobate, t: Date.now() } };
+}
+async function indicatoriActiune(env, cerere, cine) {
+  // cine = { admin:true } sau { rep:{id,nr,nume,depouri,drepturi} }
+  const a = cerere.actiune;
+  if (a === 'indicatoriPropune') {
+    const dep = String(cerere.dep || '').toLowerCase();
+    if (!DEPOURI.includes(dep)) return { status: 400, corp: { ok: false, eroare: 'Depou necunoscut' } };
+    if (cine.rep && !cine.rep.depouri.includes(dep)) return { status: 403, corp: { ok: false, eroare: 'Poți modifica doar indicatorii depoului tău.' } };
+    const v = String(cerere.valabilDin || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return { status: 400, corp: { ok: false, eroare: 'Alege data de la care intră în vigoare.' } };
+    const azi = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+    if (cine.rep && v < azi) return { status: 400, corp: { ok: false, eroare: 'Data nu poate fi în trecut.' } };
+    const tip = (dep === 'autobuze' || dep === 'troleibuze') ? 'ore' : 'tram';
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const p = { id, dep, tip, valabilDin: v, cand: Date.now(), nota: String(cerere.nota || '').slice(0, 300) };
+    if (tip === 'tram') { p.zl = _indCurataTabel(cerere.zl, 'tram'); p.we = _indCurataTabel(cerere.we, 'tram'); }
+    else { p.l = _indCurataTabel(cerere.l, 'ore'); p.we = _indCurataTabel(cerere.we, 'ore'); }
+    const n = _indNumar(p);
+    if (!n) return { status: 400, corp: { ok: false, eroare: 'Nicio modificare de trimis.' } };
+    if (JSON.stringify(p).length > 250000) return { status: 400, corp: { ok: false, eroare: 'Modificarea e prea mare.' } };
+    p.de = cine.admin ? { rol: 'admin', nume: String(cerere.de || 'admin').slice(0, 60) }
+                      : { rol: 'responsabil', nr: cine.rep.nr, nume: cine.rep.nume, id: cine.rep.id };
+    const direct = cine.admin && !cerere.doarPropune;
+    p.stare = direct ? 'aprobat' : 'asteapta';
+    if (direct) { p.aprobatLa = Date.now(); p.aprobatDe = p.de.nume; }
+    const r = await fetch(urlBroadcast(env, `indicatori/${id}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+    if (direct) { if (cerere.anunta !== false) await _indAnuntaColegii(env, p); }
+    else {
+      try {
+        await _anuntaAdminii(env, '⏱ Indicatori de aprobat',
+          `${p.de.nume || p.de.nr} a modificat indicatorii la ${IND_NUME[dep] || dep}: ${n} ture, din ${_indDataRo(v)}. Deschide panoul → Repartizare.`, 'ind-' + id);
+      } catch (e) {}
+    }
+    return { status: 200, corp: { ok: true, id, stare: p.stare, n } };
+  }
+  if (a === 'indicatoriMele') {
+    const toate = await _indCiteste(env) || {};
+    const lista = Object.values(toate).filter(p => p && p.de && p.de.id === cine.rep.id)
+      .sort((x, y) => (y.cand || 0) - (x.cand || 0)).slice(0, 10)
+      .map(p => ({ id: p.id, dep: p.dep, valabilDin: p.valabilDin, cand: p.cand, stare: p.stare, n: _indNumar(p), motiv: p.motiv || '' }));
+    return { status: 200, corp: { ok: true, lista } };
+  }
+  if (!cine.admin) return { status: 403, corp: { ok: false, eroare: 'Nepermis' } };
+  if (a === 'indicatoriLista') {
+    const toate = await _indCiteste(env);
+    if (toate === null) return { status: 503, corp: { ok: false, eroare: 'Firebase indisponibil' } };
+    const lista = Object.values(toate).filter(Boolean).sort((x, y) => (y.cand || 0) - (x.cand || 0)).slice(0, 60);
+    return { status: 200, corp: { ok: true, lista } };
+  }
+  const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+  if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+  let p = null;
+  try { p = await getJSON(urlBroadcast(env, `indicatori/${id}.json`)); } catch (e) {}
+  if (!p) return { status: 404, corp: { ok: false, eroare: 'Nu mai există' } };
+  const patch = async o => {
+    const r = await fetch(urlBroadcast(env, `indicatori/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
+    return r.ok;
+  };
+  if (a === 'indicatoriAproba') {
+    if (p.stare !== 'asteapta') return { status: 400, corp: { ok: false, eroare: 'Nu e în așteptare' } };
+    if (!(await patch({ stare: 'aprobat', aprobatLa: Date.now(), aprobatDe: String(cerere.de || 'admin').slice(0, 60) }))) return { status: 502, corp: { ok: false, eroare: 'Firebase' } };
+    if (cerere.anunta !== false) await _indAnuntaColegii(env, p);
+    return { status: 200, corp: { ok: true } };
+  }
+  if (a === 'indicatoriRespinge') {
+    if (p.stare !== 'asteapta') return { status: 400, corp: { ok: false, eroare: 'Nu e în așteptare' } };
+    await patch({ stare: 'respins', motiv: String(cerere.motiv || '').slice(0, 200), respinsLa: Date.now() });
+    return { status: 200, corp: { ok: true } };
+  }
+  if (a === 'indicatoriAnuleaza') {
+    if (p.stare !== 'aprobat') return { status: 400, corp: { ok: false, eroare: 'Nu e aprobată' } };
+    await patch({ stare: 'anulat', anulatLa: Date.now() });
+    return { status: 200, corp: { ok: true } };
+  }
+  return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută: ' + a } };
+}
+
 // [v11.18] Notificare către admin(i): numerele trecute în /config/adminNotif.
 // Folosită când un blocat cere aprobarea unui număr nou (și, mai târziu, la alte cereri).
 async function _anuntaAdminii(env, titlu, text, tag) {
@@ -1940,7 +2105,8 @@ async function repartitorValid(env, cod) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Date.now())
       });
     } catch (e) {}
-    return { id, nr: d.nr || '', nume: d.nume || '', depouri: Array.isArray(d.depouri) ? d.depouri : [] };
+    return { id, nr: d.nr || '', nume: d.nume || '', depouri: Array.isArray(d.depouri) ? d.depouri : [],
+      drepturi: _drepturi(d.drepturi) };
   } catch (e) { return 'necunoscut'; }
 }
 
@@ -2029,10 +2195,15 @@ async function admin(request, env) {
   }
   if (rep) {
     if (cerere.actiune === 'verifica') {
-      return { status: 200, corp: { ok: true, rol: 'repartitor', nr: rep.nr, nume: rep.nume, depouri: rep.depouri } };
+      return { status: 200, corp: { ok: true, rol: 'repartitor', nr: rep.nr, nume: rep.nume, depouri: rep.depouri, drepturi: rep.drepturi } };
     }
-    if (cerere.actiune !== 'repartizare') {
-      return { status: 403, corp: { ok: false, eroare: 'Cu codul de repartizare poți doar să urci repartizarea.' } };
+    // [v11.29] indicatorii de ore: doar cu dreptul „ind", doar pentru depoul lui
+    if (cerere.actiune === 'indicatoriPropune' || cerere.actiune === 'indicatoriMele') {
+      if (!rep.drepturi.ind) return { status: 403, corp: { ok: false, eroare: 'Codul tău nu are drept la indicatori.' } };
+      return await indicatoriActiune(env, cerere, { rep });
+    }
+    if (cerere.actiune !== 'repartizare' || !rep.drepturi.rep) {
+      return { status: 403, corp: { ok: false, eroare: 'Cu codul tău nu ai voie la asta.' } };
     }
     const dep = String(cerere.depou || '').trim().toLowerCase();
     if (!rep.depouri.includes(dep)) {
@@ -2123,17 +2294,29 @@ async function admin(request, env) {
       const r = await fetch(urlBroadcast(env, `repartitori/${id}.json`), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hash: await hashJeton('rep:' + cod), nr, nume: String(cerere.nume || '').slice(0, 40),
-          depouri, creat: Date.now(), ultima: 0 })
+          depouri, creat: Date.now(), ultima: 0,
+          drepturi: { rep: !(cerere.drepturi && cerere.drepturi.rep === false), ind: !!(cerere.drepturi && cerere.drepturi.ind) } })
       });
       if (!r.ok) { const d = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } }; }
       // Codul în clar se întoarce O SINGURĂ DATĂ.
       return { status: 200, corp: { ok: true, id, cod: cod.slice(0, 4) + '-' + cod.slice(4), nr, depouri } };
     }
+    case 'indicatoriPropune': case 'indicatoriLista': case 'indicatoriAproba':
+    case 'indicatoriRespinge': case 'indicatoriAnuleaza':
+      return await indicatoriActiune(env, cerere, { admin: true });
+    case 'repartitorDrepturi': {
+      const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
+      if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      const dr = { rep: !!(cerere.drepturi && cerere.drepturi.rep), ind: !!(cerere.drepturi && cerere.drepturi.ind) };
+      if (!dr.rep && !dr.ind) return { status: 400, corp: { ok: false, eroare: 'Măcar un drept.' } };
+      await fetch(urlBroadcast(env, `repartitori/${id}/drepturi.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dr) });
+      return { status: 200, corp: { ok: true, id, drepturi: dr } };
+    }
     case 'repartitori': {
       const r = await fetch(urlBroadcast(env, 'repartitori.json'), { headers: { 'Cache-Control': 'no-cache' } });
       const d = r.ok ? (await r.json().catch(() => null)) : null;
       const lista = Object.entries(d || {}).map(([id, v]) => ({ id, nr: (v && v.nr) || '', nume: (v && v.nume) || '',
-        depouri: (v && v.depouri) || [], creat: (v && v.creat) || 0, ultima: (v && v.ultima) || 0 }))
+        depouri: (v && v.depouri) || [], creat: (v && v.creat) || 0, ultima: (v && v.ultima) || 0, drepturi: _drepturi(v && v.drepturi) }))
         .sort((a, b2) => String(a.nr).localeCompare(String(b2.nr)));
       return { status: 200, corp: { ok: true, lista } };
     }
