@@ -1967,7 +1967,8 @@ async function indicatoriActiune(env, cerere, cine) {
   }
   if (a === 'indicatoriMele') {
     const toate = await _indCiteste(env) || {};
-    const lista = Object.values(toate).filter(p => p && p.de && p.de.id === cine.rep.id)
+    const ale = new Set([cine.rep.id].concat(cine.rep.vechi || []));   // [v11.34] și cele trimise cu codurile lui vechi
+    const lista = Object.values(toate).filter(p => p && p.de && ale.has(p.de.id))
       .sort((x, y) => (y.cand || 0) - (x.cand || 0)).slice(0, 10)
       .map(p => ({ id: p.id, dep: p.dep, baza: p.baza || '', valabilDin: p.valabilDin, cand: p.cand, stare: p.stare, n: _indNumar(p), motiv: p.motiv || '' }));
     return { status: 200, corp: { ok: true, lista } };
@@ -2142,7 +2143,8 @@ async function repartitorValid(env, cod) {
       });
     } catch (e) {}
     return { id, nr: d.nr || '', nume: d.nume || '', depouri: Array.isArray(d.depouri) ? d.depouri : [],
-      drepturi: _drepturi(d.drepturi), autobaze: _autobaze(d.autobaze) };
+      drepturi: _drepturi(d.drepturi), autobaze: _autobaze(d.autobaze),
+      vechi: Array.isArray(d.vechi) ? d.vechi.map(String).slice(-10) : [] };
   } catch (e) { return 'necunoscut'; }
 }
 
@@ -2340,6 +2342,24 @@ async function admin(request, env) {
     case 'indicatoriPropune': case 'indicatoriLista': case 'indicatoriAproba':
     case 'indicatoriRespinge': case 'indicatoriAnuleaza':
       return await indicatoriActiune(env, cerere, { admin: true });
+    // [v11.34] Cod nou pentru același responsabil (a pierdut codul, telefon nou).
+    // Codul vechi nu mai merge; drepturile, depourile și istoricul rămân.
+    case 'repartitorCodNou': {
+      const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
+      if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      let v = null;
+      try { v = await getJSON(urlBroadcast(env, `repartitori/${id}.json`)); } catch (e) {}
+      if (!v || !v.hash) return { status: 404, corp: { ok: false, eroare: 'Nu mai există' } };
+      const b = crypto.getRandomValues(new Uint8Array(8));
+      const cod = [...b].map(x => REP_ALFABET[x % REP_ALFABET.length]).join('');
+      const idNou = await idRep(cod);
+      const nou = Object.assign({}, v, { hash: await hashJeton('rep:' + cod), ultima: 0, codNou: Date.now(),
+        vechi: (Array.isArray(v.vechi) ? v.vechi : []).concat(id).slice(-10) });
+      const r = await fetch(urlBroadcast(env, `repartitori/${idNou}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nou) });
+      if (!r.ok) { const d = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } }; }
+      await fetch(urlBroadcast(env, `repartitori/${id}.json`), { method: 'DELETE' });
+      return { status: 200, corp: { ok: true, id: idNou, cod: cod.slice(0, 4) + '-' + cod.slice(4), nr: nou.nr || '', drepturi: _drepturi(nou.drepturi) } };
+    }
     case 'repartitorDrepturi': {
       const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
       if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
