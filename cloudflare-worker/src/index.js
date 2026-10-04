@@ -1982,8 +1982,26 @@ async function indicatoriActiune(env, cerere, cine) {
   if (a === 'indicatoriLista') {
     const toate = await _indCiteste(env);
     if (toate === null) return { status: 503, corp: { ok: false, eroare: 'Firebase indisponibil' } };
-    const lista = Object.values(toate).filter(Boolean).sort((x, y) => (y.cand || 0) - (x.cand || 0)).slice(0, 60);
+    const lista = Object.values(toate).filter(p => p && !p.ascuns).sort((x, y) => (y.cand || 0) - (x.cand || 0)).slice(0, 60);
     return { status: 200, corp: { ok: true, lista } };
+  }
+  // [v11.37] Curăță istoricul din panou. Cele aprobate rămân în vigoare (doar nu
+  // se mai arată); cele respinse/anulate nu mai folosesc la nimic → se șterg.
+  if (a === 'indicatoriAscunde') {
+    const toate = await _indCiteste(env);
+    if (toate === null) return { status: 503, corp: { ok: false, eroare: 'Firebase indisponibil' } };
+    const tinta = cerere.toate ? Object.keys(toate) : [String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20)];
+    let n = 0;
+    for (const id of tinta) {
+      const p = toate[id];
+      if (!p || p.stare === 'asteapta') continue;
+      if (p.stare === 'aprobat') {
+        if (p.ascuns) continue;
+        await fetch(urlBroadcast(env, `indicatori/${id}/ascuns.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: 'true' });
+      } else await fetch(urlBroadcast(env, `indicatori/${id}.json`), { method: 'DELETE' });
+      n++;
+    }
+    return { status: 200, corp: { ok: true, n } };
   }
   const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
   if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
@@ -2345,7 +2363,7 @@ async function admin(request, env) {
       return { status: 200, corp: { ok: true, id, cod: cod.slice(0, 4) + '-' + cod.slice(4), nr, depouri } };
     }
     case 'indicatoriPropune': case 'indicatoriLista': case 'indicatoriAproba':
-    case 'indicatoriRespinge': case 'indicatoriAnuleaza':
+    case 'indicatoriRespinge': case 'indicatoriAnuleaza': case 'indicatoriAscunde':
       return await indicatoriActiune(env, cerere, { admin: true });
     // [v11.34] Cod nou pentru același responsabil (a pierdut codul, telefon nou).
     // Codul vechi nu mai merge; drepturile, depourile și istoricul rămân.
