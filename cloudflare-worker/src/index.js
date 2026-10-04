@@ -1874,8 +1874,28 @@ function _indDataRo(iso) { const [a, l, z] = String(iso).split('-'); return `${z
 const IND_NUME = { dudesti: 'Depoul Dudești', giurgiu: 'Depoul Giurgiu', victoria: 'Depoul Victoria', titan: 'Depoul Titan',
   alexandria: 'Depoul Alexandria', colentina: 'Depoul Colentina', militari: 'Depoul Militari', budesti: 'Depoul București Noi',
   autobuze: 'Autobuze', troleibuze: 'Troleibuze' };
+// [v11.33] Firebase nu primește chei cu „/" (iar „15/1" e cheia unui tur) și
+// transformă obiectele cu chei 0/1/2 în liste. De aceea tabelele modificării
+// se țin într-un singur câmp text (`tabele`, JSON) și se desfac la citire.
+function _indDesface(p) {
+  if (p && typeof p.tabele === 'string') {
+    try { Object.assign(p, JSON.parse(p.tabele)); } catch (e) {}
+    delete p.tabele;
+  }
+  return p;
+}
+function _indDeScris(p) {
+  const o = Object.assign({}, p), t = {};
+  for (const k of ['zl', 'we', 'l']) if (o[k]) { t[k] = o[k]; delete o[k]; }
+  o.tabele = JSON.stringify(t);
+  return o;
+}
 async function _indCiteste(env) {
-  try { return (await getJSON(urlBroadcast(env, 'indicatori.json'))) || {}; } catch (e) { return null; }
+  try {
+    const d = (await getJSON(urlBroadcast(env, 'indicatori.json'))) || {};
+    for (const k of Object.keys(d)) _indDesface(d[k]);
+    return d;
+  } catch (e) { return null; }
 }
 async function _indAnuntaColegii(env, p) {
   const doc = {
@@ -1934,8 +1954,8 @@ async function indicatoriActiune(env, cerere, cine) {
     const direct = cine.admin && !cerere.doarPropune;
     p.stare = direct ? 'aprobat' : 'asteapta';
     if (direct) { p.aprobatLa = Date.now(); p.aprobatDe = p.de.nume; }
-    const r = await fetch(urlBroadcast(env, `indicatori/${id}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
-    if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+    const r = await fetch(urlBroadcast(env, `indicatori/${id}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_indDeScris(p)) });
+    if (!r.ok) { const t = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status + (t ? ' ' + t.slice(0, 120) : '') } }; }
     if (direct) { if (cerere.anunta !== false) await _indAnuntaColegii(env, p); }
     else {
       try {
@@ -1962,7 +1982,7 @@ async function indicatoriActiune(env, cerere, cine) {
   const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
   if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
   let p = null;
-  try { p = await getJSON(urlBroadcast(env, `indicatori/${id}.json`)); } catch (e) {}
+  try { p = _indDesface(await getJSON(urlBroadcast(env, `indicatori/${id}.json`))); } catch (e) {}
   if (!p) return { status: 404, corp: { ok: false, eroare: 'Nu mai există' } };
   const patch = async o => {
     const r = await fetch(urlBroadcast(env, `indicatori/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
