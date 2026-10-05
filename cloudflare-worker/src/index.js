@@ -1859,6 +1859,7 @@ function _indCurataTabel(t, tip) {
         const x = v[sc];
         if (Array.isArray(x) && x.length === 2 && IND_ORA.test(x[0]) && IND_ORA.test(x[1])) o[sc] = [x[0], x[1]];
       }
+      if (o['2'] && v.g2) o.g2 = 1;   // [v11.44] schimbul 2 iese din garaj
       if (Object.keys(o).length) out.set[k] = o;
     }
   }
