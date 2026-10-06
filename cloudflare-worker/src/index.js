@@ -914,6 +914,7 @@ async function ruleaza(env) {
   } catch (e) { log('Statistici: ' + e.message); }
 
   await _repAmintireAutomata(env, log);   // [1.0]
+  await _curataTrimiteri(env, log);       // [1.2]
 
   log('');
   log(`Rulare terminată în ${Date.now() - pornit} ms.`);
@@ -1042,6 +1043,20 @@ export default {
       try { min = await getJSON(urlBroadcast(env, 'config/versiuneMinima.json')); } catch (e) {}
       return new Response(JSON.stringify({ ok: true, min: min || null }), {
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors } });
+    }
+
+    // [1.2] Banda de avertizare (o citește oricine), ore greșite, foi trimise.
+    if (url.pathname === '/banda') {
+      let b = null;
+      try { b = await getJSON(urlBroadcast(env, 'config/banda.json')); } catch (e) {}
+      return new Response(JSON.stringify({ ok: true, banda: b || null }), {
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors } });
+    }
+    if (url.pathname === '/raport-ore' || url.pathname === '/trimite') {
+      let r;
+      try { r = url.pathname === '/trimite' ? await trimiteFoaie(request, env) : await raportOre(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
 
     if (url.pathname === '/numar-nou') {
@@ -2116,6 +2131,132 @@ async function _repAmintireAutomata(env, log) {
   } catch (e) { log('Reamintire repartizare: ' + e.message); }
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// [1.2] BANDA DE AVERTIZARE · ORE GREȘITE · FOI TRIMISE DE COLEGI · COLEGI NOI
+// ══════════════════════════════════════════════════════════════
+const _id12 = () => Date.now().toString(36) + [...crypto.getRandomValues(new Uint8Array(5))].map(x => (x % 36).toString(36)).join('');
+const _aziRo = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+const _txt = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
+async function _fbPut(env, cale, v) {
+  const r = await fetch(urlBroadcast(env, cale + '.json'), { method: v === null ? 'DELETE' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: v === null ? undefined : JSON.stringify(v) });
+  if (!r.ok) { const d = await r.text().catch(() => ''); throw new Error(`Firebase ${r.status} ${d.slice(0, 120)}`); }
+}
+// Notificare către un singur număr de serviciu (toate telefoanele lui).
+async function _pushLa(env, nr, titlu, text, tag) {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !nr) return 0;
+  try {
+    const u = await getJSON(urlBroadcast(env, `push/${nrCurat(nr)}.json`));
+    if (!u) return 0;
+    const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
+    const r = await trimiteToate(env, nrCurat(nr), u, JSON.stringify({ title: titlu, body: text, tag: tag || 'info', url: './' }), { TTL: 86400 }, vapid);
+    return r.trimise || 0;
+  } catch (e) { return 0; }
+}
+// Doar telefonul înregistrat pe număr poate trimite în numele lui.
+async function _dispInregistrat(env, nr, dev) {
+  if (!nr || !dev) return false;
+  try { const { disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`))); return !!(disp && disp[dev]); }
+  catch (e) { return false; }
+}
+// Câte trimiteri pe zi de la un număr (raport / trimite). Întoarce false peste limită.
+async function _limitaZi(env, fel, nr, max) {
+  const cale = `limite/${fel}/${nr}/${_aziRo()}`;
+  let n = 0; try { n = Number(await getJSON(urlBroadcast(env, cale + '.json'))) || 0; } catch (e) {}
+  if (n >= max) return false;
+  await _fbPut(env, cale, n + 1).catch(() => {});
+  return true;
+}
+
+async function raportOre(request, env) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  const ora = v => /^\d{1,2}:\d{2}$/.test(String(v || '')) ? String(v).padStart(5, '0') : '';
+  const r = {
+    nr, la: Date.now(),
+    dep: DEPOURI.includes(c.dep) ? c.dep : _txt(c.dep, 30).replace(/[.$#\[\]\/]/g, ''),
+    baza: _txt(c.baza, 20).replace(/[^a-z0-9_-]/gi, ''),
+    linie: _txt(c.linie, 10), tur: _txt(c.tur, 10), sch: ['1', '2', '0'].includes(String(c.sch)) ? String(c.sch) : '',
+    data: /^\d{4}-\d{2}-\d{2}$/.test(c.data || '') ? c.data : '',
+    i: ora(c.i), r: ora(c.r), iApp: ora(c.iApp), rApp: ora(c.rApp), obs: _txt(c.obs, 300)
+  };
+  if (!r.dep || !r.linie || !r.tur || (!r.i && !r.r && !r.obs)) return { status: 400, corp: { ok: false, eroare: 'Completează linia, turul și ora de pe indicator.' } };
+  if (!(await _limitaZi(env, 'raport', nr, 10))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 10 azi. Mulțumim! Încearcă mâine.' } };
+  const id = _id12();
+  const poza = typeof c.poza === 'string' && /^data:image\/jpeg;base64,/.test(c.poza) && c.poza.length < 700000 ? c.poza : '';
+  try { await _fbPut(env, `raportOre/${id}`, Object.assign({}, r, { arePoza: !!poza })); if (poza) await _fbPut(env, `raportOrePoza/${id}`, poza); }
+  catch (e) { return { status: 502, corp: { ok: false, eroare: e.message } }; }
+  let la = 0;
+  try {
+    const toate = await getJSON(urlBroadcast(env, 'raportOre.json')) || {};
+    la = Object.values(toate).filter(x => x && x.dep === r.dep && x.linie === r.linie && x.tur === r.tur && x.sch === r.sch && x.nr !== nr).length;
+  } catch (e) {}
+  const loc = (DEPOURI.includes(r.dep) ? r.dep : r.dep) + (r.baza ? ' · ' + r.baza : '');
+  await _anuntaAdminii(env, '⏱ Oră de verificat', `${loc} · L${r.linie} T${r.tur}${r.sch ? ' sch ' + r.sch : ''}: ${r.iApp || '?'}–${r.rApp || '?'} → ${r.i || '?'}–${r.r || '?'}`, 'raport-ore').catch(() => 0);
+  return { status: 200, corp: { ok: true, id, altii: la } };
+}
+
+const TRIMITE_MAX_FISIER = 11 * 1024 * 1024;   // base64 (~8 MB fișier)
+const TRIMITE_MAX_TOTAL  = 24 * 1024 * 1024;
+async function trimiteFoaie(request, env) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'Fișierele sunt prea mari sau s-au trimis greșit.' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  const tip = ['rep', 'ind', 'alt'].includes(c.tip) ? c.tip : '';
+  const luna = /^\d{4}-\d{2}$/.test(c.luna || '') ? c.luna : '';
+  const baza = _txt(c.baza, 30).replace(/[^a-z0-9_-]/gi, '');
+  const bazaNume = _txt(c.bazaNume, 40);
+  const fis = (Array.isArray(c.fisiere) ? c.fisiere : []).filter(f => f && typeof f.date === 'string' && f.date.length > 100);
+  if (!tip || (!baza && !bazaNume)) return { status: 400, corp: { ok: false, eroare: 'Alege ce trimiți și de unde.' } };
+  if (!fis.length) return { status: 400, corp: { ok: false, eroare: 'Adaugă măcar o poză sau un PDF.' } };
+  if (fis.length > 10) return { status: 400, corp: { ok: false, eroare: 'Cel mult 10 fișiere odată.' } };
+  if (fis.some(f => f.date.length > TRIMITE_MAX_FISIER) || fis.reduce((s, f) => s + f.date.length, 0) > TRIMITE_MAX_TOTAL)
+    return { status: 413, corp: { ok: false, eroare: 'Fișierele sunt prea mari (cel mult 8 MB fiecare).' } };
+  if (!(await _limitaZi(env, 'trimite', nr, 5))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja de 5 ori azi. Încearcă mâine.' } };
+  const id = _id12();
+  const meta = { nr, la: Date.now(), tip, luna, baza, bazaNume, nou: !baza, obs: _txt(c.obs, 300),
+    fisiere: fis.map(f => ({ nume: _txt(f.nume, 80) || 'fisier', tip: /^(image\/jpeg|image\/png|application\/pdf)$/.test(f.tip) ? f.tip : 'application/octet-stream', marime: Math.round(f.date.length * 0.75) })) };
+  try {
+    for (let k = 0; k < fis.length; k++) await _fbPut(env, `trimiteriFisiere/${id}/${k}`, fis[k].date);
+    await _fbPut(env, `trimiteri/${id}`, meta);
+  } catch (e) {
+    await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {});
+    return { status: 502, corp: { ok: false, eroare: 'Nu s-a putut salva. Încearcă din nou. (' + e.message + ')' } };
+  }
+  let altii = 0;
+  try {
+    const toate = await getJSON(urlBroadcast(env, 'trimiteri.json')) || {};
+    const cheie = x => `${x.tip}|${x.baza || ('~' + String(x.bazaNume || '').toLowerCase())}|${x.luna || ''}`;
+    altii = new Set(Object.values(toate).filter(x => x && cheie(x) === cheie(meta) && x.nr !== nr).map(x => x.nr)).size;
+  } catch (e) {}
+  const ce = tip === 'rep' ? 'Repartizarea' + (luna ? ' pe ' + luna : '') : tip === 'ind' ? 'Indicatori de ore' : 'Fișiere';
+  await _anuntaAdminii(env, '📥 Foaie trimisă', `${ce} · ${bazaNume || baza} · de la ${nr} (${fis.length} fișiere)`, 'trimiteri').catch(() => 0);
+  return { status: 200, corp: { ok: true, id, altii } };
+}
+
+// Ce a rămas uitat: fișiere nedescărcate de 30 de zile, rapoarte de 60.
+async function _curataTrimiteri(env, log) {
+  const azi = _aziRo();
+  try {
+    if ((await getJSON(urlBroadcast(env, 'config/curatat.json'))) === azi) return;
+    await _fbPut(env, 'config/curatat', azi);
+    const t = await getJSON(urlBroadcast(env, 'trimiteri.json')) || {};
+    let n = 0;
+    for (const [id, x] of Object.entries(t)) {
+      if (x && x.la && Date.now() - x.la > 30 * 864e5) { await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {}); await _fbPut(env, `trimiteri/${id}`, null).catch(() => {}); n++; }
+    }
+    const r = await getJSON(urlBroadcast(env, 'raportOre.json')) || {};
+    for (const [id, x] of Object.entries(r)) {
+      if (x && x.la && Date.now() - x.la > 60 * 864e5) { await _fbPut(env, `raportOre/${id}`, null).catch(() => {}); await _fbPut(env, `raportOrePoza/${id}`, null).catch(() => {}); n++; }
+    }
+    await _fbPut(env, 'limite', null).catch(() => {});
+    if (n) log(`Curățenie: ${n} trimiteri/rapoarte vechi șterse`);
+  } catch (e) { log('Curățenie: ' + e.message); }
+}
+
 async function _anuntaAdminii(env, titlu, text, tag) {
   if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return 0;
   let lista = null;
@@ -2491,6 +2632,86 @@ async function admin(request, env) {
       if (min !== null && !/^\d{1,3}\.\d{1,3}$/.test(min)) return { status: 400, corp: { ok: false, eroare: 'Scrie versiunea ca 1.0' } };
       await fetch(urlBroadcast(env, 'config/versiuneMinima.json'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(min) });
       return { status: 200, corp: { ok: true, min } };
+    }
+    // ── [1.2] Banda de avertizare ──
+    case 'bandaSeteaza': {
+      const b = cerere.banda;
+      if (!b) { await _fbPut(env, 'config/banda', null); return { status: 200, corp: { ok: true, banda: null } }; }
+      const v = { text: _txt(b.text, 200), tip: b.tip === 'ore' ? 'ore' : 'text', culoare: ['galben', 'rosu', 'albastru'].includes(b.culoare) ? b.culoare : 'galben',
+        tinta: (Array.isArray(b.tinta) ? b.tinta : ['all']).map(String).filter(d => d === 'all' || DEPOURI.includes(d)).slice(0, 12), la: Date.now() };
+      if (!v.text) return { status: 400, corp: { ok: false, eroare: 'Scrie textul benzii.' } };
+      if (!v.tinta.length) v.tinta = ['all'];
+      await _fbPut(env, 'config/banda', v);
+      return { status: 200, corp: { ok: true, banda: v } };
+    }
+    // ── [1.2] Ore greșite semnalate de colegi ──
+    case 'raportOreLista': {
+      const d = await getJSON(urlBroadcast(env, 'raportOre.json')).catch(() => null) || {};
+      return { status: 200, corp: { ok: true, lista: Object.entries(d).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.la - a.la) } };
+    }
+    case 'raportOrePoza': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+      const p = id ? await getJSON(urlBroadcast(env, `raportOrePoza/${id}.json`)).catch(() => null) : null;
+      return { status: 200, corp: { ok: true, poza: p || null } };
+    }
+    case 'raportOreInchide': {
+      const ids = (Array.isArray(cerere.ids) ? cerere.ids : []).map(x => String(x).replace(/[^a-z0-9]/g, '').slice(0, 20)).filter(Boolean).slice(0, 50);
+      const d = await getJSON(urlBroadcast(env, 'raportOre.json')).catch(() => null) || {};
+      const anunt = new Map();
+      for (const id of ids) {
+        const x = d[id];
+        if (x && cerere.corectat) anunt.set(x.nr, x);
+        await _fbPut(env, `raportOre/${id}`, null).catch(() => {});
+        await _fbPut(env, `raportOrePoza/${id}`, null).catch(() => {});
+      }
+      let trimise = 0;
+      for (const [nr, x] of anunt) trimise += await _pushLa(env, nr, '✓ Ora a fost corectată', `L${x.linie} T${x.tur}${x.sch ? ' sch ' + x.sch : ''} — mulțumim că ai anunțat!`, 'raport-ore');
+      return { status: 200, corp: { ok: true, trimise } };
+    }
+    // ── [1.2] Foi și poze trimise de colegi ──
+    case 'trimiteriLista': {
+      const d = await getJSON(urlBroadcast(env, 'trimiteri.json')).catch(() => null) || {};
+      return { status: 200, corp: { ok: true, lista: Object.entries(d).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.la - a.la) } };
+    }
+    case 'trimiteFisier': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20), k = Number(cerere.k) || 0;
+      const date = id ? await getJSON(urlBroadcast(env, `trimiteriFisiere/${id}/${k}.json`)).catch(() => null) : null;
+      if (!date) return { status: 404, corp: { ok: false, eroare: 'Fișierul nu mai există (a fost descărcat sau a expirat).' } };
+      return { status: 200, corp: { ok: true, date } };
+    }
+    case 'trimiteDescarcat': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+      if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      await _fbPut(env, `trimiteriFisiere/${id}`, null);
+      await _fbPut(env, `trimiteri/${id}/descarcat`, Date.now()).catch(() => {});
+      return { status: 200, corp: { ok: true } };
+    }
+    case 'trimiteGata': {
+      const ids = (Array.isArray(cerere.ids) ? cerere.ids : []).map(x => String(x).replace(/[^a-z0-9]/g, '').slice(0, 20)).filter(Boolean).slice(0, 50);
+      const d = await getJSON(urlBroadcast(env, 'trimiteri.json')).catch(() => null) || {};
+      const anunt = new Map();
+      for (const id of ids) {
+        const x = d[id]; if (x && cerere.anunta !== false) anunt.set(x.nr, x);
+        await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {});
+        await _fbPut(env, `trimiteri/${id}`, null).catch(() => {});
+      }
+      let trimise = 0;
+      for (const [nr, x] of anunt) trimise += await _pushLa(env, nr, x.tip === 'ind' ? '✓ Indicatorii au fost actualizați' : '✓ Foaia a fost urcată',
+        `${x.bazaNume || x.baza}${x.luna ? ' · ' + x.luna : ''} — mulțumim că ai trimis-o!`, 'trimiteri');
+      return { status: 200, corp: { ok: true, trimise } };
+    }
+    // ── [1.2] Colegi noi: primul telefon înregistrat pe număr în ultimele N zile ──
+    case 'colegiNoi': {
+      const zile = Math.min(60, Math.max(1, Number(cerere.zile) || 7)), prag = Date.now() - zile * 864e5;
+      const pr = await getJSON(urlBroadcast(env, 'proprietar.json')).catch(() => null) || {};
+      const out = [];
+      for (const [nr, v] of Object.entries(pr)) {
+        const { disp } = _normalizeaza(v);
+        const la = Math.min(...Object.values(disp || {}).map(x => Number(x && x.la) || Infinity));
+        if (isFinite(la) && la >= prag) out.push({ nr, la });
+      }
+      out.sort((a, b) => b.la - a.la);
+      return { status: 200, corp: { ok: true, lista: out } };
     }
     case 'repartitorCodNou': {
       const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
