@@ -913,6 +913,8 @@ async function ruleaza(env) {
     }
   } catch (e) { log('Statistici: ' + e.message); }
 
+  await _repAmintireAutomata(env, log);   // [1.0]
+
   log('');
   log(`Rulare terminată în ${Date.now() - pornit} ms.`);
   return raport.join('\n');
@@ -1018,6 +1020,28 @@ export default {
         status: r.status,
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors }
       });
+    }
+
+    // [1.0] „Am citit" la un anunț — se numără în /anuntCitit/<id>/<nr>.
+    if (url.pathname === '/citit') {
+      let corp = { ok: false }, st = 400;
+      try {
+        const c = await request.json();
+        const id = String(c.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+        const nr = nrCurat(c.nr);
+        if (id && nr) {
+          await fetch(urlBroadcast(env, `anuntCitit/${id}/${nr}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Date.now()) });
+          corp = { ok: true }; st = 200;
+        }
+      } catch (e) {}
+      return new Response(JSON.stringify(corp), { status: st, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
+    // [1.0] Versiunea minimă cerută (actualizare forțată).
+    if (url.pathname === '/versiune') {
+      let min = null;
+      try { min = await getJSON(urlBroadcast(env, 'config/versiuneMinima.json')); } catch (e) {}
+      return new Response(JSON.stringify({ ok: true, min: min || null }), {
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors } });
     }
 
     if (url.pathname === '/numar-nou') {
@@ -2034,6 +2058,64 @@ async function indicatoriActiune(env, cerere, cine) {
 
 // [v11.18] Notificare către admin(i): numerele trecute în /config/adminNotif.
 // Folosită când un blocat cere aprobarea unui număr nou (și, mai târziu, la alte cereri).
+// ══════════════════════════════════════════════════════════════
+// [1.0] FOILE DE REPARTIZARE PE LUNI + REAMINTIRE CĂTRE RESPONSABILI
+// ══════════════════════════════════════════════════════════════
+const _lunaUrm = (luna) => { const [a, l] = luna.split('-').map(Number); const d = new Date(Date.UTC(a, l, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+async function _repStareLuna(env, dep, luna, cuNumere) {
+  let urcat = null, urcatDe = null, nrs = [];
+  try { urcat = await getJSON(urlBroadcast(env, `repartizare/${dep}/${luna}/urcat.json`)); } catch (e) {}
+  try { urcatDe = await getJSON(urlBroadcast(env, `repartizare/${dep}/${luna}/urcatDe.json`)); } catch (e) {}
+  if (urcat || cuNumere) {
+    try {
+      const u = urlBroadcast(env, `repartizare/${dep}/${luna}/lunara.json`);
+      const k = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true');
+      nrs = k && typeof k === 'object' ? Object.keys(k) : [];
+    } catch (e) {}
+  }
+  return { urcat: urcat || 0, urcatDe: urcatDe || '', n: nrs.length, nrs: cuNumere ? nrs : undefined };
+}
+// Trimite notificare responsabililor (cod cu drept de repartizare) ai depourilor date.
+async function _repAminteste(env, depouri, luna) {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !depouri.length) return { trimise: 0, oameni: 0 };
+  const rr = await getJSON(urlBroadcast(env, 'repartitori.json')).catch(() => null) || {};
+  const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
+  const [a, l] = luna.split('-');
+  const numeLuna = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'][Number(l) - 1] || luna;
+  let trimise = 0, oameni = 0;
+  for (const v of Object.values(rr)) {
+    if (!v || !v.nr || !_drepturi(v.drepturi).rep) continue;
+    const ale = (Array.isArray(v.depouri) ? v.depouri : []).filter(d => depouri.includes(d));
+    if (!ale.length) continue;
+    try {
+      const u = await getJSON(urlBroadcast(env, `push/${nrCurat(v.nr)}.json`));
+      if (!u) continue;
+      const payload = JSON.stringify({ title: '📋 Repartizarea pe ' + numeLuna,
+        body: `Nu e urcată încă foaia pe ${numeLuna} ${a}. Când o ai, urc-o din aplicație (ține apăsat pe titlu → codul tău).`, tag: 'rep-' + luna, url: './' });
+      const r = await trimiteToate(env, nrCurat(v.nr), u, payload, { TTL: 86400, urgency: 'normal' }, vapid);
+      if (r.trimise) { trimise += r.trimise; oameni++; }
+    } catch (e) {}
+  }
+  return { trimise, oameni };
+}
+// Rulează din cron: pe 25 ale lunii, după 10:00, o singură dată pe lună.
+async function _repAmintireAutomata(env, log) {
+  try {
+    const { data, minute } = acumRo();
+    if (Number(data.slice(8, 10)) !== 25 || minute < 600) return;
+    const luna = _lunaUrm(data.slice(0, 7));
+    const oprit = await getJSON(urlBroadcast(env, 'config/repAmintireOprita.json')).catch(() => null);
+    if (oprit) return;
+    const facut = await getJSON(urlBroadcast(env, `config/repAmintit/${luna}.json`)).catch(() => null);
+    if (facut) return;
+    const lipsa = [];
+    for (const dep of DEPOURI) { const st = await _repStareLuna(env, dep, luna, false); if (!st.urcat) lipsa.push(dep); }
+    const r = await _repAminteste(env, lipsa, luna);
+    await fetch(urlBroadcast(env, `config/repAmintit/${luna}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ la: Date.now(), lipsa, ...r }) });
+    log(`Reamintire repartizare ${luna}: ${lipsa.length} depouri fără foaie · ${r.oameni} responsabili anunțați`);
+  } catch (e) { log('Reamintire repartizare: ' + e.message); }
+}
+
 async function _anuntaAdminii(env, titlu, text, tag) {
   if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return 0;
   let lista = null;
@@ -2368,6 +2450,48 @@ async function admin(request, env) {
       return await indicatoriActiune(env, cerere, { admin: true });
     // [v11.34] Cod nou pentru același responsabil (a pierdut codul, telefon nou).
     // Codul vechi nu mai merge; drepturile, depourile și istoricul rămân.
+    // ── [1.0] Foile urcate pe luni (și numerele de pe foaie, pentru acoperire) ──
+    case 'repStare': {
+      const luni = (Array.isArray(cerere.luni) ? cerere.luni : []).filter(l => /^\d{4}-\d{2}$/.test(l)).slice(0, 3);
+      const cuNumere = /^\d{4}-\d{2}$/.test(cerere.cuNumere || '') ? cerere.cuNumere : '';
+      const out = {};
+      for (const dep of DEPOURI) {
+        out[dep] = {};
+        for (const l of luni) out[dep][l] = await _repStareLuna(env, dep, l, l === cuNumere);
+      }
+      let amintit = null;
+      try { amintit = await getJSON(urlBroadcast(env, 'config/repAmintit.json')); } catch (e) {}
+      let oprit = null;
+      try { oprit = await getJSON(urlBroadcast(env, 'config/repAmintireOprita.json')); } catch (e) {}
+      return { status: 200, corp: { ok: true, stare: out, amintit: amintit || {}, amintireOprita: !!oprit } };
+    }
+    case 'repAminteste': {
+      const luna = /^\d{4}-\d{2}$/.test(cerere.luna || '') ? cerere.luna : null;
+      if (!luna) return { status: 400, corp: { ok: false, eroare: 'Luna lipsește' } };
+      const dep = (Array.isArray(cerere.depouri) ? cerere.depouri : []).map(String).filter(d => DEPOURI.includes(d));
+      const r = await _repAminteste(env, dep, luna);
+      return { status: 200, corp: { ok: true, ...r } };
+    }
+    case 'repAmintireOprita': {
+      await fetch(urlBroadcast(env, 'config/repAmintireOprita.json'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cerere.oprita ? true : null) });
+      return { status: 200, corp: { ok: true } };
+    }
+    // ── [1.0] Câți au citit fiecare anunț ──
+    case 'anunturiCitite': {
+      const u = urlBroadcast(env, 'anuntCitit.json');
+      let d = null;
+      try { d = await getJSON(u); } catch (e) {}
+      const out = {};
+      for (const [id, v] of Object.entries(d || {})) out[id] = v && typeof v === 'object' ? Object.keys(v) : [];
+      return { status: 200, corp: { ok: true, citite: out } };
+    }
+    // ── [1.0] Actualizare forțată ──
+    case 'versiuneMinima': {
+      const min = cerere.min === null || cerere.min === '' ? null : String(cerere.min).trim();
+      if (min !== null && !/^\d{1,3}\.\d{1,3}$/.test(min)) return { status: 400, corp: { ok: false, eroare: 'Scrie versiunea ca 1.0' } };
+      await fetch(urlBroadcast(env, 'config/versiuneMinima.json'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(min) });
+      return { status: 200, corp: { ok: true, min } };
+    }
     case 'repartitorCodNou': {
       const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
       if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
