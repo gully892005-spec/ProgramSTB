@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Confidențialitate · Program STB</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{ --bg:#060a12; --card:#0b0f1a; --linie:#1e2d47; --text:#e2e8f0; --mut:#94a3b8; --slab:#64748b; --verde:#22d3a5; --albastru:#60a5fa; --rosu:#f87171; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--text); font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif; }
+  body{ padding:18px 16px 40px; line-height:1.55; font-size:15px; }
+  .cap{ max-width:620px; margin:0 auto; }
+  h1{ font-size:1.5rem; margin:0 0 4px; color:var(--verde); letter-spacing:.01em; }
+  .sub{ color:var(--slab); font-size:.85rem; margin-bottom:14px; }
+  h2{ font-size:.72rem; letter-spacing:.09em; text-transform:uppercase; color:var(--albastru); margin:22px 0 8px; }
+  .it{ display:flex; gap:10px; margin:9px 0; }
+  .it .i{ width:22px; flex-shrink:0; text-align:center; }
+  .card{ background:var(--card); border:1px solid var(--linie); border-radius:14px; padding:14px; margin-top:10px; }
+  b{ color:#fff; }
+  button{ width:100%; padding:13px; border-radius:12px; font-size:.95rem; font-weight:800; margin-top:9px; cursor:pointer; font-family:inherit; }
+  .b1{ background:#1e293b; color:var(--text); border:1px solid #334155; }
+  .b2{ background:rgba(248,113,113,.1); color:var(--rosu); border:1px solid rgba(248,113,113,.45); }
+  .b3{ background:var(--verde); color:#04110b; border:none; }
+  button:disabled{ opacity:.45; }
+  .mic{ font-size:.8rem; color:var(--slab); }
+  #stare{ margin-top:10px; font-size:.85rem; min-height:1.2em; }
+  a{ color:var(--verde); }
+  .app h1{ display:none; }   /* în aplicație titlul e deja în bara de sus */
+  @media (prefers-color-scheme: light){ :root:not(.app){ --bg:#f5f7fa; --card:#fff; --linie:#d6dde8; --text:#1e293b; --mut:#475569; --slab:#64748b; } :root:not(.app) b{ color:#0f172a; } :root:not(.app) .b1{ background:#eef2f7; border-color:#cbd5e1; } }
+</style>
+</head>
+<body>
+<div class="cap">
+  <h1>🔒 Confidențialitate</h1>
+  <div class="sub">Program STB 2026 · aplicație neoficială, făcută de un coleg. Nu aparține STB S.A. · Actualizat: octombrie 2026</div>
+
+  <p>Aici scrie, pe înțeles, ce date păstrează aplicația despre tine, de ce, unde stau, cine le vede și cum le poți lua sau șterge.</p>
+
+  <h2>Ce păstrăm</h2>
+  <div class="it"><span class="i">🔢</span><span><b>Numărul de serviciu și depoul</b> — ca să-ți găsim turele pe foaia de repartizare și să-ți salvăm programul.</span></div>
+  <div class="it"><span class="i">📅</span><span><b>Programul tău</b> (ture, ore, concedii, zile speciale) — o copie în cloud, ca să nu-l pierzi dacă schimbi telefonul.</span></div>
+  <div class="it"><span class="i">📱</span><span><b>Telefonul</b>: un cod al telefonului (nu numărul de telefon), tipul lui (Android / iPhone) și versiunea aplicației — ca numărul tău să nu fie folosit de altcineva și ca să vedem ce nu merge.</span></div>
+  <div class="it"><span class="i">🔔</span><span><b>Abonamentul la notificări</b>, doar dacă le pornești.</span></div>
+  <div class="it"><span class="i">🐞</span><span><b>Erorile aplicației</b>: când ceva crapă, se trimite textul erorii, versiunea, tipul telefonului și numărul de serviciu. Nimic din program.</span></div>
+  <div class="it"><span class="i">💬</span><span><b>Chatul</b>: mesajele și numele pe care ți-l alegi acolo le văd colegii din chat.</span></div>
+  <div class="it"><span class="i">📤</span><span><b>Ce trimiți tu adminului</b> (foi, poze cu indicatorii, ore greșite, mesaje). Pozele și foile se șterg după ce le descarcă adminul, cel târziu în 30 de zile; orele semnalate, în cel mult 60 de zile.</span></div>
+
+  <h2>Ce NU facem</h2>
+  <div class="it"><span class="i">🚫</span><span>Nu cerem numele, numărul de telefon, adresa sau CNP-ul. Nu vindem datele și nu le dăm nimănui. Nu avem reclame.</span></div>
+
+  <h2>Unde stau datele</h2>
+  <div class="it"><span class="i">🇪🇺</span><span>La Google Firebase, pe servere din Belgia (Uniunea Europeană). Legătura dintre aplicație și Firebase trece printr-un server Cloudflare.</span></div>
+  <div class="it"><span class="i">📊</span><span>Pentru statistici de folosire (câți deschid aplicația, ce ecrane) folosim Google Analytics.</span></div>
+
+  <h2>Cine le vede</h2>
+  <div class="it"><span class="i">👤</span><span>Doar administratorul aplicației. Responsabilii de depou, dacă există, văd doar foaia de repartizare a depoului lor, nu programul tău.</span></div>
+
+  <h2>Cât timp le păstrăm</h2>
+  <div class="it"><span class="i">⏳</span><span>Cât folosești aplicația. <b>Dacă n-o deschizi 6 luni</b>, copia din cloud se șterge singură. Programul de pe telefon rămâne până dezinstalezi aplicația.</span></div>
+
+  <h2>De ce avem voie</h2>
+  <div class="it"><span class="i">⚖️</span><span>Folosim datele doar ca să-ți facem aplicația să meargă (îți salvăm programul, îți trimitem notificările pe care le-ai cerut). Când îți scrii numărul de serviciu în aplicație, ești de acord cu asta. Poți retrage acordul oricând, ștergându-ți datele mai jos.</span></div>
+
+  <h2>Drepturile tale</h2>
+  <div class="it"><span class="i">✋</span><span>Poți cere oricând să vezi, să corectezi sau să ștergi ce e despre tine. Dacă nu ești mulțumit, te poți plânge la ANSPDCP (dataprotection.ro).</span></div>
+
+  <div class="card" id="datele-mele">
+    <b>Datele tale</b>
+    <div class="mic" id="nr-txt">Butoanele merg doar din aplicație, de pe telefonul tău.</div>
+    <button class="b1" id="b-desc" onclick="descarca()" disabled>📥 Descarcă datele mele</button>
+    <button class="b2" id="b-sterge" onclick="sterge()" disabled>🗑 Șterge-mi datele din cloud</button>
+    <div class="mic" style="margin-top:6px;">Șterge copia programului din cloud, notificările, telefonul înregistrat pe număr și ce ai trimis adminului. Programul de pe telefon rămâne. Pentru mesajele din chat, scrie-i adminului.</div>
+    <div id="stare"></div>
+  </div>
+
+  <h2>Contact</h2>
+  <div class="it"><span class="i">✉️</span><span>Din aplicație: <b>meniul 💾 → „Scrie-i adminului”</b>, sau pe grupul de Facebook <a href="https://www.facebook.com/share/g/1EsPr11xAr/" target="_blank" rel="noopener">Tribuna RATB-iștilor</a>.</span></div>
+
+  <button class="b3" id="b-inapoi" onclick="inapoi()" style="margin-top:22px;">‹ Înapoi la aplicație</button>
+</div>
+
+<script>
+  const WORKER = 'https://programstb.gully892005.workers.dev';
+  const inApp = /[?&]app=1/.test(location.search);
+  if(inApp) document.documentElement.classList.add('app');
+  let nr = '', dev = '';
+  try{ nr = localStorage.getItem('p2026_nr_serviciu') || ''; dev = localStorage.getItem('stb_dev') || ''; }catch(e){}
+  const st = document.getElementById('stare');
+  const spune = (t, cul) => { st.style.color = cul || ''; st.textContent = t; };
+  if(nr && dev){
+    document.getElementById('nr-txt').textContent = 'Numărul tău de serviciu: ' + nr;
+    document.getElementById('b-desc').disabled = false;
+    document.getElementById('b-sterge').disabled = false;
+  }else if(!nr){
+    document.getElementById('nr-txt').textContent = 'Pe telefonul ăsta nu e scris niciun număr de serviciu, deci nu avem în cloud date despre tine de pe el.';
+  }
+  async function cere(actiune){
+    const r = await fetch(WORKER + '/datele-mele', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nr, dev, actiune }) });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok || !j.ok) throw new Error(j.eroare || ('eroare ' + r.status));
+    return j;
+  }
+  async function descarca(){
+    spune('⏳ Se adună datele…');
+    try{
+      const j = await cere('descarca');
+      const blob = new Blob([JSON.stringify(j.date, null, 2)], { type:'application/json' });
+      const f = new File([blob], `datele-mele-${nr}.json`, { type:'application/json' });
+      if(/iPhone|iPad|iPod/.test(navigator.userAgent) && navigator.canShare && navigator.canShare({ files:[f] })){ await navigator.share({ files:[f] }); }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); }
+      spune('✓ Gata. Fișierul conține tot ce e în cloud despre numărul ' + nr + '.', '#22c55e');
+    }catch(e){ spune('✕ ' + (e.message === 'Failed to fetch' ? 'Fără internet. Încearcă din nou.' : e.message), '#f87171'); }
+  }
+  async function sterge(){
+    if(!confirm('Ștergi din cloud tot ce e despre numărul ' + nr + '?\n\nProgramul de pe telefon rămâne, dar nu se mai salvează nicăieri și nu-l mai poți recupera dacă schimbi telefonul.')) return;
+    if(!confirm('Sigur? Nu se poate anula.')) return;
+    spune('⏳ Se șterge…');
+    try{
+      await cere('sterge');
+      try{ localStorage.removeItem('p2026_nr_serviciu'); }catch(e){}
+      spune('✓ Datele tale au fost șterse din cloud.', '#22c55e');
+      document.getElementById('b-desc').disabled = true; document.getElementById('b-sterge').disabled = true;
+      try{ parent !== window && parent.postMessage({ tip:'date-sterse' }, location.origin); }catch(e){}
+    }catch(e){ spune('✕ ' + (e.message === 'Failed to fetch' ? 'Fără internet. Încearcă din nou.' : e.message), '#f87171'); }
+  }
+  function inapoi(){
+    if(inApp && parent !== window){ try{ parent.postMessage({ tip:'conf-inchide' }, location.origin); return; }catch(e){} }
+    location.href = './';
+  }
+</script>
+</body>
+</html>
