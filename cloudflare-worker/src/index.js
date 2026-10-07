@@ -2505,6 +2505,7 @@ async function numarNou(request, env) {
   try { b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)); }
   catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica. Încearcă din nou.' } }; }
   if (!b) return { status: 200, corp: { ok: false, stare: 'neblocat', eroare: 'Numărul nu mai e blocat.' } };
+  if (b.fel === 'definitiv') return { status: 403, corp: { ok: false, stare: 'definitiv', eroare: 'Blocarea e definitivă. Poți doar să-i scrii adminului.' } };   // [2.1]
   if (!(await _telefonulAreVoie(env, nr, dev))) {
     await new Promise(r => setTimeout(r, 400));
     return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
@@ -3101,7 +3102,7 @@ async function admin(request, env) {
 
       const inreg = {
         motiv: String(cerere.motiv || '').trim().slice(0, 200),
-        tel:   String(cerere.tel   || '').trim().slice(0, 30),
+        fel:   cerere.fel === 'definitiv' ? 'definitiv' : 'numar',   // [2.1] număr greșit / blocare definitivă
         la:    Date.now(),
         de:    String(cerere.de || 'admin').slice(0, 60)
       };
@@ -3114,6 +3115,18 @@ async function admin(request, env) {
         return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
       }
       return { status: 200, corp: { ok: true, nr, inreg } };
+    }
+
+    // [2.1] Schimbă felul blocării fără să-l deblochezi.
+    case 'blocareFel': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
+      if (!b) return { status: 404, corp: { ok: false, eroare: 'Nu mai e blocat.' } };
+      const fel = cerere.fel === 'definitiv' ? 'definitiv' : 'numar';
+      await _fbPut(env, `blocati/${nr}/fel`, fel);
+      if (fel === 'definitiv') await _fbPut(env, `blocati/${nr}/cerere`, null).catch(() => {});
+      return { status: 200, corp: { ok: true, nr, fel } };
     }
 
     // [v11.19] Programele tuturor, pe scurt, pentru comparația cu repartizarea.
