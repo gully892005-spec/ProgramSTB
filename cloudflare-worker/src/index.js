@@ -915,6 +915,7 @@ async function ruleaza(env) {
 
   await _repAmintireAutomata(env, log);   // [1.0]
   await _curataTrimiteri(env, log);       // [1.2]
+  await _sterge6Luni(env, log);           // [1.6]
 
   log('');
   log(`Rulare terminată în ${Date.now() - pornit} ms.`);
@@ -1051,6 +1052,12 @@ export default {
       try { b = await getJSON(urlBroadcast(env, 'config/banda.json')); } catch (e) {}
       return new Response(JSON.stringify({ ok: true, banda: b || null }), {
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors } });
+    }
+    if (url.pathname === '/eroare' || url.pathname === '/mesaj-admin' || url.pathname === '/datele-mele') {
+      let r;
+      try { r = url.pathname === '/eroare' ? await raportEroare(request, env) : url.pathname === '/mesaj-admin' ? await mesajAdmin(request, env) : await dateleMele(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
     if (url.pathname === '/raport-ore' || url.pathname === '/trimite') {
       let r;
@@ -2252,9 +2259,107 @@ async function _curataTrimiteri(env, log) {
     for (const [id, x] of Object.entries(r)) {
       if (x && x.la && Date.now() - x.la > 60 * 864e5) { await _fbPut(env, `raportOre/${id}`, null).catch(() => {}); await _fbPut(env, `raportOrePoza/${id}`, null).catch(() => {}); n++; }
     }
+    const er = await getJSON(urlBroadcast(env, 'erori.json')) || {};
+    for (const [id, x] of Object.entries(er)) if (!x || !x.ultima || Date.now() - x.ultima > 30 * 864e5) { await _fbPut(env, `erori/${id}`, null).catch(() => {}); n++; }
     await _fbPut(env, 'limite', null).catch(() => {});
     if (n) log(`Curățenie: ${n} trimiteri/rapoarte vechi șterse`);
   } catch (e) { log('Curățenie: ' + e.message); }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// [1.6] ERORI RAPORTATE · SCRIE-I ADMINULUI · DATELE MELE · ȘTERGERE DUPĂ 6 LUNI
+// ══════════════════════════════════════════════════════════════
+const ERORI_NORMALE = /Failed to fetch|NetworkError|Load failed|AbortError|aborted|timeout|network connection was lost|Internet|offline|ERR_INTERNET|QuotaExceeded/i;
+function _hashScurt(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return h.toString(36); }
+async function raportEroare(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
+  const msg = _txt(c.msg, 300), src = _txt(c.src, 60).replace(/[^\w.$<> -]/g, '');
+  if (!msg || /^Script error\.?$/i.test(msg)) return { status: 200, corp: { ok: true, sarit: true } };
+  const dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64) || 'anonim';
+  if (!(await _limitaZi(env, 'eroare', dev.slice(0, 40), 30))) return { status: 200, corp: { ok: true, sarit: true } };
+  const cheie = 'e' + _hashScurt(msg.replace(/\d+/g, '#').slice(0, 160) + '|' + src);
+  const cale = `erori/${cheie}`;
+  let e = null; try { e = await getJSON(urlBroadcast(env, cale + '.json')); } catch (x) {}
+  const acum = Date.now();
+  const tel = _txt(dev, 12);
+  const nou = e || { msg, src, prima: acum, n: 0, tel: {}, normal: ERORI_NORMALE.test(msg) };
+  nou.ultima = acum; nou.n = (nou.n || 0) + 1;
+  nou.stack = _txt(c.stack, 600) || nou.stack || '';
+  nou.tel = nou.tel || {};
+  if (Object.keys(nou.tel).length < 60 || nou.tel[tel])
+    nou.tel[tel] = { nr: nrCurat(c.nr), v: _txt(c.v, 10), plat: _txt(c.plat, 20), dep: _txt(c.dep, 20), la: acum };
+  delete nou.rezolvat;
+  try { await _fbPut(env, cale, nou); } catch (x) { return { status: 502, corp: { ok: false } }; }
+  const telefoane = Object.keys(nou.tel).length;
+  if (telefoane >= 3 && !nou.normal && !nou.anuntat) {
+    await _fbPut(env, cale + '/anuntat', acum).catch(() => {});
+    await _anuntaAdminii(env, '🐞 Eroare la ' + telefoane + ' telefoane', msg.slice(0, 120), 'erori').catch(() => 0);
+  }
+  return { status: 200, corp: { ok: true } };
+}
+async function mesajAdmin(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  const text = _txt(c.text, 1000);
+  if (text.length < 3) return { status: 400, corp: { ok: false, eroare: 'Scrie mesajul.' } };
+  if (!(await _limitaZi(env, 'mesaj', nr, 5))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 5 mesaje azi. Încearcă mâine.' } };
+  const id = _id12();
+  await _fbPut(env, `mesajeAdmin/${id}`, { nr, text, la: Date.now(), dep: _txt(c.dep, 20), v: _txt(c.v, 10), fel: ['problema', 'idee', 'altceva'].includes(c.fel) ? c.fel : 'altceva' });
+  await _anuntaAdminii(env, '✉️ Mesaj de la ' + nr, text.slice(0, 120), 'mesaj-admin').catch(() => 0);
+  return { status: 200, corp: { ok: true } };
+}
+// Ce ține despre un număr: căile din Firebase (pentru „Descarcă” și „Șterge”).
+const CAI_NR = ['backup', 'backupIstoric', 'stats', 'push', 'proprietar'];
+async function _stergeNr(env, nr) {
+  for (const c of CAI_NR) await _fbPut(env, `${c}/${nr}`, null).catch(() => {});
+  for (const col of ['trimiteri', 'raportOre', 'mesajeAdmin']) {
+    const d = await getJSON(urlBroadcast(env, col + '.json')).catch(() => null) || {};
+    for (const [id, x] of Object.entries(d)) if (x && x.nr === nr) {
+      await _fbPut(env, `${col}/${id}`, null).catch(() => {});
+      if (col === 'trimiteri') await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {});
+      if (col === 'raportOre') await _fbPut(env, `raportOrePoza/${id}`, null).catch(() => {});
+    }
+  }
+}
+async function dateleMele(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Doar telefonul înregistrat pe numărul ăsta poate cere datele.' } };
+  if (c.actiune === 'sterge') {
+    await _stergeNr(env, nr);
+    await _anuntaAdminii(env, '🗑 Date șterse', `${nr} și-a șters singur datele din cloud`, 'date-sterse').catch(() => 0);
+    return { status: 200, corp: { ok: true, sters: true } };
+  }
+  const out = { numar: nr, descarcatLa: new Date().toISOString() };
+  for (const cale of CAI_NR) {
+    let v = await getJSON(urlBroadcast(env, `${cale}/${nr}.json`)).catch(() => null);
+    if (cale === 'push' && v) v = { telefoaneCuNotificari: Object.keys(v.subs || {}).length || (v.sub ? 1 : 0) };   // cheile tehnice nu
+    if (v !== null && v !== undefined) out[cale] = v;
+  }
+  for (const col of ['trimiteri', 'raportOre', 'mesajeAdmin']) {
+    const d = await getJSON(urlBroadcast(env, col + '.json')).catch(() => null) || {};
+    const ale = Object.values(d).filter(x => x && x.nr === nr);
+    if (ale.length) out[col] = ale;
+  }
+  return { status: 200, corp: { ok: true, date: out } };
+}
+// Numerele care n-au mai deschis aplicația de 6 luni: se șterg din cloud, câte 3 pe rulare.
+async function _sterge6Luni(env, log) {
+  const azi = _aziRo();
+  try {
+    if ((await getJSON(urlBroadcast(env, 'config/sterse6luni.json'))) === azi) return;
+    const prag = Date.now() - 182 * 864e5;
+    const [st, bk] = await Promise.all([getJSON(urlBroadcast(env, 'stats.json')).catch(() => null), getJSON(urlBroadcast(env, 'backup.json')).catch(() => null)]);
+    const ultim = {};
+    for (const [nr, x] of Object.entries(st || {})) { const t = x && x.ultimaVizita ? Date.parse(x.ultimaVizita) : 0; ultim[nr] = Math.max(ultim[nr] || 0, t || 0); }
+    for (const [nr, x] of Object.entries(bk || {})) { ultim[nr] = Math.max(ultim[nr] || 0, Number(x && x.ts) || 0); }
+    const vechi = Object.entries(ultim).filter(([nr, t]) => t && t < prag).map(([nr]) => nr);
+    for (const nr of vechi.slice(0, 3)) await _stergeNr(env, nr);
+    if (vechi.length <= 3) await _fbPut(env, 'config/sterse6luni', azi).catch(() => {});
+    if (vechi.length) log(`6 luni fără activitate: șterse ${Math.min(3, vechi.length)} (${vechi.slice(0, 3).join(', ')})`);
+  } catch (e) { log('Ștergere 6 luni: ' + e.message); }
 }
 
 async function _anuntaAdminii(env, titlu, text, tag) {
@@ -2712,6 +2817,27 @@ async function admin(request, env) {
       }
       out.sort((a, b) => b.la - a.la);
       return { status: 200, corp: { ok: true, lista: out } };
+    }
+    // ── [1.6] Erori raportate de telefoane ──
+    case 'eroriLista': {
+      const d = await getJSON(urlBroadcast(env, 'erori.json')).catch(() => null) || {};
+      const prag = Date.now() - 30 * 864e5;
+      return { status: 200, corp: { ok: true, lista: Object.entries(d).filter(([k, x]) => x && x.ultima > prag).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.ultima - a.ultima) } };
+    }
+    case 'eroareRezolvata': {
+      const ids = (Array.isArray(cerere.ids) ? cerere.ids : [cerere.id]).map(x => String(x || '').replace(/[^a-z0-9]/g, '').slice(0, 20)).filter(Boolean).slice(0, 100);
+      for (const id of ids) await _fbPut(env, `erori/${id}`, null).catch(() => {});
+      return { status: 200, corp: { ok: true } };
+    }
+    // ── [1.6] Mesaje de la colegi („Scrie-i adminului”) ──
+    case 'mesajeAdminLista': {
+      const d = await getJSON(urlBroadcast(env, 'mesajeAdmin.json')).catch(() => null) || {};
+      return { status: 200, corp: { ok: true, lista: Object.entries(d).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.la - a.la) } };
+    }
+    case 'mesajAdminCitit': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+      if (id) await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
+      return { status: 200, corp: { ok: true } };
     }
     case 'repartitorCodNou': {
       const id = String(cerere.id || '').replace(/[^0-9a-f]/g, '').slice(0, 16);
