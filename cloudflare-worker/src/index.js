@@ -2358,7 +2358,7 @@ async function mesajAdmin(request, env) {
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
   const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
   if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
-  const text = _txt(c.text, 1000);
+  const text = String(c.text == null ? '' : c.text).replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000);   // rândurile noi rămân
   if (text.length < 3) return { status: 400, corp: { ok: false, eroare: 'Scrie mesajul.' } };
   if (!(await _limitaZi(env, 'mesaj', nr, 5))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 5 mesaje azi. Încearcă mâine.' } };
   const id = _id12();
@@ -2798,7 +2798,7 @@ async function admin(request, env) {
     case 'bandaSeteaza': {
       const b = cerere.banda;
       if (!b) { await _fbPut(env, 'config/banda', null); return { status: 200, corp: { ok: true, banda: null } }; }
-      const v = { text: _txt(b.text, 200), tip: b.tip === 'ore' ? 'ore' : 'text', culoare: ['galben', 'rosu', 'albastru'].includes(b.culoare) ? b.culoare : 'galben',
+      const v = { text: _txt(b.text, 200), tip: ['ore', 'mesaj'].includes(b.tip) ? b.tip : 'text', culoare: ['galben', 'rosu', 'albastru'].includes(b.culoare) ? b.culoare : 'galben',
         tinta: (Array.isArray(b.tinta) ? b.tinta : ['all']).map(String).filter(d => d === 'all' || DEPOURI.includes(d)).slice(0, 12), la: Date.now() };
       if (!v.text) return { status: 400, corp: { ok: false, eroare: 'Scrie textul benzii.' } };
       if (!v.tinta.length) v.tinta = ['all'];
