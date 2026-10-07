@@ -1156,7 +1156,11 @@ async function testPush(request, env) {
   // cifre. Nu e o rută publică, e o unealtă de diagnostic din panou, deci
   // cere parola sau jetonul, ca restul panoului.
   if (!paroleEgale(String(c.parola || ''), String(env.ADMIN_PASS))) {
-    const stareTP = c.jeton ? await jetonValid(env, String(c.jeton)) : 'nu';
+    let stareTP = c.jeton ? await jetonValid(env, String(c.jeton)) : 'nu';
+    if (stareTP !== 'da' && codAdm2Curat(c.parola)) {
+      const a = await _adm2DinCod(env, codAdm2Curat(c.parola));
+      stareTP = a === 'necunoscut' ? 'necunoscut' : (a ? 'da' : stareTP);
+    }
     if (stareTP === 'necunoscut') {
       return { status: 503, corp: { ok: false,
         eroare: 'Nu am putut verifica jetonul' + (_motivJeton ? ': ' + _motivJeton : '.') } };
@@ -2323,6 +2327,11 @@ async function _curataTrimiteri(env, log) {
     }
     const er = await getJSON(urlBroadcast(env, 'erori.json')) || {};
     for (const [id, x] of Object.entries(er)) if (!x || !x.ultima || Date.now() - x.ultima > 30 * 864e5) { await _fbPut(env, `erori/${id}`, null).catch(() => {}); n++; }
+    // [2.3] jurnalul adminului 2: 90 de zile
+    const jr = await getJSON(urlBroadcast(env, ADM2_JURNAL + '.json')).catch(() => null) || {};
+    for (const [nrA, intrari] of Object.entries(jr)) {
+      for (const [id, x] of Object.entries(intrari || {})) if (!x || !x.la || Date.now() - x.la > 90 * 864e5) { await _fbPut(env, `${ADM2_JURNAL}/${nrA}/${id}`, null).catch(() => {}); n++; }
+    }
     await _fbPut(env, 'limite', null).catch(() => {});
     if (n) log(`Curățenie: ${n} trimiteri/rapoarte vechi șterse`);
   } catch (e) { log('Curățenie: ' + e.message); }
@@ -2623,9 +2632,9 @@ async function repartitorValid(env, cod) {
 // nodul `adminJetoane` e închis în regulile Firebase, iar worker-ul n-are
 // `FB_SECRET` setat în Cloudflare, deci nu trece de reguli.
 let _motivJeton = '';
-async function jetonValid(env, jeton) {
+async function jetonValid(env, jeton, out) {
   _motivJeton = '';
-  if (!jeton || jeton.length < 32) return 'nu';
+  if (!jeton || jeton.length < 32 || !/^[0-9a-f]+$/.test(jeton)) return 'nu';
   let r;
   try {
     r = await fetch(urlBroadcast(env, `adminJetoane/${idJeton(jeton)}.json`), { headers: { 'Cache-Control': 'no-cache' } });
@@ -2646,6 +2655,7 @@ async function jetonValid(env, jeton) {
   if (!d || !d.hash) return 'nu';
   const h = await hashJeton(jeton);
   if (!paroleEgale(h, String(d.hash))) return 'nu';
+  if (out) out.d = d;          // [2.3] ca admin() să vadă dacă jetonul e al adminului 2
   // Reînnoim ultima folosire, ca să vezi în panou care telefon mai e activ
   fetch(urlBroadcast(env, `adminJetoane/${idJeton(jeton)}/ultima.json`), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -2653,6 +2663,97 @@ async function jetonValid(env, jeton) {
   }).catch(() => {});
   return 'da';
 }
+
+// ══════════════════════════════════════════════════════════════
+// [2.3] ADMIN 2 — un coleg cu acces la tot panoul, cu codul LUI (nu parola).
+//
+// Codul (9 caractere, ex. K7M-42Q-9XD) e făcut de worker și se arată o singură
+// dată. În Firebase stă doar amprenta (hash) lui, în adminJetoane/_admini2/<nr>
+// — nod deja închis în reguli, ca nimeni să nu-și poată scrie singur un cod.
+// `gen` crește la „Cod nou”: jetoanele de amprentă vechi ale lui nu mai merg.
+// Tot ce schimbă el se scrie în adminJetoane/_jurnal/<nr>.
+// Doar adminul principal (parola sau jetonul lui) poate face/scoate admini.
+// ══════════════════════════════════════════════════════════════
+const ADM2_CALE = 'adminJetoane/_admini2';
+const ADM2_JURNAL = 'adminJetoane/_jurnal';
+function codAdm2Curat(x) {
+  const c = String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z0-9]{9}$/.test(c) ? c : null;
+}
+function _adm2CodNou() {
+  const b = crypto.getRandomValues(new Uint8Array(9));
+  return [...b].map(x => REP_ALFABET[x % REP_ALFABET.length]).join('');
+}
+function _adm2Afisat(c) { return c.slice(0, 3) + '-' + c.slice(3, 6) + '-' + c.slice(6); }
+function _adm2Opriri(o) { o = o || {}; return { definitiv: !!o.definitiv, sterge: !!o.sterge, fortat: !!o.fortat }; }
+async function _adm2Toti(env) {
+  const r = await fetch(urlBroadcast(env, ADM2_CALE + '.json'), { headers: { 'Cache-Control': 'no-cache' } });
+  if (!r.ok) return 'necunoscut';
+  return (await r.json().catch(() => null)) || {};
+}
+async function _adm2DinCod(env, cod) {
+  try {
+    const toti = await _adm2Toti(env);
+    if (toti === 'necunoscut') return 'necunoscut';
+    const h = await hashJeton('adm2:' + cod);
+    for (const [nr, a] of Object.entries(toti)) {
+      if (a && a.hash && paroleEgale(h, String(a.hash))) return Object.assign({ nr }, a, { opriri: _adm2Opriri(a.opriri) });
+    }
+    return null;
+  } catch (e) { return 'necunoscut'; }
+}
+async function _adm2Citeste(env, nr) {
+  try {
+    const r = await fetch(urlBroadcast(env, `${ADM2_CALE}/${nr}.json`), { headers: { 'Cache-Control': 'no-cache' } });
+    if (!r.ok) return 'necunoscut';
+    const a = await r.json().catch(() => null);
+    return a ? Object.assign({ nr: String(nr) }, a, { opriri: _adm2Opriri(a.opriri) }) : null;
+  } catch (e) { return 'necunoscut'; }
+}
+// Jetoanele de amprentă ale unui admin 2 (la „Cod nou” și „Taie accesul” pleacă toate).
+async function _adm2StergeJetoane(env, nr) {
+  let d = null;
+  try { d = await getJSON(urlBroadcast(env, 'adminJetoane.json')); } catch (e) {}
+  let n = 0;
+  for (const [id, v] of Object.entries(d || {})) {
+    if (id.startsWith('_')) continue;
+    if (v && String(v.adm2 || '') === String(nr)) { await _fbPut(env, `adminJetoane/${id}`, null).catch(() => {}); n++; }
+  }
+  return n;
+}
+async function _adm2Scrie(env, nr, cerere, extra) {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const e = { la: Date.now(), a: String(cerere.actiune || '').slice(0, 40) };
+  const tinta = nrCurat(cerere.nr);
+  if (tinta) e.t = tinta;
+  const x = extra || _adm2Detaliu(cerere);
+  if (x) e.x = String(x).slice(0, 120);
+  await _fbPut(env, `${ADM2_JURNAL}/${nr}/${id}`, e).catch(() => {});
+}
+function _adm2Detaliu(c) {
+  switch (c.actiune) {
+    case 'blocheaza': case 'blocareFel': return c.fel === 'definitiv' ? 'definitiv' : 'numar';
+    case 'repartizare': case 'stergeRepartizare': return [c.depou, c.luna].filter(Boolean).join(' ');
+    case 'bandaSeteaza': return c.banda ? _txt(c.banda.text, 80) : 'oprită';
+    case 'versiuneMinima': return c.min == null || c.min === '' ? 'oprită' : String(c.min);
+    case 'cerereRezolva': return String(c.fa || '');
+    case 'anunt': case 'anuntEcran': return _txt(c.titlu || c.text || c.mesaj, 80);
+    case 'mesajAdminCitit': return c.raspuns ? 'răspuns' : '';
+    case 'indicatoriPropune': case 'indicatoriAproba': case 'indicatoriRespinge': case 'indicatoriAnuleaza':
+      return String(c.dep || c.depou || c.bazaNume || '');
+  }
+  return '';
+}
+// Acțiuni care doar citesc: nu intră în jurnal.
+const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
+  'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista',
+  'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
+  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati']);
+// Doar adminul principal.
+const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal']);
+// Acțiuni care nu se pot face pe numărul unui admin.
+const ADM2_PROTEJAT = new Set(['blocheaza', 'blocareFel', 'stergeUtilizator', 'reseteazaDispozitiv', 'stergeDispozitiv',
+  'scoateLoc', 'readuBackup', 'recupereaza', 'pushStergeNr']);
 
 async function admin(request, env) {
   if (request.method !== 'POST') {
@@ -2672,8 +2773,9 @@ async function admin(request, env) {
   // nicăieri pe telefon — asta e toată ideea.
   const cuParola = paroleEgale(String(cerere.parola || ''), String(env.ADMIN_PASS));
   let stareJeton = 'nu';
+  const jd = {};
   if (!cuParola && cerere.jeton) {
-    stareJeton = await jetonValid(env, String(cerere.jeton));
+    stareJeton = await jetonValid(env, String(cerere.jeton), jd);
   }
   const cuJeton = stareJeton === 'da';
 
@@ -2682,6 +2784,25 @@ async function admin(request, env) {
   if (!cuParola && stareJeton === 'necunoscut') {
     return { status: 503, corp: { ok: false,
       eroare: 'Nu am putut verifica jetonul' + (_motivJeton ? ': ' + _motivJeton : '. Încearcă din nou.') } };
+  }
+
+  // [2.3] Admin 2: cu jetonul lui de amprentă sau cu codul lui.
+  let adm2 = null;
+  if (cuJeton && jd.d && jd.d.adm2) {
+    const a = await _adm2Citeste(env, String(jd.d.adm2));
+    if (a === 'necunoscut') return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica accesul. Încearcă din nou.' } };
+    if (!a || Number(a.gen || 1) !== Number(jd.d.gen || 1)) {
+      return { status: 401, corp: { ok: false, jetonAnulat: true, eroare: 'Accesul de admin a fost oprit.' } };
+    }
+    adm2 = a;
+  }
+  if (!cuParola && !cuJeton) {
+    const cod = codAdm2Curat(cerere.adm2 || cerere.parola);
+    if (cod) {
+      const a = await _adm2DinCod(env, cod);
+      if (a === 'necunoscut') return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica codul. Încearcă din nou.' } };
+      if (a) adm2 = a;
+    }
   }
 
   // [v11.13] Responsabil de repartizare: intră cu codul lui (trimis ca `rep`,
@@ -2715,7 +2836,7 @@ async function admin(request, env) {
     cerere._urcatDe = rep.nr || rep.id;
   }
 
-  if (!cuParola && !cuJeton && !rep) {
+  if (!cuParola && !cuJeton && !rep && !adm2) {
     // Mică întârziere, ca încercările repetate să nu fie ieftine
     await new Promise(r => setTimeout(r, 400));
     // `jetonAnulat` spune limpede aplicației că jetonul chiar nu mai e bun și
@@ -2731,13 +2852,111 @@ async function admin(request, env) {
   }
 
   // Un jeton nu poate crea alte jetoane: pentru asta trebuie parola.
-  if (cerere.actiune === 'jetonNou' && !cuParola) {
+  // [2.3] Adminul 2, intrat cu codul lui, își poate face jeton pentru amprentă.
+  if (cerere.actiune === 'jetonNou' && !cuParola && !(adm2 && !cuJeton)) {
     // [v4.5] `cerereParola`: aplicația știe că nu e o respingere a accesului și
     // nu mai scoate toată sesiunea de amprentă din cauza unei singure acțiuni.
     return { status: 401, corp: { ok: false, cerereParola: true, eroare: 'Pentru asta trebuie parola.' } };
   }
 
-  switch (cerere.actiune) {
+  // [2.3] Ce are voie adminul 2
+  if (adm2) {
+    const a = cerere.actiune;
+    if (ADM2_INTERZIS.has(a)) return { status: 403, corp: { ok: false, eroare: 'Doar adminul principal poate face asta.' } };
+    const o = adm2.opriri;
+    if (o.definitiv && (a === 'blocheaza' || a === 'blocareFel') && cerere.fel === 'definitiv')
+      return { status: 403, corp: { ok: false, eroare: 'Blocarea definitivă e oprită pentru tine. Folosește „număr greșit”.' } };
+    if (o.sterge && (a === 'stergeUtilizator' || a === 'stergeToateDispozitivele'))
+      return { status: 403, corp: { ok: false, eroare: 'Ștergerea datelor e oprită pentru tine.' } };
+    if (o.fortat && a === 'versiuneMinima')
+      return { status: 403, corp: { ok: false, eroare: 'Actualizarea obligatorie e oprită pentru tine.' } };
+    if (ADM2_PROTEJAT.has(a)) {
+      const tinta = nrCurat(cerere.nr);
+      let principal = null;
+      try { principal = await getJSON(urlBroadcast(env, 'config/adminPrincipal.json')); } catch (e) {}
+      const toti = await _adm2Toti(env).catch(() => ({}));
+      if (tinta && (String(principal || '') === tinta || (toti && toti !== 'necunoscut' && toti[tinta] && tinta !== adm2.nr)))
+        return { status: 403, corp: { ok: false, eroare: 'Nu poți face asta pe numărul unui admin.' } };
+    }
+    cerere.de = 'admin 2 · ' + adm2.nr;
+    cerere._urcatDe = 'admin 2 · ' + adm2.nr;
+    // ultima folosire
+    await _fbPut(env, `${ADM2_CALE}/${adm2.nr}/ultima`, Date.now()).catch(() => {});
+  }
+
+  const rez = await (async () => { switch (cerere.actiune) {
+    // ── [2.3] Cine e intrat (rol) — panoul îl întreabă la deschidere ──
+    case 'cineSunt': {
+      if (adm2) {
+        if (Date.now() - Number(adm2.intrat || 0) > 15 * 60000) {
+          await _fbPut(env, `${ADM2_CALE}/${adm2.nr}/intrat`, Date.now()).catch(() => {});
+          await _adm2Scrie(env, adm2.nr, { actiune: 'intrare' });
+        }
+        return { status: 200, corp: { ok: true, rol: 'admin2', nr: adm2.nr, opriri: adm2.opriri } };
+      }
+      return { status: 200, corp: { ok: true, rol: 'admin' } };
+    }
+
+    // ── [2.3] Administratori (doar adminul principal) ──
+    case 'adminiLista': {
+      const toti = await _adm2Toti(env);
+      if (toti === 'necunoscut') return { status: 502, corp: { ok: false, eroare: 'Nu am putut citi lista.' } };
+      let jet = null;
+      try { jet = await getJSON(urlBroadcast(env, 'adminJetoane.json')); } catch (e) {}
+      const tel = {};
+      for (const [id, v] of Object.entries(jet || {})) if (!id.startsWith('_') && v && v.adm2) tel[v.adm2] = (tel[v.adm2] || 0) + 1;
+      const lista = Object.entries(toti).map(([nr, a]) => ({ nr, creat: a.creat || 0, codLa: a.codLa || 0, ultima: a.ultima || 0,
+        opriri: _adm2Opriri(a.opriri), telefoane: tel[nr] || 0 })).sort((x, y) => x.creat - y.creat);
+      return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'adminNou': case 'adminCodNou': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Scrie numărul de serviciu.' } };
+      const vechi = await _adm2Citeste(env, nr);
+      if (vechi === 'necunoscut') return { status: 502, corp: { ok: false, eroare: 'Nu am putut verifica. Încearcă din nou.' } };
+      if (cerere.actiune === 'adminNou' && vechi) return { status: 409, corp: { ok: false, eroare: `${nr} e deja admin. Dacă a pierdut codul, apasă „Cod nou”.` } };
+      if (cerere.actiune === 'adminCodNou' && !vechi) return { status: 404, corp: { ok: false, eroare: `${nr} nu mai e admin.` } };
+      const eu = nrCurat(cerere.eu);
+      if (eu && eu === nr) return { status: 400, corp: { ok: false, eroare: 'Ăsta e numărul tău.' } };
+      if (eu) await _fbPut(env, 'config/adminPrincipal', eu).catch(() => {});
+      const cod = _adm2CodNou();
+      const a = vechi ? { hash: vechi.hash, gen: vechi.gen, creat: vechi.creat, ultima: vechi.ultima || 0, opriri: vechi.opriri } :
+        { creat: Date.now(), ultima: 0, gen: 0, opriri: _adm2Opriri() };
+      a.hash = await hashJeton('adm2:' + cod);
+      a.gen = Number(a.gen || 0) + 1;
+      a.codLa = Date.now();
+      const r = await fetch(urlBroadcast(env, `${ADM2_CALE}/${nr}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(a) });
+      if (!r.ok) { const d = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } }; }
+      if (vechi) await _adm2StergeJetoane(env, nr);
+      // Codul în clar se întoarce O SINGURĂ DATĂ.
+      return { status: 200, corp: { ok: true, nr, cod: _adm2Afisat(cod) } };
+    }
+    case 'adminTaie': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr lipsă' } };
+      await _fbPut(env, `${ADM2_CALE}/${nr}`, null);
+      const n = await _adm2StergeJetoane(env, nr);
+      await _fbPut(env, `config/adminNotif/${nr}`, null).catch(() => {});
+      await _adm2Scrie(env, nr, { actiune: 'scos' });
+      return { status: 200, corp: { ok: true, nr, telefoane: n } };
+    }
+    case 'adminOpriri': {
+      const nr = nrCurat(cerere.nr);
+      const a = nr ? await _adm2Citeste(env, nr) : null;
+      if (!a || a === 'necunoscut') return { status: 404, corp: { ok: false, eroare: 'Nu mai e admin.' } };
+      const o = _adm2Opriri(cerere.opriri);
+      await _fbPut(env, `${ADM2_CALE}/${nr}/opriri`, o);
+      return { status: 200, corp: { ok: true, nr, opriri: o } };
+    }
+    case 'adminJurnal': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr lipsă' } };
+      let d = null;
+      try { d = await getJSON(urlBroadcast(env, `${ADM2_JURNAL}/${nr}.json`)); } catch (e) {}
+      const lista = Object.values(d || {}).filter(x => x && x.la).sort((a, b) => b.la - a.la).slice(0, 200);
+      return { status: 200, corp: { ok: true, nr, lista } };
+    }
+
     // ── Jeton nou pentru telefonul ăsta (cere parola) ──
     case 'jetonNou': {
       const jeton = [...crypto.getRandomValues(new Uint8Array(32))]
@@ -2747,7 +2966,8 @@ async function admin(request, env) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hash, creat: Date.now(), ultima: Date.now(),
-          nume: String(cerere.nume || 'telefon').slice(0, 40)
+          nume: String(cerere.nume || 'telefon').slice(0, 40),
+          ...(adm2 ? { adm2: adm2.nr, gen: Number(adm2.gen || 1) } : {})
         })
       });
       if (!r.ok) {
@@ -2755,15 +2975,17 @@ async function admin(request, env) {
         return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
       }
       // Jetonul în clar se întoarce O SINGURĂ DATĂ, acum; nu se mai poate citi.
-      return { status: 200, corp: { ok: true, jeton, id: idJeton(jeton) } };
+      return { status: 200, corp: { ok: true, jeton, id: idJeton(jeton), rol: adm2 ? 'admin2' : 'admin', nr: adm2 ? adm2.nr : undefined } };
     }
 
     // ── Ce telefoane pot intra fără parolă ──
     case 'jetoane': {
       const r = await fetch(urlBroadcast(env, 'adminJetoane.json'), { headers: { 'Cache-Control': 'no-cache' } });
       const d = r.ok ? (await r.json().catch(() => null)) : null;
-      const lista = Object.entries(d || {}).map(([id, v]) => ({
-        id, nume: (v && v.nume) || 'telefon',
+      const lista = Object.entries(d || {})
+        .filter(([id, v]) => !id.startsWith('_') && (adm2 ? String((v && v.adm2) || '') === adm2.nr : true))
+        .map(([id, v]) => ({
+        id, nume: (v && v.nume) || 'telefon', adm2: (v && v.adm2) || '',
         creat: (v && v.creat) || 0, ultima: (v && v.ultima) || 0
       })).sort((a, b) => b.ultima - a.ultima);
       return { status: 200, corp: { ok: true, lista } };
@@ -2772,7 +2994,12 @@ async function admin(request, env) {
     // ── Anulează accesul unui telefon ──
     case 'jetonSterge': {
       const id = String(cerere.id || '').slice(0, 16);
-      if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      if (!id || !/^[0-9a-f]{16}$/.test(id)) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      if (adm2) {
+        let v = null;
+        try { v = await getJSON(urlBroadcast(env, `adminJetoane/${id}.json`)); } catch (e) {}
+        if (!v || String(v.adm2 || '') !== adm2.nr) return { status: 403, corp: { ok: false, eroare: 'Poți scoate doar telefoanele tale.' } };
+      }
       const r = await fetch(urlBroadcast(env, `adminJetoane/${id}.json`), { method: 'DELETE' });
       if (!r.ok) {
         const d = await r.text().catch(() => '');
@@ -2782,7 +3009,7 @@ async function admin(request, env) {
     }
 
     case 'verifica':
-      return { status: 200, corp: { ok: true } };
+      return { status: 200, corp: adm2 ? { ok: true, rol: 'admin2', nr: adm2.nr } : { ok: true } };
 
     // ── [v11.13] Responsabili de repartizare ──
     case 'repartitorNou': {
@@ -3968,5 +4195,11 @@ async function admin(request, env) {
 
     default:
       return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută: ' + cerere.actiune } };
+  } })();
+
+  // [2.3] Ce a făcut adminul 2 rămâne scris (doar ce a reușit și a schimbat ceva).
+  if (adm2 && rez && rez.status === 200 && !ADM2_CITIRE.has(cerere.actiune)) {
+    await _adm2Scrie(env, adm2.nr, cerere);
   }
+  return rez;
 }
