@@ -1059,6 +1059,12 @@ export default {
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
+    if (url.pathname === '/trimite-fisier' || url.pathname === '/trimite-gata') {
+      let r;
+      try { r = url.pathname === '/trimite-fisier' ? await trimiteFisier(request, env) : await trimiteGata(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
     if (url.pathname === '/raport-ore' || url.pathname === '/trimite') {
       let r;
       try { r = url.pathname === '/trimite' ? await trimiteFoaie(request, env) : await raportOre(request, env); }
@@ -2192,7 +2198,7 @@ async function raportOre(request, env) {
   if (!r.dep || !r.linie || !r.tur || (!r.i && !r.r && !r.obs)) return { status: 400, corp: { ok: false, eroare: 'Completează linia, turul și ora de pe indicator.' } };
   if (!(await _limitaZi(env, 'raport', nr, 10))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 10 azi. Mulțumim! Încearcă mâine.' } };
   const id = _id12();
-  const poza = typeof c.poza === 'string' && /^data:image\/jpeg;base64,/.test(c.poza) && c.poza.length < 700000 ? c.poza : '';
+  const poza = typeof c.poza === 'string' && /^data:image\/jpeg;base64,/.test(c.poza) && c.poza.length < 3000000 ? c.poza : '';   // [1.8] poze mai clare (2000 px)
   try { await _fbPut(env, `raportOre/${id}`, Object.assign({}, r, { arePoza: !!poza })); if (poza) await _fbPut(env, `raportOrePoza/${id}`, poza); }
   catch (e) { return { status: 502, corp: { ok: false, eroare: e.message } }; }
   let la = 0;
@@ -2205,7 +2211,7 @@ async function raportOre(request, env) {
   return { status: 200, corp: { ok: true, id, altii: la } };
 }
 
-const TRIMITE_MAX_FISIER = 11 * 1024 * 1024;   // base64 (~8 MB fișier)
+const TRIMITE_MAX_FISIER = 9900000;            // base64 (~7 MB fișier); Firebase primește cel mult 10 MB într-un șir
 const TRIMITE_MAX_TOTAL  = 24 * 1024 * 1024;
 async function trimiteFoaie(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
@@ -2216,16 +2222,26 @@ async function trimiteFoaie(request, env) {
   const luna = /^\d{4}-\d{2}$/.test(c.luna || '') ? c.luna : '';
   const baza = _txt(c.baza, 30).replace(/[^a-z0-9_-]/gi, '');
   const bazaNume = _txt(c.bazaNume, 40);
-  const fis = (Array.isArray(c.fisiere) ? c.fisiere : []).filter(f => f && typeof f.date === 'string' && f.date.length > 100);
+  // [1.8] pe_rand: întâi doar lista fișierelor, apoi fiecare fișier în cererea lui (/trimite-fisier) — poze la rezoluția întreagă
+  const peRand = c.pe_rand === true;
+  const fis = (Array.isArray(c.fisiere) ? c.fisiere : []).filter(f => f && (peRand ? Number(f.marime) > 0 : (typeof f.date === 'string' && f.date.length > 100)));
   if (!tip || (!baza && !bazaNume)) return { status: 400, corp: { ok: false, eroare: 'Alege ce trimiți și de unde.' } };
   if (!fis.length) return { status: 400, corp: { ok: false, eroare: 'Adaugă măcar o poză sau un PDF.' } };
   if (fis.length > 10) return { status: 400, corp: { ok: false, eroare: 'Cel mult 10 fișiere odată.' } };
-  if (fis.some(f => f.date.length > TRIMITE_MAX_FISIER) || fis.reduce((s, f) => s + f.date.length, 0) > TRIMITE_MAX_TOTAL)
-    return { status: 413, corp: { ok: false, eroare: 'Fișierele sunt prea mari (cel mult 8 MB fiecare).' } };
+  if (!peRand && (fis.some(f => f.date.length > TRIMITE_MAX_FISIER) || fis.reduce((s, f) => s + f.date.length, 0) > TRIMITE_MAX_TOTAL))
+    return { status: 413, corp: { ok: false, eroare: 'Fișierele sunt prea mari (cel mult 7 MB fiecare).' } };
+  if (peRand && fis.some(f => Number(f.marime) > TRIMITE_MAX_FISIER * 0.75))
+    return { status: 413, corp: { ok: false, eroare: 'Un fișier e prea mare (cel mult 7 MB).' } };
   if (!(await _limitaZi(env, 'trimite', nr, 5))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja de 5 ori azi. Încearcă mâine.' } };
   const id = _id12();
   const meta = { nr, la: Date.now(), tip, luna, baza, bazaNume, nou: !baza, obs: _txt(c.obs, 300),
-    fisiere: fis.map(f => ({ nume: _txt(f.nume, 80) || 'fisier', tip: /^(image\/jpeg|image\/png|application\/pdf)$/.test(f.tip) ? f.tip : 'application/octet-stream', marime: Math.round(f.date.length * 0.75) })) };
+    fisiere: fis.map(f => ({ nume: _txt(f.nume, 80) || 'fisier', tip: /^(image\/jpeg|image\/png|application\/pdf)$/.test(f.tip) ? f.tip : 'application/octet-stream', marime: peRand ? Math.round(Number(f.marime)) : Math.round(f.date.length * 0.75) })) };
+  if (peRand) {
+    meta.incomplet = true;
+    meta.tok = [...crypto.getRandomValues(new Uint8Array(12))].map(x => x.toString(16).padStart(2, '0')).join('');
+    try { await _fbPut(env, `trimiteri/${id}`, meta); } catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu s-a putut salva. Încearcă din nou.' } }; }
+    return { status: 200, corp: { ok: true, id, tok: meta.tok, n: fis.length } };
+  }
   try {
     for (let k = 0; k < fis.length; k++) await _fbPut(env, `trimiteriFisiere/${id}/${k}`, fis[k].date);
     await _fbPut(env, `trimiteri/${id}`, meta);
@@ -2244,6 +2260,46 @@ async function trimiteFoaie(request, env) {
   return { status: 200, corp: { ok: true, id, altii } };
 }
 
+// [1.8] Un fișier dintr-o trimitere începută cu pe_rand.
+async function _trimiteMeta(env, id, tok) {
+  id = String(id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+  if (!id || !tok) return null;
+  const m = await getJSON(urlBroadcast(env, `trimiteri/${id}.json`)).catch(() => null);
+  return m && m.incomplet && m.tok === String(tok) ? Object.assign({ id }, m) : null;
+}
+async function trimiteFisier(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 413, corp: { ok: false, eroare: 'Fișierul e prea mare sau s-a trimis greșit.' } }; }
+  const m = await _trimiteMeta(env, c.id, c.tok);
+  if (!m) return { status: 404, corp: { ok: false, eroare: 'Trimiterea nu mai există. Începe din nou.' } };
+  const k = Number(c.k);
+  if (!(k >= 0 && k < (m.fisiere || []).length)) return { status: 400, corp: { ok: false, eroare: 'Fișier greșit.' } };
+  if (typeof c.date !== 'string' || c.date.length < 100) return { status: 400, corp: { ok: false, eroare: 'Fișier gol.' } };
+  if (c.date.length > TRIMITE_MAX_FISIER) return { status: 413, corp: { ok: false, eroare: 'Fișierul e prea mare (cel mult 7 MB).' } };
+  try { await _fbPut(env, `trimiteriFisiere/${m.id}/${k}`, c.date); }
+  catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu s-a putut salva fișierul. (' + e.message + ')' } }; }
+  return { status: 200, corp: { ok: true, k } };
+}
+async function trimiteGata(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
+  const m = await _trimiteMeta(env, c.id, c.tok);
+  if (!m) return { status: 404, corp: { ok: false, eroare: 'Trimiterea nu mai există. Începe din nou.' } };
+  const u = urlBroadcast(env, `trimiteriFisiere/${m.id}.json`);
+  const are = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true').catch(() => null) || {};
+  const lipsa = (m.fisiere || []).map((f, k) => k).filter(k => !are[k]);
+  if (lipsa.length) return { status: 409, corp: { ok: false, lipsa, eroare: 'Lipsesc fișiere: ' + lipsa.map(k => k + 1).join(', ') } };
+  await _fbPut(env, `trimiteri/${m.id}/incomplet`, null);
+  await _fbPut(env, `trimiteri/${m.id}/tok`, null);
+  let altii = 0;
+  try {
+    const toate = await getJSON(urlBroadcast(env, 'trimiteri.json')) || {};
+    const cheie = x => `${x.tip}|${x.baza || ('~' + String(x.bazaNume || '').toLowerCase())}|${x.luna || ''}`;
+    altii = new Set(Object.values(toate).filter(x => x && !x.incomplet && cheie(x) === cheie(m) && x.nr !== m.nr).map(x => x.nr)).size;
+  } catch (e) {}
+  const ce = m.tip === 'rep' ? 'Repartizarea' + (m.luna ? ' pe ' + m.luna : '') : m.tip === 'ind' ? 'Indicatori de ore' : 'Fișiere';
+  await _anuntaAdminii(env, '📥 Foaie trimisă', `${ce} · ${m.bazaNume || m.baza} · de la ${m.nr} (${(m.fisiere || []).length} fișiere)`, 'trimiteri').catch(() => 0);
+  return { status: 200, corp: { ok: true, id: m.id, altii } };
+}
+
 // Ce a rămas uitat: fișiere nedescărcate de 30 de zile, rapoarte de 60.
 async function _curataTrimiteri(env, log) {
   const azi = _aziRo();
@@ -2253,7 +2309,7 @@ async function _curataTrimiteri(env, log) {
     const t = await getJSON(urlBroadcast(env, 'trimiteri.json')) || {};
     let n = 0;
     for (const [id, x] of Object.entries(t)) {
-      if (x && x.la && Date.now() - x.la > 30 * 864e5) { await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {}); await _fbPut(env, `trimiteri/${id}`, null).catch(() => {}); n++; }
+      if (x && x.la && (Date.now() - x.la > 30 * 864e5 || (x.incomplet && Date.now() - x.la > 864e5))) { await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {}); await _fbPut(env, `trimiteri/${id}`, null).catch(() => {}); n++; }
     }
     const r = await getJSON(urlBroadcast(env, 'raportOre.json')) || {};
     for (const [id, x] of Object.entries(r)) {
@@ -2776,7 +2832,7 @@ async function admin(request, env) {
     // ── [1.2] Foi și poze trimise de colegi ──
     case 'trimiteriLista': {
       const d = await getJSON(urlBroadcast(env, 'trimiteri.json')).catch(() => null) || {};
-      return { status: 200, corp: { ok: true, lista: Object.entries(d).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.la - a.la) } };
+      return { status: 200, corp: { ok: true, lista: Object.entries(d).filter(([id, x]) => x && !x.incomplet).map(([id, x]) => { const o = Object.assign({ id }, x); delete o.tok; return o; }).sort((a, b) => b.la - a.la) } };
     }
     case 'trimiteFisier': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20), k = Number(cerere.k) || 0;
