@@ -1059,6 +1059,12 @@ export default {
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
+    if (url.pathname === '/cerere-admin' || url.pathname === '/cerere-stare') {
+      let r;
+      try { r = url.pathname === '/cerere-admin' ? await cerereAdmin(request, env) : await cerereStare(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
     if (url.pathname === '/trimite-fisier' || url.pathname === '/trimite-gata') {
       let r;
       try { r = url.pathname === '/trimite-fisier' ? await trimiteFisier(request, env) : await trimiteGata(request, env); }
@@ -2418,6 +2424,55 @@ async function _sterge6Luni(env, log) {
   } catch (e) { log('Ștergere 6 luni: ' + e.message); }
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// [2.0] CERERI DE PE ECRANELE „NUMĂR DEJA FOLOSIT” ȘI „ACCES BLOCAT”
+// Telefonul care scrie NU e înregistrat pe număr (de aceea scrie), deci nu-l
+// putem verifica. Mesajul ține și codul telefonului: adminul îl poate pune pe
+// număr dintr-o apăsare. Ce poate face un străin: cel mult să-ți trimită o
+// cerere, pe care o vezi și o ignori.
+// ══════════════════════════════════════════════════════════════
+async function cerereAdmin(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  const motiv = ['ocupat', 'blocat'].includes(c.motiv) ? c.motiv : '';
+  if (!nr || !dev || !motiv) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
+  if (!(await _limitaZi(env, 'cerere', dev.slice(0, 40), 6))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja mai multe cereri azi. Așteaptă răspunsul adminului.' } };
+  const info = {};
+  if (motiv === 'ocupat') {
+    const { locuri, disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
+    if (disp[dev]) return { status: 200, corp: { ok: true, aprobat: true } };
+    const la = Object.values(disp).map(x => Number(x && x.la) || 0).filter(Boolean);
+    info.telefoane = Object.keys(disp).length; info.locuri = locuri; info.din = la.length ? Math.min(...la) : 0;
+  } else {
+    const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
+    if (!b) return { status: 200, corp: { ok: true, aprobat: true } };
+    info.motivBlocare = _txt(b.motiv, 120);
+  }
+  const fel = ['telefon_nou', 'al_doilea', 'altceva'].includes(c.fel) ? c.fel : 'altceva';
+  const text = String(c.text == null ? '' : c.text).replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 600);
+  // o singură cerere deschisă pe telefon + număr: a doua o înlocuiește pe prima
+  const toate = await getJSON(urlBroadcast(env, 'mesajeAdmin.json')).catch(() => null) || {};
+  const vechi = Object.entries(toate).find(([id, x]) => x && x.cerere && x.nr === nr && x.dev === dev);
+  const id = vechi ? vechi[0] : _id12();
+  await _fbPut(env, `mesajeAdmin/${id}`, { cerere: motiv, nr, dev, fel, text, la: Date.now(), plat: _txt(c.plat, 20), dep: _txt(c.dep, 20), v: _txt(c.v, 10), ...info });
+  const ce = motiv === 'ocupat' ? ({ telefon_nou: 'și-a schimbat telefonul', al_doilea: 'vrea încă un telefon', altceva: 'număr ocupat' }[fel]) : 'e blocat';
+  await _anuntaAdminii(env, (motiv === 'ocupat' ? '📵 ' : '🔒 ') + nr + ' — ' + ce, text ? text.slice(0, 120) : 'Rezolvi din panou, De rezolvat.', 'cerere-admin').catch(() => 0);
+  return { status: 200, corp: { ok: true } };
+}
+// Telefonul întreabă dacă s-a rezolvat (cât stă pe ecranul de așteptare).
+async function cerereStare(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!nr || !dev) return { status: 400, corp: { ok: false } };
+  if (c.motiv === 'blocat') {
+    const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
+    return { status: 200, corp: { ok: true, aprobat: !b } };
+  }
+  const { disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
+  return { status: 200, corp: { ok: true, aprobat: !!disp[dev] } };
+}
+
 async function _anuntaAdminii(env, titlu, text, tag) {
   if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return 0;
   let lista = null;
@@ -2889,6 +2944,24 @@ async function admin(request, env) {
     case 'mesajeAdminLista': {
       const d = await getJSON(urlBroadcast(env, 'mesajeAdmin.json')).catch(() => null) || {};
       return { status: 200, corp: { ok: true, lista: Object.entries(d).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.la - a.la) } };
+    }
+    // ── [2.0] Rezolvarea dintr-o apăsare a unei cereri „număr ocupat” / „blocat” ──
+    case 'cerereRezolva': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+      const m = id ? await getJSON(urlBroadcast(env, `mesajeAdmin/${id}.json`)).catch(() => null) : null;
+      if (!m || !m.cerere) return { status: 404, corp: { ok: false, eroare: 'Cererea nu mai există.' } };
+      const nr = nrCurat(m.nr), dev = String(m.dev || ''), acum = Date.now();
+      if (cerere.fa === 'muta' || cerere.fa === 'adauga') {
+        const { locuri, disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
+        const nou = cerere.fa === 'muta'
+          ? { locuri: 1, disp: { [dev]: { la: acum, ultima: acum } } }
+          : { locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length + 1)), disp: Object.assign({}, disp, { [dev]: { la: acum, ultima: acum } }) };
+        await _fbPut(env, `proprietar/${nr}`, nou);
+      } else if (cerere.fa === 'deblocheaza') {
+        await _fbPut(env, `blocati/${nr}`, null);
+      } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
+      await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
+      return { status: 200, corp: { ok: true, nr } };
     }
     case 'mesajAdminCitit': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
