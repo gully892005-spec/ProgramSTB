@@ -9588,16 +9588,17 @@
     "we": {},
     "_istoric": [],
     "_ore": {
-      "_info": "Orele turelor de autobuz (Giurgiului, Titan, Ferentari, Berceni) și de troleibuz (Bujoreni, Vatra Luminoasă), din zilnice. l = zi lucrătoare, s = sâmbătă, d = duminică/sărbătoare. Cheie: tur/linie → schimb (1, 2 sau 0 = oricare) → [început, sfârșit].",
+      "_info": "Orele turelor de autobuz (Giurgiului, Titan, Ferentari, Berceni) și de troleibuz (Bujoreni, Vatra Luminoasă, Bucureștii Noi), din zilnice. l = zi lucrătoare, s = sâmbătă, d = duminică/sărbătoare. Cheie: tur/linie → schimb (1, 2 sau 0 = oricare) → [început, sfârșit].",
       "_surse": {
         "giurgiului": "l 21.09 (verificat cu 17.09) · s 12.09 · d 13.09",
         "titan": "indicatori ore Titan, valabili 01.10–31.10.2026 (listat 30.09) · l / s / d · 23 de linii",
         "ferentari": "l 29.09 + 30.09 · s 26.09 · d 27.09",
         "berceni": "l indicatori 01.09 · s indicatori 01.08 (valabili și duminica/sărbători) · liniile 72, 73, 74, 76, 97, 312, 505",
         "bujoreni": "61, 62, 63, 93, 96: zi lucr. 01–30.09.2026 · 69: zi lucr. 01.09.2026 · weekend: 61, 63, 69, 93 din aceleași foi, 62 din 20/21.06.2026, 96 din 01–31.08.2026 · 93: foaia de sâmbătă pusă și duminica · 515 (noapte): 01–30.04.2026 · 368: zi lucr. 10, 11, 13 · sâmbătă 1, 2 · duminică 1, 8 — confirmate de foaia recapitulativă de la avizier (sept. 2026)",
-        "vatra_luminoasa": "l indicatori ore 01.10.2026 (zi lucrătoare) · s/d din indicatorii de sâmbătă 05.09.2026 (poză de la avizier), puși și duminica/sărbători · liniile 61, 66, 69, 73, 74, 79, 85, 86, 90, 311, 508 (noapte)"
+        "vatra_luminoasa": "l indicatori ore 01.10.2026 (zi lucrătoare) · s/d din indicatorii de sâmbătă 05.09.2026 (poză de la avizier), puși și duminica/sărbători · liniile 61, 66, 69, 73, 74, 79, 85, 86, 90, 311, 508 (noapte)",
+        "bucurestii_noi": "indicatori ore zi lucrătoare valabili de la 02.09.2026 (listat 02.09.2026) · liniile 86, 93, 95, 97 · fără weekend (nu există indicatori de weekend)"
       },
-      "_actualizat": "2026-10-03",
+      "_actualizat": "2026-10-08",
       "l": {
         "1/102": {
           "1": [
@@ -15295,6 +15296,286 @@
           "0": [
             "23:04",
             "05:29"
+          ]
+        },
+        "1/86": {
+          "1": [
+            "06:39",
+            "14:48"
+          ],
+          "2": [
+            "14:48",
+            "22:52"
+          ]
+        },
+        "2/86": {
+          "1": [
+            "04:45",
+            "12:15"
+          ],
+          "2": [
+            "15:01",
+            "23:02"
+          ]
+        },
+        "3/86": {
+          "1": [
+            "06:52",
+            "15:00"
+          ],
+          "2": [
+            "15:00",
+            "23:12"
+          ]
+        },
+        "4/86": {
+          "1": [
+            "04:54",
+            "12:26"
+          ],
+          "2": [
+            "12:26",
+            "21:01"
+          ]
+        },
+        "5/86": {
+          "1": [
+            "05:03",
+            "12:39"
+          ],
+          "2": [
+            "15:28",
+            "23:22"
+          ]
+        },
+        "7/86": {
+          "1": [
+            "05:11",
+            "12:50"
+          ],
+          "2": [
+            "12:50",
+            "21:22"
+          ]
+        },
+        "8/86": {
+          "1": [
+            "05:19",
+            "13:04"
+          ],
+          "2": [
+            "15:53",
+            "23:37"
+          ]
+        },
+        "9/86": {
+          "1": [
+            "05:27",
+            "13:09"
+          ],
+          "2": [
+            "13:09",
+            "21:35"
+          ]
+        },
+        "11/86": {
+          "1": [
+            "05:35",
+            "13:31"
+          ],
+          "2": [
+            "13:31",
+            "21:48"
+          ]
+        },
+        "13/86": {
+          "1": [
+            "05:49",
+            "13:52"
+          ],
+          "2": [
+            "13:52",
+            "22:02"
+          ]
+        },
+        "16/86": {
+          "1": [
+            "06:09",
+            "14:04"
+          ],
+          "2": [
+            "14:04",
+            "22:22"
+          ]
+        },
+        "17/86": {
+          "1": [
+            "06:15",
+            "14:15"
+          ],
+          "2": [
+            "14:15",
+            "22:32"
+          ]
+        },
+        "19/86": {
+          "1": [
+            "06:27",
+            "11:49"
+          ],
+          "2": [
+            "14:37",
+            "22:42"
+          ]
+        },
+        "1/93": {
+          "1": [
+            "04:43",
+            "13:13"
+          ],
+          "2": [
+            "13:13",
+            "22:01"
+          ]
+        },
+        "3/93": {
+          "1": [
+            "04:58",
+            "13:34"
+          ],
+          "2": [
+            "13:34",
+            "22:19"
+          ]
+        },
+        "12/93": {
+          "1": [
+            "05:59",
+            "14:51"
+          ],
+          "2": [
+            "14:51",
+            "23:19"
+          ]
+        },
+        "14/93": {
+          "1": [
+            "06:13",
+            "12:17"
+          ],
+          "2": [
+            "15:01",
+            "23:30"
+          ]
+        },
+        "17/93": {
+          "1": [
+            "06:36",
+            "12:43"
+          ],
+          "2": [
+            "15:25",
+            "23:42"
+          ]
+        },
+        "1/95": {
+          "1": [
+            "04:41",
+            "12:39"
+          ],
+          "2": [
+            "12:39",
+            "21:31"
+          ]
+        },
+        "2/95": {
+          "1": [
+            "06:48",
+            "15:00"
+          ],
+          "2": [
+            "15:00",
+            "23:18"
+          ]
+        },
+        "3/95": {
+          "1": [
+            "04:52",
+            "11:18"
+          ],
+          "2": [
+            "15:05",
+            "21:00"
+          ]
+        },
+        "4/95": {
+          "1": [
+            "07:00",
+            "15:13"
+          ],
+          "2": [
+            "15:13",
+            "23:30"
+          ]
+        },
+        "5/95": {
+          "1": [
+            "05:02",
+            "13:06"
+          ],
+          "2": [
+            "13:06",
+            "21:13"
+          ]
+        },
+        "6/95": {
+          "1": [
+            "06:28",
+            "15:28"
+          ],
+          "2": [
+            "15:28",
+            "23:42"
+          ]
+        },
+        "7/95": {
+          "1": [
+            "05:12",
+            "11:43"
+          ],
+          "2": [
+            "15:31",
+            "22:02"
+          ]
+        },
+        "6/97": {
+          "1": [
+            "05:52",
+            "10:51"
+          ],
+          "2": [
+            "15:50",
+            "23:10"
+          ]
+        },
+        "13/97": {
+          "1": [
+            "04:50",
+            "11:51"
+          ],
+          "2": [
+            "14:20",
+            "21:55"
+          ]
+        },
+        "16/97": {
+          "1": [
+            "05:10",
+            "12:05"
+          ],
+          "2": [
+            "12:05",
+            "20:07"
           ]
         }
       },
@@ -22258,7 +22539,35 @@
           "1/508": "vatra",
           "2/508": "vatra",
           "3/508": "vatra",
-          "4/508": "vatra"
+          "4/508": "vatra",
+          "1/86": "bucurestii_noi",
+          "2/86": "bucurestii_noi",
+          "3/86": "bucurestii_noi",
+          "4/86": "bucurestii_noi",
+          "5/86": "bucurestii_noi",
+          "7/86": "bucurestii_noi",
+          "8/86": "bucurestii_noi",
+          "9/86": "bucurestii_noi",
+          "11/86": "bucurestii_noi",
+          "13/86": "bucurestii_noi",
+          "16/86": "bucurestii_noi",
+          "17/86": "bucurestii_noi",
+          "19/86": "bucurestii_noi",
+          "1/93": "bucurestii_noi",
+          "3/93": "bucurestii_noi",
+          "12/93": "bucurestii_noi",
+          "14/93": "bucurestii_noi",
+          "17/93": "bucurestii_noi",
+          "1/95": "bucurestii_noi",
+          "2/95": "bucurestii_noi",
+          "3/95": "bucurestii_noi",
+          "4/95": "bucurestii_noi",
+          "5/95": "bucurestii_noi",
+          "6/95": "bucurestii_noi",
+          "7/95": "bucurestii_noi",
+          "6/97": "bucurestii_noi",
+          "13/97": "bucurestii_noi",
+          "16/97": "bucurestii_noi"
         },
         "s": {
           "1/72": "berceni",
@@ -22941,7 +23250,8 @@
         "ferentari": "Ferentari",
         "berceni": "Berceni",
         "bujoreni": "Bujoreni",
-        "vatra": "Vatra Luminoasă"
+        "vatra": "Vatra Luminoasă",
+        "bucurestii_noi": "Bucureștii Noi"
       }
     }
   },
