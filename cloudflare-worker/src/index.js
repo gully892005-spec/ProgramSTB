@@ -1068,6 +1068,12 @@ export default {
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
+    if (url.pathname === '/blocat-disp') {                 // [2.9]
+      let r;
+      try { r = await blocatDisp(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
     if (url.pathname === '/cerere-admin' || url.pathname === '/cerere-stare') {
       let r;
       try { r = url.pathname === '/cerere-admin' ? await cerereAdmin(request, env) : await cerereStare(request, env); }
@@ -2531,7 +2537,9 @@ async function cerereAdmin(request, env) {
     const la = Object.values(disp).map(x => Number(x && x.la) || 0).filter(Boolean);
     info.telefoane = Object.keys(disp).length; info.locuri = locuri; info.din = la.length ? Math.min(...la) : 0;
   } else {
-    const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
+    let b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
+    // [2.9] telefonul poate fi blocat definitiv prin alt număr (cel blocat inițial)
+    if (!b) { const bt = await _dispBlocat(env, dev).catch(() => null); if (bt) { b = bt; info.nrBlocat = String(bt.nr); } }
     if (!b) return { status: 200, corp: { ok: true, aprobat: true } };
     info.motivBlocare = _txt(b.motiv, 120);
   }
@@ -2547,13 +2555,71 @@ async function cerereAdmin(request, env) {
   return { status: 200, corp: { ok: true } };
 }
 // Telefonul întreabă dacă s-a rezolvat (cât stă pe ecranul de așteptare).
+// ══════════════════════════════════════════════════════════════
+// [2.9] BLOCAREA DEFINITIVĂ PRINDE ȘI TELEFONUL
+// Blocarea era doar pe număr: cine băga alt număr intra din nou. Acum, la
+// blocarea definitivă, telefoanele numărului se notează în blocatiDisp/<amprentă>
+// (amprenta telefonului, nu codul lui — codul e ca o parolă). Un telefon notat e
+// blocat pe orice număr, cât timp numărul inițial e blocat definitiv: deblocarea
+// numărului (din orice loc) sau trecerea pe „număr greșit” îl eliberează singură.
+// ══════════════════════════════════════════════════════════════
+async function _dispAmprenta(dev) { return (await hashJeton('bloc:' + dev)).slice(0, 24); }
+async function _blocDispNoteaza(env, nr, devs) {
+  let n = 0;
+  for (const d of devs || []) {
+    const dev = String(d || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64); if (!dev) continue;
+    await _fbPut(env, `blocatiDisp/${await _dispAmprenta(dev)}`, { nr, la: Date.now() }).catch(() => {});
+    n++;
+  }
+  return n;
+}
+// Telefoanele înregistrate acum pe număr.
+async function _blocDispNumar(env, nr) {
+  const { disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
+  const n = await _blocDispNoteaza(env, nr, Object.keys(disp || {}));
+  if (n) await _fbPut(env, `blocati/${nr}/telefoane`, n).catch(() => {});
+  return n;
+}
+// Întoarce blocarea (cu numărul inițial) dacă telefonul e blocat definitiv; altfel null.
+async function _dispBlocat(env, dev) {
+  if (!dev) return null;
+  const h = await _dispAmprenta(dev);
+  const rec = await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`));
+  if (!rec || !rec.nr) return null;
+  const b = await getJSON(urlBroadcast(env, `blocati/${nrCurat(rec.nr)}.json`));
+  if (b && b.fel === 'definitiv') return Object.assign({}, b, { nr: String(rec.nr), prinTelefon: true });
+  await _fbPut(env, `blocatiDisp/${h}`, null).catch(() => {});      // numărul a fost deblocat între timp
+  return null;
+}
+async function blocatDisp(request, env) {
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!dev) return { status: 400, corp: { ok: false } };
+  try {
+    // Telefonul deschide aplicația cu un număr blocat definitiv: îl notăm și pe el.
+    if (nr) {
+      const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`));
+      if (b && b.fel === 'definitiv') {
+        const h = await _dispAmprenta(dev);
+        if (!(await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`)))) await _blocDispNoteaza(env, nr, [dev]);
+        return { status: 200, corp: { ok: true, blocat: Object.assign({}, b, { nr }) } };
+      }
+    }
+    return { status: 200, corp: { ok: true, blocat: await _dispBlocat(env, dev) } };
+  } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica.' } }; }
+}
+
 async function cerereStare(request, env) {
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
   const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
   if (!nr || !dev) return { status: 400, corp: { ok: false } };
   if (c.motiv === 'blocat') {
-    const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
-    return { status: 200, corp: { ok: true, aprobat: !b } };
+    // [2.9] o citire picată nu mai înseamnă „deblocat”; și telefonul trebuie să fie liber
+    try {
+      const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`));
+      const bt = await _dispBlocat(env, dev);
+      return { status: 200, corp: { ok: true, aprobat: !b && !bt } };
+    } catch (e) { return { status: 200, corp: { ok: true, aprobat: false } }; }
   }
   const { disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
   return { status: 200, corp: { ok: true, aprobat: !!disp[dev] } };
@@ -3483,6 +3549,7 @@ async function admin(request, env) {
         await _fbPut(env, `proprietar/${nr}`, nou);
       } else if (cerere.fa === 'deblocheaza') {
         await _fbPut(env, `blocati/${nr}`, null);
+        try { const bt = await _dispBlocat(env, dev); if (bt && bt.nr) await _fbPut(env, `blocati/${nrCurat(bt.nr)}`, null); } catch (e) {}   // [2.9]
       } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
       await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
       return { status: 200, corp: { ok: true, nr } };
@@ -3637,7 +3704,9 @@ async function admin(request, env) {
         const d = await r.text().catch(() => '');
         return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
       }
-      return { status: 200, corp: { ok: true, nr, inreg } };
+      let telefoane = 0;
+      if (inreg.fel === 'definitiv') telefoane = await _blocDispNumar(env, nr).catch(() => 0);   // [2.9]
+      return { status: 200, corp: { ok: true, nr, inreg, telefoane } };
     }
 
     // [2.1] Schimbă felul blocării fără să-l deblochezi.
@@ -3649,7 +3718,8 @@ async function admin(request, env) {
       const fel = cerere.fel === 'definitiv' ? 'definitiv' : 'numar';
       await _fbPut(env, `blocati/${nr}/fel`, fel);
       if (fel === 'definitiv') await _fbPut(env, `blocati/${nr}/cerere`, null).catch(() => {});
-      return { status: 200, corp: { ok: true, nr, fel } };
+      const telefoane = fel === 'definitiv' ? await _blocDispNumar(env, nr).catch(() => 0) : 0;   // [2.9]
+      return { status: 200, corp: { ok: true, nr, fel, telefoane } };
     }
 
     // [v11.19] Programele tuturor, pe scurt, pentru comparația cu repartizarea.
