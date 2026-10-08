@@ -269,6 +269,9 @@ function momentulZilei(dataISO, minute) {
 // poți urca worker-ul fără să blochezi nimic până schimbi regula.
 // ══════════════════════════════════════════════════════════════
 function urlBroadcast(env, cale) {
+  // [2.7] Nicio cale cu „..”, „#”, „\” sau „.”/„/” codate: fetch le-ar rezolva și ar
+  // scrie în alt loc din Firebase decât cel cerut (ex. adminJetoane).
+  if (/(^|\/)\.\.?(\/|$)|#|\\|%2e|%2f|%5c/i.test(String(cale).split('?')[0])) throw new Error('Cale nepermisă');
   const u = `${env.FB_URL}/${cale}`;
   return env.FB_SECRET ? `${u}?auth=${encodeURIComponent(env.FB_SECRET)}` : u;
 }
@@ -349,20 +352,26 @@ async function trimiteTure(env, toti, numere, now, vapid) {
     // alerta de tură, oricât de veche ar fi lista de ture. Așa nu mai ajunge
     // pe telefon tura rămasă în cloud de la alt depou sau de la un coleg.
     const ziAzi = Array.isArray(u.zile) ? u.zile.find(x => x && x.data === now.data) : null;
-    if (ziAzi && ziAzi.lucrata === false) return { sarit: 1 };
+    const aziLiber = !!(ziAzi && ziAzi.lucrata === false);
 
+    // [2.7] O tură care începe după miezul nopții (ex. 00:30, liniile de noapte)
+    // are alerta de „cu o oră înainte" în ziua de dinainte. Înainte nu pleca.
+    const maine = (() => { const [a, l, z] = now.data.split('-').map(Number); return new Date(Date.UTC(a, l - 1, z + 1)).toISOString().slice(0, 10); })();
     for (const t of u.ture) {
       if (!t || !t.data || !t.start) continue;
-      if (t.data !== now.data) continue;
+      if (t.data !== now.data && t.data !== maine) continue;
+      const peMaine = t.data === maine;
+      if (!peMaine && aziLiber) continue;
 
       const [h, m] = t.start.split(':').map(Number);
       if (isNaN(h) || isNaN(m)) continue;
+      if (peMaine && h * 60 + m >= 240) continue;     // doar turele de mâine dinainte de 04:00
 
       const timpi = Array.isArray(t.mins) && t.mins.length
         ? t.mins.map(Number).filter(x => x > 0)
         : [Number(t.minBefore) || 60];
 
-      const startMin = h * 60 + m;
+      const startMin = h * 60 + m + (peMaine ? 1440 : 0);
       let minBefore = null, tinta = null, marcaj = null;
 
       for (const cat of timpi) {
@@ -377,7 +386,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
       if (marcaj === null) continue;
 
       // s-a abonat după ce trecuse momentul reminderului
-      if (inainteDeAbonare(u, momentulZilei(t.data, tinta))) return { sarit: 1 };
+      if (inainteDeAbonare(u, momentulZilei(peMaine ? now.data : t.data, tinta))) return { sarit: 1 };
 
       // Timpul real rămas — poate diferi puțin de minBefore dacă a durat
       // câteva minute până la rulare.
@@ -1100,6 +1109,7 @@ export default {
     // manuală cere acum parola de admin: .../?cheie=PAROLA
     const cheie = url.searchParams.get('cheie') || '';
     if (!env.ADMIN_PASS || !paroleEgale(cheie, String(env.ADMIN_PASS))) {
+      if (cheie) await new Promise(r => setTimeout(r, 600));
       return new Response('Program STB · worker activ.\nRularea manuală: adaugă ?cheie=<parola de admin> la adresă.',
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
@@ -1155,7 +1165,7 @@ async function testPush(request, env) {
   // coleg al cărui număr de serviciu îl ghicea — iar numerele au patru-cinci
   // cifre. Nu e o rută publică, e o unealtă de diagnostic din panou, deci
   // cere parola sau jetonul, ca restul panoului.
-  if (!paroleEgale(String(c.parola || ''), String(env.ADMIN_PASS))) {
+  if (!env.ADMIN_PASS || !paroleEgale(String(c.parola || ''), String(env.ADMIN_PASS))) {
     let stareTP = c.jeton ? await jetonValid(env, String(c.jeton)) : 'nu';
     if (stareTP !== 'da' && codAdm2Curat(c.parola)) {
       const a = await _adm2DinCod(env, codAdm2Curat(c.parola));
@@ -1341,6 +1351,13 @@ async function backup(request, env) {
     await new Promise(r => setTimeout(r, 300));
     return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
   }
+  // [2.7] Citirea întregului backup și ștergerea lui cer telefon chiar înregistrat
+  // pe număr. Înainte, un număr fără niciun telefon (după „Resetează telefonul”
+  // din panou) putea fi citit sau șters de oricine îi știa numărul.
+  if ((c.actiune === 'citeste' || c.actiune === 'sterge') && !(await _dispInregistrat(env, nr, dev))) {
+    await new Promise(r => setTimeout(r, 300));
+    return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
+  }
 
   const cale = urlBroadcast(env, `backup/${nr}.json`);
 
@@ -1381,12 +1398,26 @@ async function backup(request, env) {
     catch (e) {
       return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi backupul existent. Reîncerc mai târziu.' } };
     }
+    // [2.7] Un pachet fără `data` ar fi înlocuit tot backupul.
+    if (vechiCitit && vechiCitit.data && (!c.backup.data || typeof c.backup.data !== 'object')) {
+      return { status: 400, corp: { ok: false, eroare: 'Salvare fără program — refuzată ca să nu șteargă ce e în cloud.' } };
+    }
+    // [2.7] Pachet uriaș = ceva nu e în regulă (și ar umple baza).
+    if (JSON.stringify(c.backup).length > 3000000) return { status: 413, corp: { ok: false, eroare: 'Backup prea mare.' } };
     try {
       const vechi = vechiCitit;
       vechiBackup = vechi;
       if (vechi && vechi.data && c.backup.data) {
         const dataNoua = Object.assign({}, vechi.data, c.backup.data);
         let pastrate = 0;
+        // [2.7] Telefonul a trimis pentru un depou ceva ce nu e program (null, gol,
+        // text stricat), dar în cloud e un program bun: îl păstrăm pe cel din cloud.
+        const _deScosAcum = Array.isArray(c.backup.stergeChei) ? c.backup.stergeChei : [];
+        for (const k of Object.keys(c.backup.data)) {
+          if (!k.startsWith('p2026_') || _deScosAcum.includes(k)) continue;
+          const nouOk = _bkZile(c.backup.data[k]), vechiOk = _bkZile(vechi.data[k]);
+          if (!nouOk && vechiOk) { dataNoua[k] = vechi.data[k]; pastrate++; }
+        }
 
         for (const k of Object.keys(vechi.data)) {
           if (!k.startsWith('p2026_')) continue;
@@ -1455,7 +1486,8 @@ async function backup(request, env) {
     if (deScris && deScris.stergeChei) delete deScris.stergeChei;
 
     // [2.5] Depourile șterse de admin nu se mai întorc în cloud.
-    const sterse = vechiBackup && vechiBackup.sterse && typeof vechiBackup.sterse === 'object' ? vechiBackup.sterse : null;
+    let sterse = vechiBackup && vechiBackup.sterse && typeof vechiBackup.sterse === 'object' ? vechiBackup.sterse : null;
+    if (sterse) { sterse = Object.fromEntries(Object.entries(sterse).filter(([, ts]) => Date.now() - Number(ts) <= 60 * 864e5)); if (!Object.keys(sterse).length) sterse = null; }
     if (deScris && deScris.sterse) { deScris = Object.assign({}, deScris); delete deScris.sterse; }
     if (sterse && deScris && deScris.data) {
       deScris = Object.assign({}, deScris, { data: Object.assign({}, deScris.data) });
@@ -1534,6 +1566,16 @@ async function _accesSolicitant(env, c) {
   return { cheie: _accesCheie('tel_' + dev), tip: 'dev', cine: dev, dev };
 }
 
+// [2.7] Cheia unei cereri de la un telefon fără număr conține identificatorul
+// telefonului (tel_<dev>) — adică exact ce dovedește „eu sunt telefonul ăsta”.
+// Omul căruia i se cere programul o primea în listă. Acum vede un alias.
+async function _accesAlias(cheie) { return cheie.startsWith('tel_') ? 'h_' + (await hashJeton('acc:' + cheie)).slice(0, 24) : cheie; }
+async function _accesDinAlias(env, nr, cheie) {
+  if (!cheie.startsWith('h_')) return cheie;
+  let d = null; try { d = await getJSON(urlBroadcast(env, `acces/${nr}.json`)); } catch (e) {}
+  for (const k of Object.keys(d || {})) if (await _accesAlias(k) === cheie) return k;
+  return null;
+}
 async function _accesStare(env, nrTinta, cheie) {
   try {
     const r = await fetch(urlBroadcast(env, `acces/${nrTinta}/${cheie}.json`),
@@ -1579,6 +1621,7 @@ async function acces(request, env) {
   if (c.actiune === 'cere') {
     const tinta = nrCurat(c.nr);
     if (!tinta) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul' } };
+    if (!(await _limitaZi(env, 'acces-ip', _ipCheie(request), 30))) return { status: 429, corp: { ok: false, eroare: 'Prea multe cereri azi. Mai încearcă mâine.' } };
 
     const s = await _accesSolicitant(env, c);
     if (!s) return { status: 400, corp: { ok: false, eroare: 'Nu te pot identifica' } };
@@ -1645,7 +1688,13 @@ async function acces(request, env) {
     try {
       const r = await fetch(urlBroadcast(env, `acces/${nr}.json`), { headers: { 'Cache-Control': 'no-cache' } });
       const d = r.ok ? (await r.json()) : null;
-      const lista = Object.entries(d || {}).map(([cheie, v]) => Object.assign({ cheie }, v));
+      const lista = [];
+      for (const [cheie, v] of Object.entries(d || {})) {
+        const x = Object.assign({}, v, { cheie: await _accesAlias(cheie) });
+        delete x.dev;
+        if (x.tip === 'dev') x.cine = '';
+        lista.push(x);
+      }
       return { status: 200, corp: { ok: true,
         asteapta: lista.filter(x => x.stare === 'asteapta').sort((a, b) => (b.creat || 0) - (a.creat || 0)),
         permise:  lista.filter(x => x.stare === 'da').sort((a, b) => (b.raspuns || 0) - (a.raspuns || 0)) } };
@@ -1657,12 +1706,14 @@ async function acces(request, env) {
   // ── Răspund: da sau nu ────────────────────────────────────────────
   if (c.actiune === 'raspunde') {
     const nr = nrCurat(c.nr);
-    const cheie = _accesCheie(c.cheie);
+    let cheie = _accesCheie(c.cheie);
     const da = c.raspuns === 'da';
     if (!nr || !cheie) return { status: 400, corp: { ok: false, eroare: 'Cerere incompletă' } };
     if (!(await _telefonulAreVoie(env, nr, dev))) {
       return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
     }
+    cheie = await _accesDinAlias(env, nr, cheie);
+    if (!cheie) return { status: 404, corp: { ok: false, eroare: 'Cererea nu mai există' } };
     const vechi = await _accesStare(env, nr, cheie);
     if (!vechi) return { status: 404, corp: { ok: false, eroare: 'Cererea nu mai există' } };
     const w = await fetch(urlBroadcast(env, `acces/${nr}/${cheie}.json`), {
@@ -1680,11 +1731,13 @@ async function acces(request, env) {
   // ── Tai accesul cuiva ─────────────────────────────────────────────
   if (c.actiune === 'taie') {
     const nr = nrCurat(c.nr);
-    const cheie = _accesCheie(c.cheie);
+    let cheie = _accesCheie(c.cheie);
     if (!nr || !cheie) return { status: 400, corp: { ok: false, eroare: 'Cerere incompletă' } };
     if (!(await _telefonulAreVoie(env, nr, dev))) {
       return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
     }
+    cheie = await _accesDinAlias(env, nr, cheie);
+    if (!cheie) return { status: 404, corp: { ok: false, eroare: 'Cererea nu mai există' } };
     const cui = await _accesStare(env, nr, cheie);
     const w = await fetch(urlBroadcast(env, `acces/${nr}/${cheie}.json`), { method: 'DELETE' });
     if (!w.ok) return { status: 502, corp: { ok: false, eroare: 'Nu am putut tăia accesul' } };
@@ -2002,7 +2055,7 @@ async function indicatoriActiune(env, cerere, cine) {
     if (cine.rep && !cine.rep.depouri.includes(dep)) return { status: 403, corp: { ok: false, eroare: 'Poți modifica doar indicatorii depoului tău.' } };
     const v = String(cerere.valabilDin || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return { status: 400, corp: { ok: false, eroare: 'Alege data de la care intră în vigoare.' } };
-    const azi = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+    const azi = acumRo().data;
     if (cine.rep && v < azi) return { status: 400, corp: { ok: false, eroare: 'Data nu poate fi în trecut.' } };
     const tip = (dep === 'autobuze' || dep === 'troleibuze') ? 'ore' : 'tram';
     // [v11.31] la Autobuze, modificarea e a unei autobaze; responsabilul doar a lui
@@ -2169,7 +2222,7 @@ async function _repAmintireAutomata(env, log) {
 // [1.2] BANDA DE AVERTIZARE · ORE GREȘITE · FOI TRIMISE DE COLEGI · COLEGI NOI
 // ══════════════════════════════════════════════════════════════
 const _id12 = () => Date.now().toString(36) + [...crypto.getRandomValues(new Uint8Array(5))].map(x => (x % 36).toString(36)).join('');
-const _aziRo = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+const _aziRo = () => acumRo().data;   // [2.7] fusul orar real (vara +3, iarna +2)
 const _txt = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
 async function _fbPut(env, cale, v) {
   const r = await fetch(urlBroadcast(env, cale + '.json'), { method: v === null ? 'DELETE' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: v === null ? undefined : JSON.stringify(v) });
@@ -2209,9 +2262,9 @@ async function raportOre(request, env) {
   const ora = v => /^\d{1,2}:\d{2}$/.test(String(v || '')) ? String(v).padStart(5, '0') : '';
   const r = {
     nr, la: Date.now(),
-    dep: DEPOURI.includes(c.dep) ? c.dep : _txt(c.dep, 30).replace(/[.$#\[\]\/]/g, ''),
+    dep: DEPOURI.includes(c.dep) ? c.dep : '',      // [2.7] doar depourile cunoscute (textul ajungea în panou)
     baza: _txt(c.baza, 20).replace(/[^a-z0-9_-]/gi, ''),
-    linie: _txt(c.linie, 10), tur: _txt(c.tur, 10), sch: ['1', '2', '0'].includes(String(c.sch)) ? String(c.sch) : '',
+    linie: _txt(c.linie, 10).replace(/[^0-9A-Za-z]/g, ''), tur: _txt(c.tur, 10).replace(/[^0-9A-Za-z]/g, ''), sch: ['1', '2', '0'].includes(String(c.sch)) ? String(c.sch) : '',
     data: /^\d{4}-\d{2}-\d{2}$/.test(c.data || '') ? c.data : '',
     i: ora(c.i), r: ora(c.r), iApp: ora(c.iApp), rApp: ora(c.rApp), obs: _txt(c.obs, 300)
   };
@@ -2352,6 +2405,9 @@ async function _curataTrimiteri(env, log) {
 // [1.6] ERORI RAPORTATE · SCRIE-I ADMINULUI · DATELE MELE · ȘTERGERE DUPĂ 6 LUNI
 // ══════════════════════════════════════════════════════════════
 const ERORI_NORMALE = /Failed to fetch|NetworkError|Load failed|AbortError|aborted|timeout|network connection was lost|Internet|offline|ERR_INTERNET|QuotaExceeded/i;
+// [2.7] Limită pe zi și pe rețea (IP-ul nu se păstrează — doar o amprentă scurtă).
+// Limitele pe telefon se ocoleau schimbând identificatorul trimis.
+function _ipCheie(request) { return 'i' + _hashScurt(String(request.headers.get('CF-Connecting-IP') || 'necunoscut')); }
 function _hashScurt(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return h.toString(36); }
 async function raportEroare(request, env) {
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
@@ -2359,6 +2415,7 @@ async function raportEroare(request, env) {
   if (!msg || /^Script error\.?$/i.test(msg)) return { status: 200, corp: { ok: true, sarit: true } };
   const dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64) || 'anonim';
   if (!(await _limitaZi(env, 'eroare', dev.slice(0, 40), 30))) return { status: 200, corp: { ok: true, sarit: true } };
+  if (!(await _limitaZi(env, 'eroare-ip', _ipCheie(request), 60))) return { status: 200, corp: { ok: true, sarit: true } };
   const cheie = 'e' + _hashScurt(msg.replace(/\d+/g, '#').slice(0, 160) + '|' + src);
   const cale = `erori/${cheie}`;
   let e = null; try { e = await getJSON(urlBroadcast(env, cale + '.json')); } catch (x) {}
@@ -2432,13 +2489,22 @@ async function _sterge6Luni(env, log) {
   try {
     if ((await getJSON(urlBroadcast(env, 'config/sterse6luni.json'))) === azi) return;
     const prag = Date.now() - 182 * 864e5;
-    const [st, bk] = await Promise.all([getJSON(urlBroadcast(env, 'stats.json')).catch(() => null), getJSON(urlBroadcast(env, 'backup.json')).catch(() => null)]);
+    // [2.7] Dacă vreuna din citiri eșuează, NU ștergem nimic azi: înainte o
+    // citire picată lăsa decizia doar pe cealaltă sursă și putea șterge oameni activi.
+    const [st, bk, pr] = await Promise.all([getJSON(urlBroadcast(env, 'stats.json')), getJSON(urlBroadcast(env, 'backup.json')), getJSON(urlBroadcast(env, 'proprietar.json'))]);
+    if (!st || !bk) { log('Ștergere 6 luni: date incomplete, sar azi'); return; }
+    const timp = v => { if (v == null || v === '') return 0; const n = Number(v); if (Number.isFinite(n) && n > 0) return n < 1e12 ? n * 1000 : n; const t = Date.parse(v); return Number.isFinite(t) ? t : 0; };
     const ultim = {};
-    for (const [nr, x] of Object.entries(st || {})) { const t = x && x.ultimaVizita ? Date.parse(x.ultimaVizita) : 0; ultim[nr] = Math.max(ultim[nr] || 0, t || 0); }
-    for (const [nr, x] of Object.entries(bk || {})) { ultim[nr] = Math.max(ultim[nr] || 0, Number(x && x.ts) || 0); }
+    const pune = (nr, t) => { ultim[nr] = Math.max(ultim[nr] || 0, t || 0); };
+    for (const [nr, x] of Object.entries(st || {})) pune(nr, timp(x && x.ultimaVizita));
+    for (const [nr, x] of Object.entries(bk || {})) { pune(nr, timp(x && x.ts)); pune(nr, timp(x && (x.updated || x.updat))); }
+    for (const [nr, x] of Object.entries(pr || {})) { const { disp } = _normalizeaza(x); for (const d of Object.values(disp || {})) pune(nr, timp(d && (d.ultima || d.la))); }
     const vechi = Object.entries(ultim).filter(([nr, t]) => t && t < prag).map(([nr]) => nr);
     for (const nr of vechi.slice(0, 3)) await _stergeNr(env, nr);
-    if (vechi.length <= 3) await _fbPut(env, 'config/sterse6luni', azi).catch(() => {});
+    // [2.7] cel mult 3 pe rulare și cel mult 30 pe zi
+    const cate = Number(await getJSON(urlBroadcast(env, `limite/sterse6luni/${azi}.json`)).catch(() => 0)) || 0;
+    await _fbPut(env, `limite/sterse6luni/${azi}`, cate + Math.min(3, vechi.length)).catch(() => {});
+    if (vechi.length <= 3 || cate + 3 >= 30) await _fbPut(env, 'config/sterse6luni', azi).catch(() => {});
     if (vechi.length) log(`6 luni fără activitate: șterse ${Math.min(3, vechi.length)} (${vechi.slice(0, 3).join(', ')})`);
   } catch (e) { log('Ștergere 6 luni: ' + e.message); }
 }
@@ -2456,6 +2522,7 @@ async function cerereAdmin(request, env) {
   const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
   const motiv = ['ocupat', 'blocat'].includes(c.motiv) ? c.motiv : '';
   if (!nr || !dev || !motiv) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
+  if (!(await _limitaZi(env, 'cerere-ip', _ipCheie(request), 20))) return { status: 429, corp: { ok: false, eroare: 'Prea multe cereri azi. Așteaptă răspunsul adminului.' } };
   if (!(await _limitaZi(env, 'cerere', dev.slice(0, 40), 6))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja mai multe cereri azi. Așteaptă răspunsul adminului.' } };
   const info = {};
   if (motiv === 'ocupat') {
@@ -2514,6 +2581,7 @@ async function _anuntaAdminii(env, titlu, text, tag) {
 
 async function numarNou(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  if (!(await _limitaZi(env, 'numarnou-ip', _ipCheie(request), 20))) return { status: 429, corp: { ok: false, eroare: 'Prea multe încercări azi.' } };
   let c;
   try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
   const nr  = nrCurat(c.nr);
@@ -2547,7 +2615,7 @@ async function numarNou(request, env) {
   try { bNou = await getJSON(urlBroadcast(env, `blocati/${nou}.json`)); } catch (e) {}
   if (bNou) return { status: 200, corp: { ok: false, eroare: `Și ${nou} e blocat.` } };
   let prop = null;
-  try { prop = await getJSON(urlBroadcast(env, `proprietar/${nou}.json`)); } catch (e) {}
+  try { prop = await getJSON(urlBroadcast(env, `proprietar/${nou}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
   const { locuri, disp } = _normalizeaza(prop);
   if (!disp[dev] && Object.keys(disp).length >= locuri && Object.keys(disp).length > 0) {
     return { status: 200, corp: { ok: false, stare: 'ocupat', eroare: `${nou} e deja folosit pe alt telefon.` } };
@@ -2720,7 +2788,7 @@ function _bkLucru(depouri, marcat, peFoaie) {
   return { lucru: D.sort((a, b) => b[1].zile - a[1].zile)[0][0], motiv: 'zile' };
 }
 // Numerele de pe repartizările urcate, luna asta și luna trecută: { depou: Set(nr) }.
-async function _repNumere(env) {
+async function _repNumere(env, strict) {
   const a = acumRo().data; const [an, lu] = a.split('-').map(Number);
   const luni = [`${an}-${String(lu).padStart(2, '0')}`, lu === 1 ? `${an - 1}-12` : `${an}-${String(lu - 1).padStart(2, '0')}`];
   const out = {};
@@ -2729,7 +2797,7 @@ async function _repNumere(env) {
       const u = urlBroadcast(env, `repartizare/${dep}/${l}/lunara.json`);
       const k = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true');
       if (k && typeof k === 'object') { out[dep] = out[dep] || new Set(); Object.keys(k).forEach(n => out[dep].add(n)); }
-    } catch (e) {}
+    } catch (e) { if (strict) throw e; }
   })));
   return out;
 }
@@ -2769,7 +2837,7 @@ function _bkECopie(oA, oB) {
 function _bkECopieDe(A, dep, Y) {
   const a = A.obiecte[dep], y = Y.obiecte[dep];
   if (!a || !y || !Y.depouri[dep] || !A.depouri[dep]) return false;
-  if (!(Y.marcat === dep || Y.depouri[dep].zile > A.depouri[dep].zile)) return false;
+  if (A.marcat === dep ? !(Y.depouri[dep].zile > A.depouri[dep].zile) : !(Y.marcat === dep || Y.depouri[dep].zile > A.depouri[dep].zile)) return false;
   return _bkECopie(a, y);
 }
 // Depoul unde lucrează, fără depourile care sunt copia programului altcuiva.
@@ -2781,8 +2849,8 @@ function _bkFinal(p, copii) {
   return p;
 }
 // Analiza completă pentru un singur om: repartizarea + copiile din programele colegilor.
-async function _bkAnaliza(env, nr, bOpt) {
-  const [tot, R] = await Promise.all([getJSON(urlBroadcast(env, 'backup.json')).catch(() => null), _repNumere(env).catch(() => ({}))]);
+async function _bkAnaliza(env, nr, bOpt, strict) {
+  const [tot, R] = await Promise.all([getJSON(urlBroadcast(env, 'backup.json')).catch(e => { if (strict) throw e; return null; }), _repNumere(env, strict).catch(e => { if (strict) throw e; return {}; })]);
   const b = bOpt || (tot && tot[nr]);
   const p = _bkProgram(b, _peFoaie(R, nr));
   const copii = {};
@@ -2810,6 +2878,7 @@ function _bkAplicaSterse(data, sterse) {
   let scoase = 0;
   for (const [dep, ts] of Object.entries(sterse || {})) {
     if (!DEPOURI.includes(dep)) continue;
+    if (Date.now() - Number(ts) > 60 * 864e5) continue;      // [2.7] după 60 de zile nu mai aplicăm ștergerea
     const k = 'p2026_' + dep;
     if (data[k] == null) continue;
     const o = _bkZile(data[k]); if (!o) continue;
@@ -2909,10 +2978,11 @@ const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista
   'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine']);
 // Doar adminul principal.
-const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal']);
+const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
 // Acțiuni care nu se pot face pe numărul unui admin.
 const ADM2_PROTEJAT = new Set(['blocheaza', 'blocareFel', 'stergeUtilizator', 'reseteazaDispozitiv', 'stergeDispozitiv',
-  'scoateLoc', 'readuBackup', 'recupereaza', 'pushStergeNr', 'stergeDepouDinBackup']);
+  'scoateLoc', 'readuBackup', 'recupereaza', 'pushStergeNr', 'stergeDepouDinBackup',
+  'adaugaLoc', 'aprobaNumar', 'respingeNumar', 'propuneNumar', 'adminNotif', 'cerereRezolva', 'fisa', 'dispozitive', 'programBrut', 'testPush']);
 
 async function admin(request, env) {
   if (request.method !== 'POST') {
@@ -3030,7 +3100,12 @@ async function admin(request, env) {
     if (o.fortat && a === 'versiuneMinima')
       return { status: 403, corp: { ok: false, eroare: 'Actualizarea obligatorie e oprită pentru tine.' } };
     if (ADM2_PROTEJAT.has(a)) {
-      const tinta = nrCurat(cerere.nr);
+      let tinta = nrCurat(cerere.nr);
+      if (a === 'cerereRezolva') {          // numărul e în cerere, nu în ce trimite panoul
+        const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+        const m = id ? await getJSON(urlBroadcast(env, `mesajeAdmin/${id}.json`)).catch(() => null) : null;
+        tinta = m ? nrCurat(m.nr) : null;
+      }
       let principal = null;
       try { principal = await getJSON(urlBroadcast(env, 'config/adminPrincipal.json')); } catch (e) {}
       const toti = await _adm2Toti(env).catch(() => ({}));
@@ -3053,6 +3128,8 @@ async function admin(request, env) {
         }
         return { status: 200, corp: { ok: true, rol: 'admin2', nr: adm2.nr, opriri: adm2.opriri } };
       }
+      const eu = nrCurat(cerere.eu);
+      if (eu && (cuParola || cuJeton)) await _fbPut(env, 'config/adminPrincipal', eu).catch(() => {});
       return { status: 200, corp: { ok: true, rol: 'admin' } };
     }
 
@@ -3094,7 +3171,9 @@ async function admin(request, env) {
       try { b = await getJSON(urlBroadcast(env, `backup/${nr}.json`)); }
       catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu am putut citi programul lui.' } }; }
       if (!b || !b.data) return { status: 404, corp: { ok: false, eroare: 'N-are program în cloud.' } };
-      const p = await _bkAnaliza(env, nr, b);
+      let p;
+      try { p = await _bkAnaliza(env, nr, b, true); }
+      catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut verifica repartizarea și programele colegilor. Încearcă din nou.' } }; }
       const vrea = (Array.isArray(cerere.deps) ? cerere.deps : [cerere.dep]).map(x => String(x || '').toLowerCase()).filter(x => DEPOURI.includes(x));
       const deps = vrea.filter(d => d !== p.lucru && !p.peFoaie.includes(d));
       if (!deps.length) return { status: 400, corp: { ok: false, eroare: vrea.length ? 'Ăsta e depoul unde lucrează (sau e pe repartizarea lui) — nu se șterge.' : 'Alege depoul.' } };
@@ -3396,7 +3475,8 @@ async function admin(request, env) {
       if (!m || !m.cerere) return { status: 404, corp: { ok: false, eroare: 'Cererea nu mai există.' } };
       const nr = nrCurat(m.nr), dev = String(m.dev || ''), acum = Date.now();
       if (cerere.fa === 'muta' || cerere.fa === 'adauga') {
-        const { locuri, disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
+        let _pr; try { _pr = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
+        const { locuri, disp } = _normalizeaza(_pr);
         const nou = cerere.fa === 'muta'
           ? { locuri: 1, disp: { [dev]: { la: acum, ultima: acum } } }
           : { locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length + 1)), disp: Object.assign({}, disp, { [dev]: { la: acum, ultima: acum } }) };
@@ -3681,7 +3761,7 @@ async function admin(request, env) {
       const nou = nrCurat(b.cerere.nr), dev = String(b.cerere.dev || '');
       // Îi facem loc pe numărul nou chiar acum, ca telefonul să nu dea de „număr deja folosit".
       let prop = null;
-      try { prop = await getJSON(urlBroadcast(env, `proprietar/${nou}.json`)); } catch (e) {}
+      try { prop = await getJSON(urlBroadcast(env, `proprietar/${nou}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
       const { locuri, disp } = _normalizeaza(prop);
       if (!disp[dev]) {
         if (Object.keys(disp).length >= locuri && Object.keys(disp).length > 0) {
@@ -3748,6 +3828,10 @@ async function admin(request, env) {
       // unice, deci foile nu se calcă. Cine e deja acolo rămâne.
       // Cu `inlocuieste: true` se șterge întâi tot, pentru cazul în care o foaie
       // a fost urcată greșit și trebuie refăcută luna de la zero.
+      // [2.7] „Șterge întâi tot” cu o foaie goală ar fi golit luna pentru toți.
+      if (cerere.inlocuieste === true && !Object.keys(lunara).length) {
+        return { status: 400, corp: { ok: false, eroare: 'Foaia nu are niciun coleg — nu șterg luna.' } };
+      }
       if (cerere.inlocuieste === true) {
         const rDel = await fetch(urlBroadcast(env, `${baza}.json`), { method: 'DELETE' });
         if (!rDel.ok) {
@@ -3776,6 +3860,7 @@ async function admin(request, env) {
         // Zilnica e pe zile, iar o zi urcată din nou trebuie să o înlocuiască
         // pe cea veche, nu să se amestece cu ea: PATCH pe fiecare zi în parte.
         for (const zi of Object.keys(zilnica)) {
+          if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(zi)) continue;      // [2.7] doar date, altfel cheia ar putea ieși din /repartizare
           await scrie(`${baza}/zilnica/${zi}`, obj(zilnica[zi]), 'PATCH');
         }
       } catch (e) {
@@ -3958,20 +4043,21 @@ async function admin(request, env) {
     // ca readucerea să poată fi și ea anulată.
     case 'readuBackup': {
       const nr = nrCurat(cerere.nr);
-      const zi = String(cerere.zi || '').replace(/[^0-9-]/g, '').slice(0, 10);
-      if (!nr || !zi) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul sau ziua' } };
+      // [2.7] și copiile „…-inainte” (făcute înaintea unei readuceri) se pot readuce
+      const zi = String(cerere.zi || '').trim();
+      if (!nr || !/^\d{4}-\d{2}-\d{2}(-inainte(-\d+)?)?$/.test(zi)) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul sau ziua' } };
       let copie = null;
       try { copie = await getJSON(urlBroadcast(env, `backupIstoric/${nr}/${zi}.json`)); } catch (e) {}
       if (!copie || !copie.data) return { status: 404, corp: { ok: false, eroare: 'Nu există copia din ' + zi } };
       try {
         const acum = await getJSON(urlBroadcast(env, `backup/${nr}.json`));
         if (acum && acum.data) {
-          await fetch(urlBroadcast(env, `backupIstoric/${nr}/${acumRo().data}-inainte.json`), {
+          await fetch(urlBroadcast(env, `backupIstoric/${nr}/${acumRo().data}-inainte-${Date.now() % 100000}.json`), {
             method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(Object.assign({}, acum, { copiatLa: Date.now() }))
           });
         }
-      } catch (e) {}
+      } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut face copia de siguranță înainte. Încearcă din nou.' } }; }
       const nou = Object.assign({}, copie, { ts: Date.now(), dev: 'admin-readucere', updated: new Date().toISOString() });
       delete nou.copiatLa;
       // [v4.7] Zilele readuse primesc ora de acum: la îmbinarea cu un telefon
@@ -4013,7 +4099,7 @@ async function admin(request, env) {
       if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
 
       let brut = null;
-      try { brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) {}
+      try { brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
       const { locuri, disp } = _normalizeaza(brut);
       const noiLocuri = Math.min(5, locuri + 1);
 
@@ -4035,7 +4121,7 @@ async function admin(request, env) {
       if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
 
       let brut = null;
-      try { brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) {}
+      try { brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
       const { locuri, disp } = _normalizeaza(brut);
       const ocupate = Object.keys(disp).length;
       const noiLocuri = Math.max(1, ocupate, locuri - 1);
@@ -4057,7 +4143,7 @@ async function admin(request, env) {
       const nr = nrCurat(cerere.nr);
       if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
       let brut = null;
-      try { brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) {}
+      try { brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
       const { locuri, disp } = _normalizeaza(brut);
       return { status: 200, corp: { ok: true, nr, locuri, disp } };
     }
@@ -4108,6 +4194,13 @@ async function admin(request, env) {
 
       vechi.ts = Date.now();
       vechi.recuperatDin = data;
+      // [2.7] Ca la „readuBackup”: zilele readuse primesc ora de acum, altfel
+      // telefonul cu versiunea stricată le-ar pune la loc peste ele la prima salvare.
+      const acumR = Date.now();
+      for (const [k, v] of Object.entries(vechi.data || {})) {
+        if (!k.startsWith('p2026_') || typeof v !== 'string' || !v.startsWith('{')) continue;
+        try { const o = JSON.parse(v); for (const z of Object.values(o)) if (z && typeof z === 'object') z._m = acumR; vechi.data[k] = JSON.stringify(o); } catch (e) {}
+      }
       const w = await fetch(urlBroadcast(env, `backup/${nr}.json`), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vechi)
@@ -4151,20 +4244,21 @@ async function admin(request, env) {
       for (const [nr, u] of Object.entries(tot || {})) {
         if (doarNr && String(nr) !== String(doarNr)) continue;
         const subs = (u && u.subs && typeof u.subs === 'object') ? u.subs : {};
-        const id = Object.keys(subs);
-        // forma veche, fără id: se șterge mereu, e dublura sigură
-        if (u && u.sub) {
+        const id = Object.keys(subs).filter(k => subs[k]);
+        const inainte = sterse;
+        // forma veche, fără id: [2.7] se șterge doar dacă omul are și abonamente noi
+        if (u && u.sub && id.length) {
           await fetch(urlBroadcast(env, `push/${nr}/sub.json`), { method: 'DELETE' }).catch(() => {});
           sterse++;
         }
         if (id.length > 1) {
-          id.sort((a, b) => (Number(subs[b].updat) || 0) - (Number(subs[a].updat) || 0));
+          id.sort((a, b) => (Number(subs[b] && subs[b].updat) || 0) - (Number(subs[a] && subs[a].updat) || 0));
           for (const vechi of id.slice(1)) {
             await fetch(urlBroadcast(env, `push/${nr}/subs/${vechi}.json`), { method: 'DELETE' }).catch(() => {});
             sterse++;
           }
         }
-        if (sterse) atinse++;
+        if (sterse > inainte) atinse++;
       }
       return { status: 200, corp: { ok: true, sterse, numere: atinse } };
     }
