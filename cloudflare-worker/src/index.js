@@ -1454,6 +1454,15 @@ async function backup(request, env) {
     } catch (e) { /* dacă nu putem citi ce era, scriem ca înainte */ }
     if (deScris && deScris.stergeChei) delete deScris.stergeChei;
 
+    // [2.5] Depourile șterse de admin nu se mai întorc în cloud.
+    const sterse = vechiBackup && vechiBackup.sterse && typeof vechiBackup.sterse === 'object' ? vechiBackup.sterse : null;
+    if (deScris && deScris.sterse) { deScris = Object.assign({}, deScris); delete deScris.sterse; }
+    if (sterse && deScris && deScris.data) {
+      deScris = Object.assign({}, deScris, { data: Object.assign({}, deScris.data) });
+      if (_bkAplicaSterse(deScris.data, sterse)) _bkRecalc(deScris);
+      deScris.sterse = sterse;
+    }
+
     // [W-copii] O copie pe zi a backupului, înainte de prima scriere a zilei.
     // Se păstrează ultimele 7 zile, în /backupIstoric/<nr>/<AAAA-LL-ZZ>.
     // Dacă programul cuiva se strică, adminul îl readuce la ziua de ieri.
@@ -1470,7 +1479,8 @@ async function backup(request, env) {
       return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
     }
     return { status: 200, corp: { ok: true,
-      zile: deScris.zile, pastrate: deScris.pastrateDinCloud || 0, acum: Date.now() } };
+      zile: deScris.zile, pastrate: deScris.pastrateDinCloud || 0, acum: Date.now(),
+      ...(sterse ? { curata: sterse } : {}) } };
   }
 
   if (c.actiune === 'sterge') {
@@ -2665,6 +2675,98 @@ async function jetonValid(env, jeton, out) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// [2.5] ZILE PE ALTE DEPOURI
+// Telefonul ține programul fiecărui depou pe care s-a completat ceva: teste,
+// depou schimbat, programe de colegi aduse cu versiuni vechi. Adminul le poate
+// șterge. Ștergerea se ține minte în backup/<nr>/sterse/<depou> = momentul ei:
+// la fiecare salvare a telefonului, zilele mai vechi de momentul ăla nu mai
+// intră în cloud, iar telefonul primește `curata` și le șterge și el.
+// Zilele completate DUPĂ ștergere (ex. s-a mutat chiar acolo) rămân.
+// ══════════════════════════════════════════════════════════════
+function _bkZile(v) {
+  if (!v) return null;
+  let o; try { o = typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { return null; }
+  return o && typeof o === 'object' ? o : null;
+}
+function _bkIso(k) { const p = String(k).split('-').map(Number); return p.length === 3 && p[0] ? `${p[0]}-${String(p[1]).padStart(2, '0')}-${String(p[2]).padStart(2, '0')}` : ''; }
+function _bkRezumat(o) {
+  const x = { zile: 0, prima: null, ultima: null, luni: {} };
+  for (const [zi, v] of Object.entries(o || {})) {
+    if (!v || typeof v !== 'object' || !v.t || v.t === 'gol') continue;
+    const z = _bkIso(zi); if (!z) continue;
+    x.zile++;
+    const l = z.slice(0, 7); x.luni[l] = (x.luni[l] || 0) + 1;
+    if (!x.prima || z < x.prima) x.prima = z;
+    if (!x.ultima || z > x.ultima) x.ultima = z;
+  }
+  return x;
+}
+// Programul pe depouri + depoul unde lucrează (aceeași regulă ca în fișă).
+function _bkProgram(b) {
+  const d = (b && b.data) || {};
+  const obiecte = {}, depouri = {};
+  for (const dep of DEPOURI) {
+    const o = _bkZile(d['p2026_' + dep]); if (!o) continue;
+    const x = _bkRezumat(o);
+    if (x.zile) { obiecte[dep] = o; depouri[dep] = x; }
+  }
+  let lucru = null;
+  const marcat = b && (b.depotLucru || b.depotPropriu);
+  if (marcat && depouri[marcat]) lucru = marcat;
+  else {
+    const prag = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 7);
+    let bestN = -1;
+    for (const [dep, x] of Object.entries(depouri)) {
+      const n = Object.entries(x.luni).filter(([l]) => l >= prag).reduce((a, [, v]) => a + v, 0);
+      if (n > bestN) { lucru = dep; bestN = n; }
+    }
+  }
+  return { obiecte, depouri, lucru, marcat: marcat || null };
+}
+// Semnătura unei zile lucrate (tur/linie/oră); liberele și CO nu contează la „copie".
+function _bkSemn(v) {
+  if (!v || typeof v !== 'object' || !['zl', 'we', 'sarb'].includes(v.t)) return null;
+  const m = v._manual || {};
+  if (!v.r && !m.tur && !m.linie) return null;
+  return [v.r || '', m.tur || '', m.linie || '', m.i || '', v.s || ''].join('|');
+}
+// A e copia lui B dacă cel puțin 80% din zilele lucrate ale lui A (minim 5) sunt identice în B.
+function _bkECopie(oA, oB) {
+  let n = 0, egal = 0;
+  for (const [zi, v] of Object.entries(oA || {})) {
+    const sa = _bkSemn(v); if (!sa) continue;
+    n++;
+    if (oB && _bkSemn(oB[zi]) === sa) egal++;
+  }
+  return n >= 5 && egal >= 0.8 * n;
+}
+function _bkRecalc(b) {
+  let zile = 0;
+  for (const v of Object.values(b.data || {})) {
+    if (typeof v !== 'string' || !v.startsWith('{')) continue;
+    try { zile += Object.keys(JSON.parse(v)).length; } catch (e) {}
+  }
+  b.zile = zile;
+  if (Array.isArray(b.depots)) b.depots = b.depots.filter(d => b.data['p2026_' + d]);
+}
+// Scoate din `data` zilele depourilor șterse de admin, mai vechi de momentul ștergerii.
+function _bkAplicaSterse(data, sterse) {
+  let scoase = 0;
+  for (const [dep, ts] of Object.entries(sterse || {})) {
+    if (!DEPOURI.includes(dep)) continue;
+    const k = 'p2026_' + dep;
+    if (data[k] == null) continue;
+    const o = _bkZile(data[k]); if (!o) continue;
+    for (const zi of Object.keys(o)) {
+      const z = o[zi];
+      if (!(z && typeof z === 'object' && Number(z._m) > Number(ts))) { delete o[zi]; scoase++; }
+    }
+    if (Object.keys(o).length) data[k] = JSON.stringify(o); else delete data[k];
+  }
+  return scoase;
+}
+
+// ══════════════════════════════════════════════════════════════
 // [2.3] ADMIN 2 — un coleg cu acces la tot panoul, cu codul LUI (nu parola).
 //
 // Codul (9 caractere, ex. K7M-42Q-9XD) e făcut de worker și se arată o singură
@@ -2737,6 +2839,7 @@ function _adm2Detaliu(c) {
     case 'bandaSeteaza': return c.banda ? _txt(c.banda.text, 80) : 'oprită';
     case 'versiuneMinima': return c.min == null || c.min === '' ? 'oprită' : String(c.min);
     case 'cerereRezolva': return String(c.fa || '');
+    case 'stergeDepouDinBackup': return (Array.isArray(c.deps) ? c.deps : [c.dep]).join(', ');
     case 'anunt': case 'anuntEcran': return _txt(c.titlu || c.text || c.mesaj, 80);
     case 'mesajAdminCitit': return c.raspuns ? 'răspuns' : '';
     case 'indicatoriPropune': case 'indicatoriAproba': case 'indicatoriRespinge': case 'indicatoriAnuleaza':
@@ -2748,12 +2851,12 @@ function _adm2Detaliu(c) {
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista',
   'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
-  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati']);
+  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal']);
 // Acțiuni care nu se pot face pe numărul unui admin.
 const ADM2_PROTEJAT = new Set(['blocheaza', 'blocareFel', 'stergeUtilizator', 'reseteazaDispozitiv', 'stergeDispozitiv',
-  'scoateLoc', 'readuBackup', 'recupereaza', 'pushStergeNr']);
+  'scoateLoc', 'readuBackup', 'recupereaza', 'pushStergeNr', 'stergeDepouDinBackup']);
 
 async function admin(request, env) {
   if (request.method !== 'POST') {
@@ -2866,7 +2969,7 @@ async function admin(request, env) {
     const o = adm2.opriri;
     if (o.definitiv && (a === 'blocheaza' || a === 'blocareFel') && cerere.fel === 'definitiv')
       return { status: 403, corp: { ok: false, eroare: 'Blocarea definitivă e oprită pentru tine. Folosește „număr greșit”.' } };
-    if (o.sterge && (a === 'stergeUtilizator' || a === 'stergeToateDispozitivele'))
+    if (o.sterge && (a === 'stergeUtilizator' || a === 'stergeToateDispozitivele' || a === 'stergeDepouDinBackup'))
       return { status: 403, corp: { ok: false, eroare: 'Ștergerea datelor e oprită pentru tine.' } };
     if (o.fortat && a === 'versiuneMinima')
       return { status: 403, corp: { ok: false, eroare: 'Actualizarea obligatorie e oprită pentru tine.' } };
@@ -2895,6 +2998,58 @@ async function admin(request, env) {
         return { status: 200, corp: { ok: true, rol: 'admin2', nr: adm2.nr, opriri: adm2.opriri } };
       }
       return { status: 200, corp: { ok: true, rol: 'admin' } };
+    }
+
+    // ── [2.5] Zile pe alte depouri ──
+    case 'depouriStraine': {
+      const doarNr = nrCurat(cerere.nr);
+      let tot = null;
+      try { tot = await getJSON(urlBroadcast(env, 'backup.json')); }
+      catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu am putut citi programele.' } }; }
+      const P = {};
+      for (const [nr, b] of Object.entries(tot || {})) { try { P[nr] = _bkProgram(b); } catch (e) {} }
+      const lista = [];
+      for (const [nr, p] of Object.entries(P)) {
+        if (doarNr && nr !== doarNr) continue;
+        const straine = [];
+        for (const [dep, x] of Object.entries(p.depouri)) {
+          if (dep === p.lucru) continue;
+          let copieDe = null;
+          for (const [alt, q] of Object.entries(P)) {
+            if (alt === nr || q.lucru !== dep || !q.obiecte[dep]) continue;
+            if (_bkECopie(p.obiecte[dep], q.obiecte[dep])) { copieDe = alt; break; }
+          }
+          straine.push({ dep, zile: x.zile, prima: x.prima, ultima: x.ultima, copieDe });
+        }
+        if (straine.length) lista.push({ nr, lucru: p.lucru, straine });
+      }
+      lista.sort((a, b) => (b.straine.some(x => x.copieDe) - a.straine.some(x => x.copieDe)) || (b.straine.reduce((s, x) => s + x.zile, 0) - a.straine.reduce((s, x) => s + x.zile, 0)));
+      return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'stergeDepouDinBackup': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
+      let b;
+      try { b = await getJSON(urlBroadcast(env, `backup/${nr}.json`)); }
+      catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu am putut citi programul lui.' } }; }
+      if (!b || !b.data) return { status: 404, corp: { ok: false, eroare: 'N-are program în cloud.' } };
+      const p = _bkProgram(b);
+      const vrea = (Array.isArray(cerere.deps) ? cerere.deps : [cerere.dep]).map(x => String(x || '').toLowerCase()).filter(x => DEPOURI.includes(x));
+      const deps = vrea.filter(d => d !== p.lucru && d !== p.marcat);
+      if (!deps.length) return { status: 400, corp: { ok: false, eroare: vrea.length ? 'Ăsta e depoul unde lucrează — nu se șterge.' : 'Alege depoul.' } };
+      try { await _copieZilnica(env, nr, b); } catch (e) {}       // ca să se poată readuce din „Copii de siguranță"
+      const acum = Date.now();
+      let zile = 0;
+      b.sterse = Object.assign({}, b.sterse && typeof b.sterse === 'object' ? b.sterse : {});
+      for (const dep of deps) {
+        zile += (p.depouri[dep] && p.depouri[dep].zile) || 0;
+        delete b.data['p2026_' + dep];
+        b.sterse[dep] = acum;
+      }
+      _bkRecalc(b);
+      const r = await fetch(urlBroadcast(env, `backup/${nr}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      if (!r.ok) { const t = await r.text().catch(() => ''); return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${t.slice(0, 120)}` } }; }
+      return { status: 200, corp: { ok: true, nr, deps, zile, lucru: p.lucru } };
     }
 
     // ── [2.3] Administratori (doar adminul principal) ──
