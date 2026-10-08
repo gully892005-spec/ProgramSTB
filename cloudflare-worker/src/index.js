@@ -2701,8 +2701,41 @@ function _bkRezumat(o) {
   }
   return x;
 }
-// Programul pe depouri + depoul unde lucrează (aceeași regulă ca în fișă).
-function _bkProgram(b) {
+// [2.5.1] Unde lucrează omul. Înainte câștiga depoul „marcat" de telefon, iar
+// versiunile vechi îl marcau greșit (ex. Dudești cu o zi, deși are 32 la Titan).
+// Acum, în ordine: 1) depoul pe a cărui repartizare (luna asta sau trecută)
+// apare numărul lui; 2) depoul cu cele mai multe zile în ultimele 60 de zile;
+// 3) abia apoi marcajul telefonului.
+function _bkLucru(depouri, marcat, peFoaie) {
+  const D = Object.entries(depouri || {});
+  if (!D.length) return { lucru: null, motiv: null };
+  const foaie = D.filter(([dep]) => (peFoaie || []).includes(dep)).sort((a, b) => b[1].zile - a[1].zile);
+  if (foaie.length) return { lucru: foaie[0][0], motiv: 'foaie' };
+  const prag = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 7);
+  const recent = x => Object.entries(x.luni || {}).filter(([l]) => l >= prag).reduce((a, [, v]) => a + v, 0);
+  let best = null, bestN = 0;
+  for (const [dep, x] of D) { const n = recent(x); if (n > bestN || (n === bestN && n > 0 && dep === marcat)) { best = dep; bestN = n; } }
+  if (best) return { lucru: best, motiv: 'zile' };
+  if (marcat && depouri[marcat]) return { lucru: marcat, motiv: 'marcat' };
+  return { lucru: D.sort((a, b) => b[1].zile - a[1].zile)[0][0], motiv: 'zile' };
+}
+// Numerele de pe repartizările urcate, luna asta și luna trecută: { depou: Set(nr) }.
+async function _repNumere(env) {
+  const a = acumRo().data; const [an, lu] = a.split('-').map(Number);
+  const luni = [`${an}-${String(lu).padStart(2, '0')}`, lu === 1 ? `${an - 1}-12` : `${an}-${String(lu - 1).padStart(2, '0')}`];
+  const out = {};
+  await Promise.all(DEPOURI.flatMap(dep => luni.map(async l => {
+    try {
+      const u = urlBroadcast(env, `repartizare/${dep}/${l}/lunara.json`);
+      const k = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true');
+      if (k && typeof k === 'object') { out[dep] = out[dep] || new Set(); Object.keys(k).forEach(n => out[dep].add(n)); }
+    } catch (e) {}
+  })));
+  return out;
+}
+function _peFoaie(rep, nr) { return Object.keys(rep || {}).filter(dep => rep[dep].has(String(nr))); }
+// Programul pe depouri + depoul unde lucrează.
+function _bkProgram(b, peFoaie) {
   const d = (b && b.data) || {};
   const obiecte = {}, depouri = {};
   for (const dep of DEPOURI) {
@@ -2710,18 +2743,9 @@ function _bkProgram(b) {
     const x = _bkRezumat(o);
     if (x.zile) { obiecte[dep] = o; depouri[dep] = x; }
   }
-  let lucru = null;
-  const marcat = b && (b.depotLucru || b.depotPropriu);
-  if (marcat && depouri[marcat]) lucru = marcat;
-  else {
-    const prag = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 7);
-    let bestN = -1;
-    for (const [dep, x] of Object.entries(depouri)) {
-      const n = Object.entries(x.luni).filter(([l]) => l >= prag).reduce((a, [, v]) => a + v, 0);
-      if (n > bestN) { lucru = dep; bestN = n; }
-    }
-  }
-  return { obiecte, depouri, lucru, marcat: marcat || null };
+  const marcat = (b && (b.depotLucru || b.depotPropriu)) || null;
+  const { lucru, motiv } = _bkLucru(depouri, marcat, peFoaie);
+  return { obiecte, depouri, lucru, motiv, marcat, peFoaie: peFoaie || [] };
 }
 // Semnătura unei zile lucrate (tur/linie/oră); liberele și CO nu contează la „copie".
 function _bkSemn(v) {
@@ -2739,6 +2763,38 @@ function _bkECopie(oA, oB) {
     if (oB && _bkSemn(oB[zi]) === sa) egal++;
   }
   return n >= 5 && egal >= 0.8 * n;
+}
+// Ziua A[dep] e copia programului lui Y dacă se potrivesc turele (vezi _bkECopie)
+// și Y e „proprietarul" acelui program: l-a ales în telefon sau are mai multe zile acolo.
+function _bkECopieDe(A, dep, Y) {
+  const a = A.obiecte[dep], y = Y.obiecte[dep];
+  if (!a || !y || !Y.depouri[dep] || !A.depouri[dep]) return false;
+  if (!(Y.marcat === dep || Y.depouri[dep].zile > A.depouri[dep].zile)) return false;
+  return _bkECopie(a, y);
+}
+// Depoul unde lucrează, fără depourile care sunt copia programului altcuiva.
+function _bkFinal(p, copii) {
+  p.copii = copii || {};
+  const fara = Object.fromEntries(Object.entries(p.depouri).filter(([d]) => !p.copii[d]));
+  const L = _bkLucru(Object.keys(fara).length ? fara : p.depouri, p.marcat, p.peFoaie);
+  p.lucru = L.lucru; p.motiv = L.motiv;
+  return p;
+}
+// Analiza completă pentru un singur om: repartizarea + copiile din programele colegilor.
+async function _bkAnaliza(env, nr, bOpt) {
+  const [tot, R] = await Promise.all([getJSON(urlBroadcast(env, 'backup.json')).catch(() => null), _repNumere(env).catch(() => ({}))]);
+  const b = bOpt || (tot && tot[nr]);
+  const p = _bkProgram(b, _peFoaie(R, nr));
+  const copii = {};
+  for (const dep of Object.keys(p.depouri)) {
+    for (const [alt, bb] of Object.entries(tot || {})) {
+      if (alt === String(nr) || !bb || !bb.data || !bb.data['p2026_' + dep]) continue;
+      const o = _bkZile(bb.data['p2026_' + dep]); if (!o) continue;
+      const Y = { marcat: bb.depotLucru || bb.depotPropriu || null, obiecte: { [dep]: o }, depouri: { [dep]: _bkRezumat(o) } };
+      if (_bkECopieDe(p, dep, Y)) { copii[dep] = alt; break; }
+    }
+  }
+  return _bkFinal(p, copii);
 }
 function _bkRecalc(b) {
   let zile = 0;
@@ -3006,22 +3062,27 @@ async function admin(request, env) {
       let tot = null;
       try { tot = await getJSON(urlBroadcast(env, 'backup.json')); }
       catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu am putut citi programele.' } }; }
+      const R = await _repNumere(env);
       const P = {};
-      for (const [nr, b] of Object.entries(tot || {})) { try { P[nr] = _bkProgram(b); } catch (e) {} }
+      for (const [nr, b] of Object.entries(tot || {})) { try { P[nr] = _bkProgram(b, _peFoaie(R, nr)); } catch (e) {} }
+      // copiile se caută doar la cei cu mai multe depouri (ceilalți n-au ce șterge)
+      for (const [nr, p] of Object.entries(P)) {
+        if (Object.keys(p.depouri).length < 2) { p.copii = {}; continue; }
+        const copii = {};
+        for (const dep of Object.keys(p.depouri)) {
+          for (const [alt, q] of Object.entries(P)) { if (alt !== nr && _bkECopieDe(p, dep, q)) { copii[dep] = alt; break; } }
+        }
+        _bkFinal(p, copii);
+      }
       const lista = [];
       for (const [nr, p] of Object.entries(P)) {
         if (doarNr && nr !== doarNr) continue;
         const straine = [];
         for (const [dep, x] of Object.entries(p.depouri)) {
           if (dep === p.lucru) continue;
-          let copieDe = null;
-          for (const [alt, q] of Object.entries(P)) {
-            if (alt === nr || q.lucru !== dep || !q.obiecte[dep]) continue;
-            if (_bkECopie(p.obiecte[dep], q.obiecte[dep])) { copieDe = alt; break; }
-          }
-          straine.push({ dep, zile: x.zile, prima: x.prima, ultima: x.ultima, copieDe });
+          straine.push({ dep, zile: x.zile, prima: x.prima, ultima: x.ultima, copieDe: (p.copii || {})[dep] || null, peFoaie: p.peFoaie.includes(dep) });
         }
-        if (straine.length) lista.push({ nr, lucru: p.lucru, straine });
+        if (straine.length) lista.push({ nr, lucru: p.lucru, motiv: p.motiv, straine });
       }
       lista.sort((a, b) => (b.straine.some(x => x.copieDe) - a.straine.some(x => x.copieDe)) || (b.straine.reduce((s, x) => s + x.zile, 0) - a.straine.reduce((s, x) => s + x.zile, 0)));
       return { status: 200, corp: { ok: true, lista } };
@@ -3033,10 +3094,10 @@ async function admin(request, env) {
       try { b = await getJSON(urlBroadcast(env, `backup/${nr}.json`)); }
       catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu am putut citi programul lui.' } }; }
       if (!b || !b.data) return { status: 404, corp: { ok: false, eroare: 'N-are program în cloud.' } };
-      const p = _bkProgram(b);
+      const p = await _bkAnaliza(env, nr, b);
       const vrea = (Array.isArray(cerere.deps) ? cerere.deps : [cerere.dep]).map(x => String(x || '').toLowerCase()).filter(x => DEPOURI.includes(x));
-      const deps = vrea.filter(d => d !== p.lucru && d !== p.marcat);
-      if (!deps.length) return { status: 400, corp: { ok: false, eroare: vrea.length ? 'Ăsta e depoul unde lucrează — nu se șterge.' : 'Alege depoul.' } };
+      const deps = vrea.filter(d => d !== p.lucru && !p.peFoaie.includes(d));
+      if (!deps.length) return { status: 400, corp: { ok: false, eroare: vrea.length ? 'Ăsta e depoul unde lucrează (sau e pe repartizarea lui) — nu se șterge.' : 'Alege depoul.' } };
       try { await _copieZilnica(env, nr, b); } catch (e) {}       // ca să se poată readuce din „Copii de siguranță"
       const acum = Date.now();
       let zile = 0;
@@ -4273,18 +4334,16 @@ async function admin(request, env) {
         }
         if (x.zile) program.depouri[dep] = x;
       }
-      // Depoul în care lucrează: cel marcat de telefon; altfel cel cu cele mai
-      // multe zile completate în ultimele 60 de zile.
-      const marcat = b && (b.depotLucru || b.depotPropriu);
-      if (marcat && program.depouri[marcat]) program.depotLucru = marcat;
-      else {
-        const prag = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 7);
-        let best = null, bestN = -1;
-        for (const [dep, x] of Object.entries(program.depouri)) {
-          const n = Object.entries(x.luni).filter(([l]) => l >= prag).reduce((a, [, v]) => a + v, 0);
-          if (n > bestN) { best = dep; bestN = n; }
+      // [2.5.1] Depoul în care lucrează: repartizarea pe care apare, apoi cele
+      // mai multe zile din ultimele 60, apoi marcajul telefonului (vezi _bkLucru).
+      if (b) {
+        try {
+          const A = await _bkAnaliza(env, nr, b);
+          program.depotLucru = A.lucru; program.motivLucru = A.motiv; program.peFoaie = A.peFoaie; program.copii = A.copii;
+        } catch (e) {
+          const L = _bkLucru(program.depouri, b.depotLucru || b.depotPropriu, []);
+          program.depotLucru = L.lucru; program.motivLucru = L.motiv;
         }
-        program.depotLucru = best;
       }
 
       // Notificări: pe câte telefoane, prin ce serviciu, ce setări
@@ -4339,8 +4398,11 @@ async function admin(request, env) {
         for (const [zi, v] of Object.entries(o)) if (v && typeof v === 'object' && v.t && v.t !== 'gol') zile[zi] = v;
         if (Object.keys(zile).length) depouri[dep] = zile;
       }
+      // [2.5.1] aceeași regulă ca în fișă, ca să se deschidă depoul unde lucrează de fapt
+      let lucru = null;
+      try { lucru = (await _bkAnaliza(env, nr, b)).lucru; } catch (e) {}
       return { status: 200, corp: { ok: true, nr, exista: true, ts: Number(b.ts) || null,
-        depotLucru: b.depotLucru || b.depotPropriu || d.p2026_depot || null, sch: d.p2026_sch || null, depouri } };
+        depotLucru: lucru || b.depotLucru || b.depotPropriu || d.p2026_depot || null, sch: d.p2026_sch || null, depouri } };
     }
 
     case 'blocati': {
