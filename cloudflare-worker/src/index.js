@@ -2180,11 +2180,15 @@ async function _repStareLuna(env, dep, luna, cuNumere) {
       nrs = k && typeof k === 'object' ? Object.keys(k) : [];
     } catch (e) {}
   }
-  return { urcat: urcat || 0, urcatDe: urcatDe || '', n: nrs.length, nrs: cuNumere ? nrs : undefined };
+  let baze = null;
+  if (dep === 'autobuze') { try { baze = await getJSON(urlBroadcast(env, `repartizare/${dep}/${luna}/baze.json`)); } catch (e) {} }
+  return { urcat: urcat || 0, urcatDe: urcatDe || '', n: nrs.length, nrs: cuNumere ? nrs : undefined, ...(baze ? { baze } : {}) };
 }
 // Trimite notificare responsabililor (cod cu drept de repartizare) ai depourilor date.
-async function _repAminteste(env, depouri, luna) {
-  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !depouri.length) return { trimise: 0, oameni: 0 };
+// [3.0] `bazeLipsa` (opțional): autobazele care n-au foaia. Responsabilul cu
+// autobaze primește amintirea doar dacă lipsește foaia uneia dintre ale lui.
+async function _repAminteste(env, depouri, luna, bazeLipsa) {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || (!depouri.length && !(bazeLipsa && bazeLipsa.length))) return { trimise: 0, oameni: 0 };
   const rr = await getJSON(urlBroadcast(env, 'repartitori.json')).catch(() => null) || {};
   const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
   const [a, l] = luna.split('-');
@@ -2192,7 +2196,10 @@ async function _repAminteste(env, depouri, luna) {
   let trimise = 0, oameni = 0;
   for (const v of Object.values(rr)) {
     if (!v || !v.nr || !_drepturi(v.drepturi).rep) continue;
-    const ale = (Array.isArray(v.depouri) ? v.depouri : []).filter(d => depouri.includes(d));
+    const depV = Array.isArray(v.depouri) ? v.depouri : [];
+    const bazeV = _autobaze(v.autobaze);
+    let ale = depV.filter(d => depouri.includes(d) && !(d === 'autobuze' && bazeV.length && Array.isArray(bazeLipsa)));
+    if (depV.includes('autobuze') && bazeV.length && Array.isArray(bazeLipsa) && bazeV.some(b => bazeLipsa.includes(b))) ale.push('autobuze');
     if (!ale.length) continue;
     try {
       const u = await getJSON(urlBroadcast(env, `push/${nrCurat(v.nr)}.json`));
@@ -2216,8 +2223,18 @@ async function _repAmintireAutomata(env, log) {
     const facut = await getJSON(urlBroadcast(env, `config/repAmintit/${luna}.json`)).catch(() => null);
     if (facut) return;
     const lipsa = [];
-    for (const dep of DEPOURI) { const st = await _repStareLuna(env, dep, luna, false); if (!st.urcat) lipsa.push(dep); }
-    const r = await _repAminteste(env, lipsa, luna);
+    let bazeUrcate = {};
+    for (const dep of DEPOURI) {
+      if (dep === 'troleibuze') continue;                       // troleibuzele stau la Autobuze
+      const st = await _repStareLuna(env, dep, luna, false);
+      if (!st.urcat) lipsa.push(dep);
+      if (dep === 'autobuze') bazeUrcate = st.baze || {};
+    }
+    // autobazele știute = cele ale responsabililor; lipsă = fără foaie urcată pe luna asta
+    const rr = await getJSON(urlBroadcast(env, 'repartitori.json')).catch(() => null) || {};
+    const toate = [...new Set(Object.values(rr).flatMap(v => _autobaze(v && v.autobaze)))];
+    const bazeLipsa = toate.filter(b => !bazeUrcate[b]);
+    const r = await _repAminteste(env, lipsa, luna, bazeLipsa);
     await fetch(urlBroadcast(env, `config/repAmintit/${luna}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ la: Date.now(), lipsa, ...r }) });
     log(`Reamintire repartizare ${luna}: ${lipsa.length} depouri fără foaie · ${r.oameni} responsabili anunțați`);
   } catch (e) { log('Reamintire repartizare: ' + e.message); }
@@ -3415,7 +3432,8 @@ async function admin(request, env) {
       const luna = /^\d{4}-\d{2}$/.test(cerere.luna || '') ? cerere.luna : null;
       if (!luna) return { status: 400, corp: { ok: false, eroare: 'Luna lipsește' } };
       const dep = (Array.isArray(cerere.depouri) ? cerere.depouri : []).map(String).filter(d => DEPOURI.includes(d));
-      const r = await _repAminteste(env, dep, luna);
+      const bazeLipsa = Array.isArray(cerere.bazeLipsa) ? _autobaze(cerere.bazeLipsa) : undefined;
+      const r = await _repAminteste(env, dep, luna, bazeLipsa);
       return { status: 200, corp: { ok: true, ...r } };
     }
     case 'repAmintireOprita': {
@@ -3925,6 +3943,12 @@ async function admin(request, env) {
       try {
         await scrie(baza, { luna, depou, urcat: Date.now(), urcatDe: cerere._urcatDe || 'admin' }, 'PATCH');
         if (Object.keys(lunara).length)  await scrie(`${baza}/lunara`,  lunara,  'PATCH');
+        // [3.0] autobazele de pe foaie (le recunoaște aplicația după ture): data urcării pe fiecare
+        if (depou === 'autobuze' && cerere.baze && typeof cerere.baze === 'object') {
+          const bz = {};
+          for (const [k, n] of Object.entries(cerere.baze)) if (BAZA_RE.test(k) && Number(n) > 0) bz[k] = { urcat: Date.now(), n: Math.min(5000, Number(n) || 0), de: String(cerere._urcatDe || 'admin').slice(0, 40) };
+          if (Object.keys(bz).length) await scrie(`${baza}/baze`, bz, 'PATCH');
+        }
         if (Object.keys(schimb).length)  await scrie(`${baza}/schimb`,  schimb,  'PATCH');
         if (Object.keys(ore).length)     await scrie(`${baza}/ore`,     ore,     'PATCH');
         // Zilnica e pe zile, iar o zi urcată din nou trebuie să o înlocuiască
