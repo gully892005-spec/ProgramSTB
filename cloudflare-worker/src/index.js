@@ -1068,6 +1068,12 @@ export default {
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
+    if (url.pathname === '/conversatie') {                // [3.8] conversația privată cu adminul
+      let r;
+      try { r = await conversatie(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
     if (url.pathname === '/blocat-disp') {                 // [2.9]
       let r;
       try { r = await blocatDisp(request, env); }
@@ -2427,7 +2433,7 @@ async function _curataTrimiteri(env, log) {
 // ══════════════════════════════════════════════════════════════
 // [1.6] ERORI RAPORTATE · SCRIE-I ADMINULUI · DATELE MELE · ȘTERGERE DUPĂ 6 LUNI
 // ══════════════════════════════════════════════════════════════
-const ERORI_NORMALE = /Failed to fetch|NetworkError|Load failed|AbortError|aborted|timeout|network connection was lost|Internet|offline|ERR_INTERNET|QuotaExceeded/i;
+const ERORI_NORMALE = /Failed to fetch|NetworkError|Load failed|AbortError|aborted|timeout|network connection was lost|Internet|offline|ERR_INTERNET|QuotaExceeded|Failed to update a ServiceWorker|error occurred when fetching the script|sw\.js load failed/i;   // [3.8] actualizarea service worker-ului pe semnal slab
 // [2.7] Limită pe zi și pe rețea (IP-ul nu se păstrează — doar o amprentă scurtă).
 // Limitele pe telefon se ocoleau schimbând identificatorul trimis.
 function _ipCheie(request) { return 'i' + _hashScurt(String(request.headers.get('CF-Connecting-IP') || 'necunoscut')); }
@@ -2471,10 +2477,71 @@ async function mesajAdmin(request, env) {
   await _anuntaAdminii(env, '✉️ Mesaj de la ' + nr, text.slice(0, 120), 'mesaj-admin').catch(() => 0);
   return { status: 200, corp: { ok: true } };
 }
+// ══ [3.8] CONVERSAȚII PRIVATE ADMIN ↔ COLEG ═══════════════════════════════
+// Stau sub adminJetoane (nod închis în regulile Firebase), deci nu le poate
+// citi nimeni direct: doar worker-ul, pentru telefonul înregistrat pe număr
+// și pentru admini. Mesajele mai vechi de 60 de zile se șterg singure.
+const CONV = 'adminJetoane/_conv';
+const CONV_ZILE = 60;
+const _convText = t => String(t == null ? '' : t).replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000);
+async function _convIa(env, nr) { return (await getJSON(urlBroadcast(env, `${CONV}/${nr}.json`))) || null; }
+function _convMesaje(c) {
+  const prag = Date.now() - CONV_ZILE * 864e5;
+  return Object.entries((c && c.m) || {}).map(([id, x]) => Object.assign({ id }, x))
+    .filter(x => x && x.t && Number(x.la) > prag).sort((a, b) => a.la - b.la);
+}
+async function _convAdauga(env, nr, de, text) {
+  const la = Date.now(), id = _id12();
+  await _fbPut(env, `${CONV}/${nr}/m/${id}`, { de, t: text, la });
+  await _fbPut(env, `${CONV}/${nr}/ultim`, la);
+  await _fbPut(env, `${CONV}/${nr}/${de === 'c' ? 'nouA' : 'nouC'}`, la);
+  // curățenie: mesajele de peste 60 de zile din conversația asta
+  try {
+    const c = await _convIa(env, nr), prag = la - CONV_ZILE * 864e5;
+    for (const [k, x] of Object.entries((c && c.m) || {})) if (!x || Number(x.la) < prag) await _fbPut(env, `${CONV}/${nr}/m/${k}`, null).catch(() => {});
+  } catch (e) {}
+  return { id, la };
+}
+// Mesajele lui din „Scrie-i adminului” intră în fir, ca să se vadă de la ce a pornit.
+async function _convAduMesajeAdmin(env, nr) {
+  const d = await getJSON(urlBroadcast(env, 'mesajeAdmin.json')).catch(() => null) || {};
+  for (const [id, x] of Object.entries(d)) {
+    if (!x || x.cerere || nrCurat(x.nr) !== nr || !x.text) continue;
+    await _fbPut(env, `${CONV}/${nr}/m/ma${String(id).replace(/[^a-z0-9]/g, '')}`, { de: 'c', t: _convText(x.text), la: Number(x.la) || Date.now() }).catch(() => {});
+  }
+}
+async function conversatie(request, env) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  let cv; try { cv = await _convIa(env, nr); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi mesajele. Încearcă din nou.' } }; }
+  const mesaje = _convMesaje(cv), cititC = Number(cv && cv.cititC) || 0;
+  const deLaAdmin = mesaje.filter(x => x.de === 'a');
+  if (c.actiune === 'stare') {
+    return { status: 200, corp: { ok: true, total: deLaAdmin.length ? mesaje.length : 0, necitite: deLaAdmin.filter(x => x.la > cititC).length } };
+  }
+  if (c.actiune === 'citeste') {
+    if (deLaAdmin.length) await _fbPut(env, `${CONV}/${nr}/cititC`, Date.now()).catch(() => {});
+    return { status: 200, corp: { ok: true, mesaje: deLaAdmin.length ? mesaje.map(x => ({ de: x.de, t: x.t, la: x.la })) : [] } };
+  }
+  if (c.actiune === 'scrie') {
+    if (!deLaAdmin.length) return { status: 400, corp: { ok: false, eroare: 'Adminului îi scrii din „Scrie-i adminului”.' } };
+    const text = _convText(c.text);
+    if (!text) return { status: 400, corp: { ok: false, eroare: 'Scrie mesajul.' } };
+    if (!(await _limitaZi(env, 'conv', nr, 30))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 30 de mesaje azi. Încearcă mâine.' } };
+    const m = await _convAdauga(env, nr, 'c', text);
+    await _fbPut(env, `${CONV}/${nr}/cititC`, Date.now()).catch(() => {});
+    await _anuntaAdminii(env, '💬 ' + nr + ' ți-a răspuns', text.slice(0, 120), 'conv-' + nr).catch(() => 0);
+    return { status: 200, corp: { ok: true, la: m.la } };
+  }
+  return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
+}
 // Ce ține despre un număr: căile din Firebase (pentru „Descarcă” și „Șterge”).
 const CAI_NR = ['backup', 'backupIstoric', 'stats', 'push', 'proprietar'];
 async function _stergeNr(env, nr) {
   for (const c of CAI_NR) await _fbPut(env, `${c}/${nr}`, null).catch(() => {});
+  await _fbPut(env, `${CONV}/${nr}`, null).catch(() => {});   // [3.8]
   for (const col of ['trimiteri', 'raportOre', 'mesajeAdmin']) {
     const d = await getJSON(urlBroadcast(env, col + '.json')).catch(() => null) || {};
     for (const [id, x] of Object.entries(d)) if (x && x.nr === nr) {
@@ -2504,6 +2571,7 @@ async function dateleMele(request, env) {
     const ale = Object.values(d).filter(x => x && x.nr === nr);
     if (ale.length) out[col] = ale;
   }
+  try { const m = _convMesaje(await _convIa(env, nr)); if (m.length) out.conversatieCuAdminul = m.map(x => ({ de: x.de === 'a' ? 'admin' : 'eu', text: x.t, la: x.la })); } catch (e) {}   // [3.8]
   return { status: 200, corp: { ok: true, date: out } };
 }
 // Numerele care n-au mai deschis aplicația de 6 luni: se șterg din cloud, câte 3 pe rulare.
@@ -3057,7 +3125,7 @@ function _adm2Detaliu(c) {
 }
 // Acțiuni care doar citesc: nu intră în jurnal.
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
-  'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista',
+  'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste',
   'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine']);
 // Doar adminul principal.
@@ -3575,6 +3643,43 @@ async function admin(request, env) {
     case 'mesajAdminCitit': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
       if (id) await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
+      return { status: 200, corp: { ok: true } };
+    }
+    // ── [3.8] Conversații private cu un coleg ──
+    case 'convLista': {
+      let d; try { d = await getJSON(urlBroadcast(env, `${CONV}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi conversațiile.' } }; }
+      const prag = Date.now() - CONV_ZILE * 864e5, lista = [];
+      for (const [nr, c] of Object.entries(d || {})) {
+        if (!c || Number(c.ultim || 0) < prag) { await _fbPut(env, `${CONV}/${nr}`, null).catch(() => {}); continue; }
+        const m = _convMesaje(c); if (!m.length) continue;
+        const ult = m[m.length - 1];
+        lista.push({ nr, ultim: Number(c.ultim) || ult.la, n: m.length, ultimText: String(ult.t).slice(0, 140), ultimDe: ult.de,
+          nou: Number(c.nouA || 0) > Number(c.cititA || 0), cititC: Number(c.cititC) || 0 });
+      }
+      lista.sort((a, b) => b.ultim - a.ultim);
+      return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'convCiteste': {
+      const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
+      await _convAduMesajeAdmin(env, nr).catch(() => {});
+      let cv; try { cv = await _convIa(env, nr); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi conversația.' } }; }
+      await _fbPut(env, `${CONV}/${nr}/cititA`, Date.now()).catch(() => {});
+      const [pu, st] = await Promise.all([getJSON(urlBroadcast(env, `push/${nr}.json`)).catch(() => null), getJSON(urlBroadcast(env, `stats/${nr}.json`)).catch(() => null)]);
+      const notificari = pu ? (Object.keys(pu.subs || {}).length || (pu.sub ? 1 : 0)) : 0;
+      return { status: 200, corp: { ok: true, nr, mesaje: _convMesaje(cv).map(x => ({ de: x.de, t: x.t, la: x.la })), cititC: Number(cv && cv.cititC) || 0,
+        notificari, dep: (st && (st.depot || st.dep)) || '', v: (st && (st.v || st.versiune)) || '' } };
+    }
+    case 'convScrie': {
+      const nr = nrCurat(cerere.nr), text = _convText(cerere.text);
+      if (!nr || !text) return { status: 400, corp: { ok: false, eroare: 'Scrie numărul și mesajul.' } };
+      await _convAduMesajeAdmin(env, nr).catch(() => {});
+      const m = await _convAdauga(env, nr, 'a', text);
+      await _fbPut(env, `${CONV}/${nr}/cititA`, Date.now()).catch(() => {});
+      const telefoane = await _pushLa(env, nr, '✉️ Mesaj de la admin', text.slice(0, 140), 'conv');
+      return { status: 200, corp: { ok: true, la: m.la, telefoane } };
+    }
+    case 'convRezolvat': {
+      const nr = nrCurat(cerere.nr); if (nr) await _fbPut(env, `${CONV}/${nr}/cititA`, Date.now()).catch(() => {});
       return { status: 200, corp: { ok: true } };
     }
     case 'repartitorCodNou': {
