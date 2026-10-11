@@ -2433,7 +2433,7 @@ async function _curataTrimiteri(env, log) {
 // ══════════════════════════════════════════════════════════════
 // [1.6] ERORI RAPORTATE · SCRIE-I ADMINULUI · DATELE MELE · ȘTERGERE DUPĂ 6 LUNI
 // ══════════════════════════════════════════════════════════════
-const ERORI_NORMALE = /Failed to fetch|NetworkError|Load failed|AbortError|aborted|timeout|network connection was lost|Internet|offline|ERR_INTERNET|QuotaExceeded|Failed to update a ServiceWorker|error occurred when fetching the script|sw\.js load failed/i;   // [3.8] actualizarea service worker-ului pe semnal slab
+const ERORI_NORMALE = /Failed to fetch|NetworkError|Load failed|AbortError|aborted|timeout|network connection was lost|Internet|offline|ERR_INTERNET|QuotaExceeded|Failed to update a ServiceWorker|error occurred when fetching the script|sw\.js load failed|Indexed Database server lost|Java object is gone|sendDataToNative/i;   // [4.1] iPhone în fundal, browsere Android cu punte proprie   // [3.8] actualizarea service worker-ului pe semnal slab
 // [2.7] Limită pe zi și pe rețea (IP-ul nu se păstrează — doar o amprentă scurtă).
 // Limitele pe telefon se ocoleau schimbând identificatorul trimis.
 function _ipCheie(request) { return 'i' + _hashScurt(String(request.headers.get('CF-Connecting-IP') || 'necunoscut')); }
@@ -3126,11 +3126,78 @@ function _adm2Detaliu(c) {
   }
   return '';
 }
+
+// ══════════════════════════════════════════════════════════════
+// [4.1] REZOLVATE RECENT — ce s-a rezolvat din „De rezolvat”, cine și când.
+// Contextul (textul cererii, numărul) se citește ÎNAINTE de acțiune, pentru că
+// acțiunea îl șterge. Se scrie doar dacă acțiunea a reușit. 30 de zile.
+// ══════════════════════════════════════════════════════════════
+const REZ_CALE = 'adminJetoane/_rezolvate', REZ_ZILE = 30;
+const REZ_ACTIUNI = new Set(['aprobaNumar', 'respingeNumar', 'cerereRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
+  'indicatoriAproba', 'indicatoriRespinge', 'raportOreInchide', 'trimiteGata']);
+const _rzT = (t, n) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, n || 140);
+async function _rezContext(env, c) {
+  const a = c.actiune, g = cale => getJSON(urlBroadcast(env, cale)).catch(() => null);
+  const idc = x => String(x || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+  if (a === 'aprobaNumar' || a === 'respingeNumar') {
+    const nr = nrCurat(c.nr), b = nr ? await g(`blocati/${nr}.json`) : null;
+    const nou = b && b.cerere ? nrCurat(b.cerere.nr) : '';
+    return { fel: a === 'aprobaNumar' ? 'ok' : 'nu', nr, ce: a === 'aprobaNumar' ? `număr nou aprobat${nou ? ' → ' + nou : ''}` : `cerere de număr nou respinsă${nou ? ' (' + nou + ')' : ''}` };
+  }
+  if (a === 'cerereRezolva' || a === 'mesajAdminCitit') {
+    const id = idc(c.id), m = id ? await g(`mesajeAdmin/${id}.json`) : null;
+    if (!m) return null;
+    const tel = _rzT(m.model || m.telefon || m.disp || '', 30);
+    let ce;
+    if (a === 'cerereRezolva') ce = c.fa === 'muta' ? `mutat pe telefonul nou${tel ? ' (' + tel + ')' : ''}` : c.fa === 'adauga' ? `adăugat și pe telefonul nou${tel ? ' (' + tel + ')' : ''}` : 'deblocat';
+    else ce = m.cerere ? 'cerere ignorată' : (c.raspuns ? 'mesaj — i-ai răspuns' : 'mesaj citit');
+    return { fel: (a === 'mesajAdminCitit' && m.cerere) ? 'nu' : 'ok', nr: nrCurat(m.nr) || '', ce, citat: _rzT(m.text, 160) };
+  }
+  if (a === 'eroareRezolvata') {
+    const ids = (Array.isArray(c.ids) ? c.ids : [c.id]).map(idc).filter(Boolean);
+    const e = ids.length ? await g(`erori/${ids[0]}.json`) : null;
+    return { fel: 'ok', nr: '', ce: ids.length > 1 ? `${ids.length} erori rezolvate` : 'eroare rezolvată', citat: e ? _rzT(e.msg, 120) : '' };
+  }
+  if (a === 'convRezolvat') {
+    const nr = nrCurat(c.nr); let citat = '';
+    try { const m = _convMesaje(await _convIa(env, nr)); const u = m[m.length - 1]; if (u) citat = (u.de === 'a' ? 'tu: ' : 'el: ') + _rzT(u.t, 120); } catch (e) {}
+    return { fel: 'ok', nr, ce: 'conversație marcată rezolvată', citat };
+  }
+  if (a === 'indicatoriAproba' || a === 'indicatoriRespinge') {
+    const id = String(c.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40), p = id ? await g(`indicatori/${id}.json`) : null;
+    const loc = p ? (IND_NUME[p.dep] || p.dep || '') + (p.bazaNume ? ' · ' + p.bazaNume : (p.baza ? ' · ' + p.baza : '')) : '';
+    const din = p && p.valabilDin ? String(p.valabilDin).split('-').reverse().join('.') : '';
+    return { fel: a === 'indicatoriAproba' ? 'ok' : 'nu', nr: '', ce: `${loc ? loc + ' · ' : ''}indicatori ${a === 'indicatoriAproba' ? 'aprobați' : 'respinși'}${din ? ' (din ' + din + ')' : ''}`,
+      citat: p && p.de ? 'propuși de ' + _rzT(p.de.nume || p.de.nr || '', 40) : '' };
+  }
+  if (a === 'raportOreInchide' || a === 'trimiteGata') {
+    const ids = (Array.isArray(c.ids) ? c.ids : []).map(idc).filter(Boolean);
+    const d = await g(a === 'raportOreInchide' ? 'raportOre.json' : 'trimiteri.json') || {};
+    const x = d[ids[0]] || null, nr = x ? nrCurat(x.nr) || '' : '';
+    if (a === 'raportOreInchide') return { fel: 'ok', nr, ce: `raport de ore ${c.corectat ? 'corectat' : 'închis'}${ids.length > 1 ? ' (' + ids.length + ')' : ''}`, citat: x ? _rzT(`L${x.linie || '?'} T${x.tur || '?'}${x.text ? ' — ' + x.text : ''}`, 120) : '' };
+    return { fel: 'ok', nr, ce: `${x && x.tip === 'ind' ? 'indicatori trimiși' : 'foaie trimisă'} — marcat gata${ids.length > 1 ? ' (' + ids.length + ')' : ''}`, citat: x ? _rzT((x.bazaNume || x.baza || '') + (x.luna ? ' · ' + x.luna : ''), 80) : '' };
+  }
+  return null;
+}
+async function _rezScrie(env, ctx, adm2) {
+  const la = Date.now(), id = la.toString(36) + Math.random().toString(36).slice(2, 6);
+  await _fbPut(env, `${REZ_CALE}/${id}`, Object.assign({ la, cine: adm2 ? String(adm2.nr) : 'admin' }, ctx)).catch(() => {});
+}
+async function _rezLista(env) {
+  const d = await getJSON(urlBroadcast(env, `${REZ_CALE}.json`)).catch(() => null) || {};
+  const prag = Date.now() - REZ_ZILE * 864e5, lista = [];
+  for (const [id, x] of Object.entries(d)) {
+    if (!x || Number(x.la || 0) < prag) { await _fbPut(env, `${REZ_CALE}/${id}`, null).catch(() => {}); continue; }
+    lista.push(Object.assign({ id }, x));
+  }
+  lista.sort((a, b) => b.la - a.la);
+  return lista.slice(0, 60);
+}
 // Acțiuni care doar citesc: nu intră în jurnal.
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste',
   'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
-  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine']);
+  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
 // Acțiuni care nu se pot face pe numărul unui admin.
@@ -3272,7 +3339,10 @@ async function admin(request, env) {
     await _fbPut(env, `${ADM2_CALE}/${adm2.nr}/ultima`, Date.now()).catch(() => {});
   }
 
+  // [4.1] contextul pentru „Rezolvate recent”, citit înainte ca acțiunea să șteargă cererea
+  const _rezCtx = REZ_ACTIUNI.has(cerere.actiune) ? await _rezContext(env, cerere).catch(() => null) : null;
   const rez = await (async () => { switch (cerere.actiune) {
+    case 'rezolvateLista': return { status: 200, corp: { ok: true, lista: await _rezLista(env) } };   // [4.1]
     // ── [2.3] Cine e intrat (rol) — panoul îl întreabă la deschidere ──
     case 'cineSunt': {
       if (adm2) {
@@ -3611,7 +3681,7 @@ async function admin(request, env) {
     case 'eroriLista': {
       const d = await getJSON(urlBroadcast(env, 'erori.json')).catch(() => null) || {};
       const prag = Date.now() - 30 * 864e5;
-      return { status: 200, corp: { ok: true, lista: Object.entries(d).filter(([k, x]) => x && x.ultima > prag).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.ultima - a.ultima) } };
+      return { status: 200, corp: { ok: true, lista: Object.entries(d).filter(([k, x]) => x && x.ultima > prag).map(([id, x]) => Object.assign({ id }, x, { normal: !!x.normal || ERORI_NORMALE.test(String(x.msg || '')) })).sort((a, b) => b.ultima - a.ultima) } };   // [4.1] lista „normale” se aplică și erorilor vechi
     }
     case 'eroareRezolvata': {
       const ids = (Array.isArray(cerere.ids) ? cerere.ids : [cerere.id]).map(x => String(x || '').replace(/[^a-z0-9]/g, '').slice(0, 20)).filter(Boolean).slice(0, 100);
@@ -4717,6 +4787,8 @@ async function admin(request, env) {
       return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută: ' + cerere.actiune } };
   } })();
 
+  // [4.1] Rezolvate recent
+  if (_rezCtx && rez && rez.status === 200) await _rezScrie(env, _rezCtx, adm2);
   // [2.3] Ce a făcut adminul 2 rămâne scris (doar ce a reușit și a schimbat ceva).
   if (adm2 && rez && rez.status === 200 && !ADM2_CITIRE.has(cerere.actiune)) {
     await _adm2Scrie(env, adm2.nr, cerere);
