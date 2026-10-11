@@ -2519,7 +2519,10 @@ async function conversatie(request, env) {
   const mesaje = _convMesaje(cv), cititC = Number(cv && cv.cititC) || 0;
   const deLaAdmin = mesaje.filter(x => x.de === 'a');
   if (c.actiune === 'stare') {
-    return { status: 200, corp: { ok: true, total: deLaAdmin.length ? mesaje.length : 0, necitite: deLaAdmin.filter(x => x.la > cititC).length } };
+    // [4.0] + ultimul mesaj, ca telefonul să știe dacă a apărut ceva nou fără să aducă tot firul
+    const ult = deLaAdmin.length ? mesaje[mesaje.length - 1] : null;
+    return { status: 200, corp: { ok: true, total: deLaAdmin.length ? mesaje.length : 0, necitite: deLaAdmin.filter(x => x.la > cititC).length,
+      ultim: ult ? ult.la : 0, ultimDe: ult ? ult.de : '', ultimText: ult ? String(ult.t).slice(0, 120) : '' } };
   }
   if (c.actiune === 'citeste') {
     if (deLaAdmin.length) await _fbPut(env, `${CONV}/${nr}/cititC`, Date.now()).catch(() => {});
@@ -2529,7 +2532,7 @@ async function conversatie(request, env) {
     if (!deLaAdmin.length) return { status: 400, corp: { ok: false, eroare: 'Adminului îi scrii din „Scrie-i adminului”.' } };
     const text = _convText(c.text);
     if (!text) return { status: 400, corp: { ok: false, eroare: 'Scrie mesajul.' } };
-    if (!(await _limitaZi(env, 'conv', nr, 30))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 30 de mesaje azi. Încearcă mâine.' } };
+    if (!(await _limitaZi(env, 'conv', nr, 60))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 60 de mesaje azi. Încearcă mâine.' } };   // [4.0] 30 → 60
     const m = await _convAdauga(env, nr, 'c', text);
     await _fbPut(env, `${CONV}/${nr}/cititC`, Date.now()).catch(() => {});
     await _anuntaAdminii(env, '💬 ' + nr + ' ți-a răspuns', text.slice(0, 120), 'conv-' + nr).catch(() => 0);
@@ -3668,6 +3671,13 @@ async function admin(request, env) {
       const notificari = pu ? (Object.keys(pu.subs || {}).length || (pu.sub ? 1 : 0)) : 0;
       return { status: 200, corp: { ok: true, nr, mesaje: _convMesaje(cv).map(x => ({ de: x.de, t: x.t, la: x.la })), cititC: Number(cv && cv.cititC) || 0,
         notificari, dep: (st && (st.depot || st.dep)) || '', v: (st && (st.v || st.versiune)) || '' } };
+    }
+    case 'convStare': {   // [4.0] verificarea deasă din conversația deschisă: doar „a apărut ceva?”
+      const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
+      let cv; try { cv = await _convIa(env, nr); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi conversația.' } }; }
+      const m = _convMesaje(cv), ult = m.length ? m[m.length - 1] : null;
+      return { status: 200, corp: { ok: true, n: m.length, ultim: ult ? ult.la : 0, ultimDe: ult ? ult.de : '', ultimText: ult ? String(ult.t).slice(0, 120) : '',
+        cititC: Number(cv && cv.cititC) || 0, nouA: Number(cv && cv.nouA) || 0, cititA: Number(cv && cv.cititA) || 0 } };
     }
     case 'convScrie': {
       const nr = nrCurat(cerere.nr), text = _convText(cerere.text);
