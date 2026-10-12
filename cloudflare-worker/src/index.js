@@ -1068,6 +1068,12 @@ export default {
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
+    if (url.pathname === '/chatNume') {                   // [4.2] legătura nume din chat ↔ număr (o vede doar adminul)
+      let r;
+      try { r = await chatNumeLeaga(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
     if (url.pathname === '/conversatie') {                // [3.8] conversația privată cu adminul
       let r;
       try { r = await conversatie(request, env); }
@@ -2510,6 +2516,35 @@ async function _convAduMesajeAdmin(env, nr) {
     await _fbPut(env, `${CONV}/${nr}/m/ma${String(id).replace(/[^a-z0-9]/g, '')}`, { de: 'c', t: _convText(x.text), la: Number(x.la) || Date.now() }).catch(() => {});
   }
 }
+// ══════════════════════════════════════════════════════════════
+// [4.2] CINE E ÎN CHAT. Chatul (Firestore) ține doar numele ales și un id
+// anonim. Telefonul ne spune aici „id-ul meu de chat e X, numele Y”, cu
+// numărul și telefonul lui înregistrat. Legătura stă în nodul închis, unde
+// ajunge doar panoul de admin.
+// ══════════════════════════════════════════════════════════════
+const CHATN = 'adminJetoane/_chatNume', CHATU = 'adminJetoane/_chatUid';
+async function chatNumeLeaga(request, env) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  const uid = String(c.uid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 64);
+  const nume = String(c.nume || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40);
+  if (!nr || !uid || !nume) return { status: 400, corp: { ok: false, eroare: 'Lipsesc date.' } };
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  const acum = Date.now();
+  const v = await getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)).catch(() => null) || {};
+  const vechi = Object.assign({}, v.vechi || {});
+  if (v.nume && v.nume !== nume) {
+    vechi[String(v.la || acum)] = v.nume;
+    const k = Object.keys(vechi).sort((a, b) => Number(b) - Number(a));
+    for (const x of k.slice(5)) delete vechi[x];
+  }
+  const dep = String(c.dep || '').replace(/[^a-z_]/g, '').slice(0, 20);
+  await _fbPut(env, `${CHATN}/${nr}`, { nume, uid, la: acum, dep, vechi });
+  await _fbPut(env, `${CHATU}/${uid}`, { nr, la: acum });
+  return { status: 200, corp: { ok: true } };
+}
+
 async function conversatie(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
@@ -2545,6 +2580,8 @@ const CAI_NR = ['backup', 'backupIstoric', 'stats', 'push', 'proprietar'];
 async function _stergeNr(env, nr) {
   for (const c of CAI_NR) await _fbPut(env, `${c}/${nr}`, null).catch(() => {});
   await _fbPut(env, `${CONV}/${nr}`, null).catch(() => {});   // [3.8]
+  try { const cn = await getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)); if (cn && cn.uid) await _fbPut(env, `${CHATU}/${cn.uid}`, null); } catch (e) {}   // [4.2]
+  await _fbPut(env, `${CHATN}/${nr}`, null).catch(() => {});
   for (const col of ['trimiteri', 'raportOre', 'mesajeAdmin']) {
     const d = await getJSON(urlBroadcast(env, col + '.json')).catch(() => null) || {};
     for (const [id, x] of Object.entries(d)) if (x && x.nr === nr) {
@@ -3197,7 +3234,7 @@ async function _rezLista(env) {
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste',
   'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
-  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista']);
+  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
 // Acțiuni care nu se pot face pe numărul unui admin.
@@ -3343,6 +3380,19 @@ async function admin(request, env) {
   const _rezCtx = REZ_ACTIUNI.has(cerere.actiune) ? await _rezContext(env, cerere).catch(() => null) : null;
   const rez = await (async () => { switch (cerere.actiune) {
     case 'rezolvateLista': return { status: 200, corp: { ok: true, lista: await _rezLista(env) } };   // [4.1]
+    case 'chatCine': {   // [4.2] cine a scris un mesaj în chat
+      const uid = String(cerere.uid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 64);
+      if (!uid) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul de chat.' } };
+      const u = await getJSON(urlBroadcast(env, `${CHATU}/${uid}.json`)).catch(() => null);
+      if (!u || !u.nr) return { status: 200, corp: { ok: true, gasit: false } };
+      const nr = nrCurat(u.nr);
+      const [st, cn, ag] = await Promise.all([getJSON(urlBroadcast(env, `stats/${nr}.json`)).catch(() => null),
+        getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)).catch(() => null), getJSON(urlBroadcast(env, `agenda/${nr}.json`)).catch(() => null)]);
+      let ultima = 0, v = st && st.versiune || '', plat = st && st.platforma || '';
+      for (const d of Object.values((st && st.disp) || {})) if (d && Number(d.ts) > ultima) { ultima = Number(d.ts); v = d.versiune || v; plat = d.platforma || plat; }
+      return { status: 200, corp: { ok: true, gasit: true, nr, chat: cn || null, depot: (st && st.depot) || (cn && cn.dep) || '', ultima, ultimaZi: (st && st.ultimaVizita) || '',
+        v, plat, nume: (ag && ag.nume) || '' } };
+    }
     // ── [2.3] Cine e intrat (rol) — panoul îl întreabă la deschidere ──
     case 'cineSunt': {
       if (adm2) {
@@ -4652,7 +4702,8 @@ async function admin(request, env) {
       try { agenda = await getJSON(urlBroadcast(env, 'agenda.json')) || {}; } catch (e) {}
       try { stats = await getJSON(urlBroadcast(env, 'stats.json')) || {}; } catch (e) {}
       const blocatiC = await citesteBlocati(env);
-      const toate = new Set([...Object.keys(b), ...Object.keys(st), ...Object.keys(pu), ...Object.keys(pr), ...Object.keys(agenda)]);
+      let chatN = {}; try { chatN = await getJSON(urlBroadcast(env, `${CHATN}.json`)) || {}; } catch (e) {}   // [4.2]
+      const toate = new Set([...Object.keys(b), ...Object.keys(st), ...Object.keys(pu), ...Object.keys(pr), ...Object.keys(agenda), ...Object.keys(chatN)]);
       const fara = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const cifre = q.replace(/[^0-9]/g, '');
       const cuvinte = fara(q).split(/\s+/).filter(Boolean);
@@ -4661,8 +4712,10 @@ async function admin(request, env) {
         const nume = (agenda[nr] && agenda[nr].nume) || '';
         const dupaNr = cifre && cifre.length === q.replace(/\s/g, '').length && nr.includes(cifre);
         const dupaNume = !cifre && nume && cuvinte.every(c => fara(nume).includes(c));
-        if (!dupaNr && !dupaNume) continue;
-        gasite.push({ nr, nume, depot: (stats[nr] && stats[nr].depot) || null,
+        const cn = chatN[nr] || null, numeChat = cn ? [cn.nume, ...Object.values(cn.vechi || {})].filter(Boolean) : [];
+        const dupaChat = !cifre && numeChat.some(x => cuvinte.every(c => fara(x).includes(c)));
+        if (!dupaNr && !dupaNume && !dupaChat) continue;
+        gasite.push({ nr, nume, chatNume: cn ? cn.nume || '' : '', depot: (stats[nr] && stats[nr].depot) || (cn && cn.dep) || null,
           areProgram: !!b[nr], areNotificari: !!pu[nr], blocat: !!blocatiC[nr], exact: nr === cifre });
       }
       gasite.sort((x, y) => (y.exact - x.exact) || x.nr.localeCompare(y.nr));
@@ -4742,6 +4795,7 @@ async function admin(request, env) {
 
       return { status: 200, corp: { ok: true, nr,
         nume: (ag && ag.nume) || '', tel: (ag && ag.tel) || '',
+        chat: await getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)).catch(() => null),   // [4.2] numele din chat
         exista: !!(b || st || pu || prBrut || ag),
         backup: b ? { ts: Number(b.ts) || null, updated: b.updated || null, dev: b.dev || null, depotPropriu: b.depotPropriu || null,
           depotLucru: b.depotLucru || null, depots: b.depots || [], zile: b.zile || 0, setari } : null,
