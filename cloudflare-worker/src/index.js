@@ -955,7 +955,7 @@ export default {
     // ── Aplicația vorbește cu workerul din browser, deci are nevoie de CORS ──
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -1077,6 +1077,12 @@ export default {
       try { r = url.pathname === '/eroare' ? await raportEroare(request, env) : url.pathname === '/mesaj-admin' ? await mesajAdmin(request, env) : await dateleMele(request, env); }
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
+    if (url.pathname === '/live' || url.pathname === '/live/sosiri' || url.pathname === '/live/test') {   // [4.6] mers live
+      let r;
+      try { r = await mersLive(url); }
+      catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
     }
     if (url.pathname === '/chatNume') {                   // [4.2] legătura nume din chat ↔ număr (o vede doar adminul)
       let r;
@@ -2554,6 +2560,58 @@ async function chatNumeLeaga(request, env) {
   await _fbPut(env, `${CHATN}/${nr}`, { nume, uid, la: acum, dep, vechi });
   await _fbPut(env, `${CHATU}/${uid}`, { nr, la: acum });
   return { status: 200, corp: { ok: true } };
+}
+
+// ══════════════════════════════════════════════════════════════
+// [4.6] MERS LIVE. Pozițiile vehiculelor și sosirile din stații vin de la
+// serverul folosit de info.stb.ro (maps.mo-bi.ro). Worker-ul le cere o dată
+// la ~12 secunde pentru toți colegii (memorie în worker) și trimite telefonului
+// doar ce îi trebuie: vehiculele unei linii sau sosirile dintr-o stație.
+// ══════════════════════════════════════════════════════════════
+const MOBI = 'https://maps.mo-bi.ro/api';
+const MOBI_HDR = { 'Accept': 'application/json, text/plain, */*', 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36', 'Referer': 'https://info.stb.ro/' };
+let _liveBus = { t: 0, v: null, p: null }, _liveSos = new Map();
+async function _liveVehicule() {
+  if (_liveBus.v && Date.now() - _liveBus.t < 8000) return _liveBus.v;
+  if (_liveBus.p) return _liveBus.p;
+  _liveBus.p = (async () => {
+    const r = await fetch(MOBI + '/busData', { headers: MOBI_HDR, cf: { cacheTtl: 10, cacheEverything: true } });
+    if (!r.ok) throw new Error('mo-bi ' + r.status);
+    const d = await r.json();
+    const lista = (Array.isArray(d) ? d : []).map(x => {
+      const v = x && x.vehicle || {}, tr = v.trip || {}, vv = v.vehicle || {}, p = v.position || {};
+      if (!isFinite(p.latitude) || !isFinite(p.longitude)) return null;
+      return { r: tr.routeId != null ? String(tr.routeId) : '', d: tr.directionId != null ? Number(tr.directionId) : null,
+        p: String(vv.label || vv.th_id || vv.id || ''), n: String(vv.licensePlate || vv.license_plate || ''),
+        la: Math.round(p.latitude * 1e5) / 1e5, lo: Math.round(p.longitude * 1e5) / 1e5, ts: Number(v.timestamp) || 0, st: tr.startTime || '' };
+    }).filter(Boolean);
+    _liveBus = { t: Date.now(), v: lista, p: null };
+    return lista;
+  })();
+  try { return await _liveBus.p; } finally { _liveBus.p = null; }
+}
+async function mersLive(url) {
+  if (url.pathname === '/live/test') {
+    const t0 = Date.now(), v = await _liveVehicule();
+    const peLinie = {}; for (const x of v) if (x.r) peLinie[x.r] = (peLinie[x.r] || 0) + 1;
+    return { status: 200, corp: { ok: true, vehicule: v.length, cuLinie: v.filter(x => x.r).length, linii: Object.keys(peLinie).length, ms: Date.now() - t0, exemplu: v.slice(0, 2) } };
+  }
+  if (url.pathname === '/live/sosiri') {
+    const s = String(url.searchParams.get('s') || '').replace(/[^0-9]/g, '').slice(0, 8);
+    if (!s) return { status: 400, corp: { ok: false, eroare: 'Lipsește stația.' } };
+    const c = _liveSos.get(s); if (c && Date.now() - c.t < 15000) return { status: 200, corp: c.corp };
+    const r = await fetch(`${MOBI}/nextArrivals/${s}`, { headers: MOBI_HDR });
+    if (!r.ok) throw new Error('mo-bi ' + r.status);
+    const d = await r.json();
+    const corp = { ok: true, nume: d && d.name || '', linii: ((d && d.lines) || []).map(l => ({ id: String(l.id), n: String(l.name || ''), d: Number(l.direction), a: l.arrivingTime == null ? null : Number(l.arrivingTime) })) };
+    if (_liveSos.size > 300) _liveSos.clear();
+    _liveSos.set(s, { t: Date.now(), corp });
+    return { status: 200, corp };
+  }
+  const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 10);
+  if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
+  const v = await _liveVehicule();
+  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt).map(({ r, ...x }) => x) } };
 }
 
 async function conversatie(request, env) {
