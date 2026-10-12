@@ -230,6 +230,19 @@ async function peGrupuri(elemente, treaba) {
   return rezultate;
 }
 
+// [4.5] Marcajele „am trimis” (tură, seara, sărbătoare, chat, anunț) se scriau
+// câte unul pe om, fiecare o cerere separată. Cloudflare limitează cererile pe
+// rulare (50 pe planul gratuit), iar la un mesaj în chat către mulți colegi
+// limita se atingea și restul nu mai primeau nimic. Acum toate marcajele unei
+// etape pleacă într-o singură cerere (actualizare pe mai multe căi).
+async function _marcajeScrie(env, cale, m) {
+  const chei = Object.keys(m || {}); if (!chei.length) return;
+  for (let i = 0; i < chei.length; i += 300) {
+    const parte = {}; for (const k of chei.slice(i, i + 300)) parte[k] = m[k];
+    await fetch(`${env.FB_URL}/${cale}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parte) }).catch(() => {});
+  }
+}
+
 // Un abonament expirat (utilizator care a șters aplicația) trebuie curățat.
 async function stergeAbonament(env, nr) {
   await fetch(`${env.FB_URL}/push/${nr}.json`, { method: 'DELETE' }).catch(() => {});
@@ -344,10 +357,12 @@ async function getJSON(url) {
 
 async function trimiteTure(env, toti, numere, now, vapid) {
   let trimise = 0, sarite = 0, expirate = 0;
+  const marcaje = {};   // [4.5]
 
   const rezultate = await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
     if (!u || !abonamentele(u).length || !Array.isArray(u.ture)) return { sarit: 1 };
+    if (u.alerteTura === false) return { sarit: 1 };   // [4.5] omul a apăsat „Dezactivează” la alertele dinainte de tură
 
     // Un coleg poate cere mai multe alerte pentru aceeași tură (2 ore, 1 oră,
     // 30 de minute). Fiecare are marcajul ei, altfel a doua ar fi luată drept
@@ -419,11 +434,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
         // Marcăm ca trimisă doar dacă a ajuns pe cel puțin un telefon. Altfel,
         // dacă toate abonamentele erau moarte, am pierde alerta definitiv.
         if (!r.trimise) return { expirat: 1 };
-        const noi = trimiseDeja.concat(marcaj).slice(-8);
-        await fetch(`${env.FB_URL}/push/${nr}/trimise.json`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(noi)
-        });
+        marcaje[`${nr}/trimise`] = trimiseDeja.concat(marcaj).slice(-12);   // [4.5] scrise toate odată, mai jos
         return { trimis: 1 };
       } catch (e) {
         return { eroare: `${nr}: ${e.statusCode || '-'} ${String(e.message || e).slice(0, 80)}` };   // [4.3] apare în raport
@@ -432,6 +443,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
     return {};   // maxim o notificare de tură per utilizator per rulare
   });
 
+  await _marcajeScrie(env, 'push', marcaje);   // [4.5]
   const erori = [];
   for (const r of rezultate) {
     trimise  += r.trimis  || 0;
@@ -453,6 +465,7 @@ async function trimiteChat(env, toti, numere, vapid) {
   if (!ultimul) return { chatTrimise: 0 };
 
   let chatTrimise = 0;
+  const marcaje = {};   // [4.5]
   await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
     if (!u || !abonamentele(u).length) return;
@@ -480,26 +493,21 @@ async function trimiteChat(env, toti, numere, vapid) {
       // rețea la scriere ieșea din try și notificarea de chat se repeta la
       // fiecare rulare de cinci minute.
       const rez = await trimiteToate(env, nr, u, JSON.stringify({
-        title: '💬 Chat STB', body, tag: 'chat', urgent: false, url: './'
+        title: '💬 Chat STB', body, tag: 'chat', urgent: false, url: './?deschide=chat'   // [4.5] atingerea deschide chatul
       }), { TTL: 1800, urgency: 'normal' }, vapid);
       if (!rez.trimise) return;
-      await fetch(`${env.FB_URL}/push/${nr}/chatNotificat.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ultimul)
-      }).catch(() => {});
+      marcaje[`${nr}/chatNotificat`] = ultimul;   // [4.5]
       chatTrimise++;
     } catch (e) {
       // [4.3] trimiteToate șterge singur doar telefoanele moarte; aici nu mai ștergem tot nodul omului
     }
   });
 
-  // curățăm jurnalul de mesaje mai vechi de 24h
-  const limita = Date.now() - 24 * 3600 * 1000;
-  for (const [k, m] of Object.entries(recent)) {
-    if (!m || !m.t || m.t < limita) {
-      await fetch(`${env.FB_URL}/chat/recent/${k}.json`, { method: 'DELETE' }).catch(() => {});
-    }
-  }
+  await _marcajeScrie(env, 'push', marcaje);   // [4.5]
+  // curățăm jurnalul de mesaje mai vechi de 24h — [4.5] o singură cerere, nu una pe mesaj
+  const limita = Date.now() - 24 * 3600 * 1000, vechi = {};
+  for (const [k, m] of Object.entries(recent)) if (!m || !m.t || m.t < limita) vechi[k] = null;
+  await _marcajeScrie(env, 'chat/recent', vechi);
 
   return { chatTrimise };
 }
@@ -525,7 +533,7 @@ async function trimiteSarbatori(env, toti, numere, now, vapid) {
   if (!nume) return { trimise: 0 };
 
   let trimise = 0;
-  const erori = [];
+  const erori = [], marcaje = {};   // [4.5]
 
   await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
@@ -553,10 +561,7 @@ async function trimiteSarbatori(env, toti, numere, now, vapid) {
       }), { TTL: 43200, urgency: 'normal' }, vapid);
       if (!rez.trimise) return;
 
-      await fetch(`${env.FB_URL}/push/${nr}/sarbTrimis.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(now.data)
-      }).catch(() => {});
+      marcaje[`${nr}/sarbTrimis`] = now.data;   // [4.5]
       trimise++;
     } catch (e) {
       if (erori.length < 3) {   // [4.3] nu mai ștergem tot nodul omului (toate telefoanele și setările)
@@ -564,6 +569,7 @@ async function trimiteSarbatori(env, toti, numere, now, vapid) {
       }
     }
   });
+  await _marcajeScrie(env, 'push', marcaje);   // [4.5]
   return { trimise, erori };
 }
 
@@ -598,7 +604,7 @@ function oraSerii(u) {
 async function trimiteSeara(env, toti, numere, now, vapid) {
   const maine = ziuaUrmatoare(now.data);
   let trimise = 0;
-  const erori = [];
+  const erori = [], marcaje = {};   // [4.5]
 
   await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
@@ -642,10 +648,7 @@ async function trimiteSeara(env, toti, numere, now, vapid) {
       }), { TTL: 43200, urgency: 'high' }, vapid);
       if (!rez.trimise) return;
 
-      await fetch(`${env.FB_URL}/push/${nr}/searaTrimis.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(now.data)
-      }).catch(() => {});
+      marcaje[`${nr}/searaTrimis`] = now.data;   // [4.5]
       trimise++;
     } catch (e) {
       if (erori.length < 3) {   // [4.3] nu mai ștergem tot nodul omului (toate telefoanele și setările)
@@ -653,6 +656,7 @@ async function trimiteSeara(env, toti, numere, now, vapid) {
       }
     }
   });
+  await _marcajeScrie(env, 'push', marcaje);   // [4.5]
   return { trimise, erori };
 }
 
@@ -681,6 +685,7 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
   // lucru doar ca să arate cifrele astea — l-am scos și le-am adus aici.
   let telefoane = 0, expirate = 0, faraTelefon = 0;
   const erori = [];   // [DIAGNOSTIC] ce anume refuză trimiterea
+  const marcaje = {};   // [4.5]
 
   await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
@@ -698,12 +703,7 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
     if (!noi.length) {
       // Abonat nou fără niciun anunț de primit: notăm totuși ultimul anunț ca
       // "văzut", ca să nu recalculăm asta la fiecare rulare de cinci minute.
-      if (u.pushDin && primit < celMaiNou) {
-        await fetch(`${env.FB_URL}/push/${nr}/broadcastNotificat.json`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(celMaiNou)
-        }).catch(() => {});
-      }
+      if (u.pushDin && primit < celMaiNou) marcaje[`${nr}/broadcastNotificat`] = celMaiNou;   // [4.5]
       return;
     }
 
@@ -731,13 +731,9 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
         }
       }
     }
-    if (okPentruAcesta) {
-      await fetch(`${env.FB_URL}/push/${nr}/broadcastNotificat.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(celMaiNou)
-      }).catch(() => {});
-    }
+    if (okPentruAcesta) marcaje[`${nr}/broadcastNotificat`] = celMaiNou;   // [4.5]
   });
+  await _marcajeScrie(env, 'push', marcaje);
 
   // curățăm anunțurile mai vechi de 7 zile
   const limita = Date.now() - 7 * 24 * 3600 * 1000;
@@ -890,6 +886,7 @@ async function ruleaza(env) {
   if (anunt.eroare) _rul.erori.push('anunțuri · ' + anunt.eroare);
   for (const x of (anunt.erori || [])) _rul.erori.push('anunțuri · ' + x);
   // [4.3] rezumatul rulării: panoul îl arată în „De rezolvat” doar dacă ceva nu merge
+  if (/subrequest/i.test(JSON.stringify(_rul.erori))) _rul.erori.unshift('Cloudflare: s-a atins limita de cereri pe rulare (planul gratuit are 50) — unii colegi n-au primit notificarea');   // [4.5]
   _rul.erori = _rul.erori.slice(0, 6); _rul.durata = Date.now() - pornit;
   await _fbPut(env, 'adminJetoane/_rulare', _rul).catch(() => {});
   if (anunt.eroare) log('Anunțuri: eroare — ' + anunt.eroare);
@@ -2277,14 +2274,14 @@ async function _fbPut(env, cale, v) {
   if (!r.ok) { const d = await r.text().catch(() => ''); throw new Error(`Firebase ${r.status} ${d.slice(0, 120)}`); }
 }
 // Notificare către un singur număr de serviciu (toate telefoanele lui).
-async function _pushLa(env, nr, titlu, text, tag) {
+async function _pushLa(env, nr, titlu, text, tag, url) {
   if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !nr) return 0;
   try {
     const u = await getJSON(urlBroadcast(env, `push/${nrCurat(nr)}.json`));
     if (!u) return 0;
     const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
     // [4.3] eticheta primește un sufix unic: două mesaje la rând nu se mai înlocuiesc în bara de notificări
-    const r = await trimiteToate(env, nrCurat(nr), u, JSON.stringify({ title: titlu, body: text, tag: (tag || 'info') + '-' + Date.now().toString(36), url: './' }), { TTL: 86400, urgency: 'high' }, vapid);
+    const r = await trimiteToate(env, nrCurat(nr), u, JSON.stringify({ title: titlu, body: text, tag: (tag || 'info') + '-' + Date.now().toString(36), url: url || './' }), { TTL: 86400, urgency: 'high' }, vapid);
     return r.trimise || 0;
   } catch (e) { return 0; }
 }
@@ -3821,7 +3818,7 @@ async function admin(request, env) {
       await _convAduMesajeAdmin(env, nr).catch(() => {});
       const m = await _convAdauga(env, nr, 'a', text);
       await _fbPut(env, `${CONV}/${nr}/cititA`, Date.now()).catch(() => {});
-      const telefoane = await _pushLa(env, nr, '✉️ Mesaj de la admin', text.slice(0, 140), 'conv');
+      const telefoane = await _pushLa(env, nr, '✉️ Mesaj de la admin', text.slice(0, 140), 'conv', './?deschide=conv');   // [4.5]
       return { status: 200, corp: { ok: true, la: m.la, telefoane } };
     }
     case 'convRezolvat': {
