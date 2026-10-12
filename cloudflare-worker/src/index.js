@@ -152,21 +152,28 @@ function abonamentele(u) {
 async function trimiteToate(env, nr, u, text, optiuni, vapid) {
   const lista = abonamentele(u);
   if (!lista.length) return { trimise: 0, moarte: 0 };
-  let trimise = 0, moarte = 0;
+  let trimise = 0, moarte = 0, ultimaEroare = null;
   for (const { id, sub } of lista) {
     try {
       await trimitePush(sub, text, optiuni, vapid);
       trimise++;
     } catch (e) {
-      if (e.statusCode === 404 || e.statusCode === 410) {
+      // [4.3] 404/410 = abonament mort; 400 „abonament incomplet” = date stricate în cloud.
+      // Amândouă se șterg, doar acel telefon.
+      if (e.statusCode === 404 || e.statusCode === 410 || (e.statusCode === 400 && /incomplet/.test(e.message || ''))) {
         moarte++;
         const cale = id === '_vechi' ? `push/${nr}/sub.json` : `push/${nr}/subs/${id}.json`;
         await fetch(urlBroadcast(env, cale), { method: 'DELETE' }).catch(() => {});
       } else {
-        throw e;
+        // [4.3] Înainte, prima eroare de alt fel (ex. 403, 429, 500 de la serverul de push)
+        // oprea bucla: celelalte telefoane ale omului nu mai primeau nimic. Dacă eroarea
+        // ținea (un abonament făcut cu altă cheie), omul nu mai primea NICIO notificare.
+        ultimaEroare = e;
       }
     }
   }
+  // Aruncăm doar dacă n-a ajuns pe niciun telefon, ca rularea să noteze eroarea și să reîncerce.
+  if (!trimise && ultimaEroare) throw ultimaEroare;
   return { trimise, moarte };
 }
 
@@ -419,18 +426,20 @@ async function trimiteTure(env, toti, numere, now, vapid) {
         });
         return { trimis: 1 };
       } catch (e) {
-        return {};
+        return { eroare: `${nr}: ${e.statusCode || '-'} ${String(e.message || e).slice(0, 80)}` };   // [4.3] apare în raport
       }
     }
     return {};   // maxim o notificare de tură per utilizator per rulare
   });
 
+  const erori = [];
   for (const r of rezultate) {
     trimise  += r.trimis  || 0;
     sarite   += r.sarit   || 0;
     expirate += r.expirat || 0;
+    if (r.eroare && erori.length < 3) erori.push(r.eroare);
   }
-  return { trimise, sarite, expirate };
+  return { trimise, sarite, expirate, erori };
 }
 
 async function trimiteChat(env, toti, numere, vapid) {
@@ -480,9 +489,7 @@ async function trimiteChat(env, toti, numere, vapid) {
       }).catch(() => {});
       chatTrimise++;
     } catch (e) {
-      if (e.statusCode === 404 || e.statusCode === 410) {
-        await fetch(`${env.FB_URL}/push/${nr}.json`, { method: 'DELETE' }).catch(() => {});
-      }
+      // [4.3] trimiteToate șterge singur doar telefoanele moarte; aici nu mai ștergem tot nodul omului
     }
   });
 
@@ -552,9 +559,7 @@ async function trimiteSarbatori(env, toti, numere, now, vapid) {
       }).catch(() => {});
       trimise++;
     } catch (e) {
-      if (e.statusCode === 404 || e.statusCode === 410) {
-        await fetch(`${env.FB_URL}/push/${nr}.json`, { method: 'DELETE' }).catch(() => {});
-      } else if (erori.length < 3) {
+      if (erori.length < 3) {   // [4.3] nu mai ștergem tot nodul omului (toate telefoanele și setările)
         erori.push(`${nr}: ${e.statusCode || '-'} ${e.message || e}`);
       }
     }
@@ -643,9 +648,7 @@ async function trimiteSeara(env, toti, numere, now, vapid) {
       }).catch(() => {});
       trimise++;
     } catch (e) {
-      if (e.statusCode === 404 || e.statusCode === 410) {
-        await fetch(`${env.FB_URL}/push/${nr}.json`, { method: 'DELETE' }).catch(() => {});
-      } else if (erori.length < 3) {
+      if (erori.length < 3) {   // [4.3] nu mai ștergem tot nodul omului (toate telefoanele și setările)
         erori.push(`${nr}: ${e.statusCode || '-'} ${e.message || e}`);
       }
     }
@@ -721,10 +724,7 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
           if (r && r.moarte) expirate += r.moarte;
         });
       } catch (e) {
-        if (e.statusCode === 404 || e.statusCode === 410) {
-          await stergeAbonament(env, nr);
-          break;
-        }
+        // [4.3] nu mai ștergem tot nodul omului: trimiteToate scoate singur doar telefoanele moarte
         // orice altă eroare: o reținem, ca să apară în raport
         if (erori.length < 3) {
           erori.push(`${nr}: ${e.statusCode || '-'} ${e.name || ''} ${e.message || e}`.trim());
@@ -836,7 +836,7 @@ async function ruleaza(env) {
 
   let toti;
   try { toti = await getJSON(`${env.FB_URL}/push.json`); }
-  catch (e) { log('❌ Nu am putut citi abonamentele: ' + e.message); return raport.join('\n'); }
+  catch (e) { log('❌ Nu am putut citi abonamentele: ' + e.message); await _fbPut(env, 'adminJetoane/_rulare', { la: pornit, crapat: 'Nu am putut citi abonamentele: ' + String(e.message).slice(0, 150), erori: [] }).catch(() => {}); return raport.join('\n'); }
 
   if (!toti) { log('Niciun abonament înregistrat.'); return raport.join('\n'); }
 
@@ -849,10 +849,13 @@ async function ruleaza(env) {
   }
   log(`${numere.length} abonamente de verificat.`);
 
-  const { trimise, sarite, expirate } = await trimiteTure(env, toti, numere, now, vapid);
+  const { trimise, sarite, expirate, erori: eroriTure } = await trimiteTure(env, toti, numere, now, vapid);
   log(`Ture: ${trimise} trimise · ${sarite} sărite · ${expirate} expirate`);
+  for (const x of eroriTure || []) log('  ⚠ tură, refuzată: ' + x);
+  const _rul = { la: pornit, abonati: numere.length, ture: trimise, erori: (eroriTure || []).map(x => 'tură · ' + x) };   // [4.3]
 
   const sarb = await trimiteSarbatori(env, toti, numere, now, vapid);
+  for (const x of (sarb.erori || [])) _rul.erori.push('sărbătoare · ' + x);
   if (sarb.trimise) log(`Sărbătoare: ${sarb.trimise} notificări trimise`);
   if (sarb.erori && sarb.erori.length) {
     log('  ⚠ sărbătoare, refuzate:');
@@ -860,6 +863,8 @@ async function ruleaza(env) {
   }
 
   const seara = await trimiteSeara(env, toti, numere, now, vapid);
+  _rul.seara = seara.trimise || 0;
+  for (const x of (seara.erori || [])) _rul.erori.push('seara · ' + x);
   if (seara.trimise) log(`Seara: ${seara.trimise} notificări trimise`);
   if (seara.erori && seara.erori.length) {
     log('  ⚠ seara, refuzate:');
@@ -869,6 +874,7 @@ async function ruleaza(env) {
   const { chatTrimise, eroare } = await trimiteChat(env, toti, numere, vapid);
   if (eroare) log('Chat: eroare — ' + eroare);
   else log(`Chat: ${chatTrimise} notificări trimise`);
+  _rul.chat = chatTrimise || 0; if (eroare) _rul.erori.push('chat · ' + eroare);
 
   // Copia zilnică, înainte de restul: dacă ceva se strică mai încolo, măcar
   // programele oamenilor sunt puse deoparte.
@@ -880,6 +886,12 @@ async function ruleaza(env) {
   } catch (e) { log('Arhivă: eroare — ' + e.message); }
 
   const anunt = await trimiteAnunturi(env, toti, numere, vapid);
+  _rul.anunturi = anunt.trimise || 0;
+  if (anunt.eroare) _rul.erori.push('anunțuri · ' + anunt.eroare);
+  for (const x of (anunt.erori || [])) _rul.erori.push('anunțuri · ' + x);
+  // [4.3] rezumatul rulării: panoul îl arată în „De rezolvat” doar dacă ceva nu merge
+  _rul.erori = _rul.erori.slice(0, 6); _rul.durata = Date.now() - pornit;
+  await _fbPut(env, 'adminJetoane/_rulare', _rul).catch(() => {});
   if (anunt.eroare) log('Anunțuri: eroare — ' + anunt.eroare);
   else {
     log(`Anunțuri: ${anunt.trimise} trimise · ${anunt.telefoane || 0} telefoane · ${anunt.expirate || 0} expirate · ${anunt.faraTelefon || 0} fără abonament`);
@@ -934,7 +946,8 @@ async function ruleaza(env) {
 export default {
   // Rulare automată, la fiecare 5 minute (vezi wrangler.toml)
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(ruleaza(env));
+    // [4.3] dacă rularea crapă la jumătate, rămâne scris de ce (îl vezi în „De rezolvat”)
+    ctx.waitUntil(ruleaza(env).catch(e => _fbPut(env, 'adminJetoane/_rulare', { la: Date.now(), crapat: String(e && e.message || e).slice(0, 200), erori: [] }).catch(() => {})));
   },
 
   // Rulare manuală: deschide URL-ul workerului în browser, ca un buton
@@ -2270,7 +2283,8 @@ async function _pushLa(env, nr, titlu, text, tag) {
     const u = await getJSON(urlBroadcast(env, `push/${nrCurat(nr)}.json`));
     if (!u) return 0;
     const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
-    const r = await trimiteToate(env, nrCurat(nr), u, JSON.stringify({ title: titlu, body: text, tag: tag || 'info', url: './' }), { TTL: 86400 }, vapid);
+    // [4.3] eticheta primește un sufix unic: două mesaje la rând nu se mai înlocuiesc în bara de notificări
+    const r = await trimiteToate(env, nrCurat(nr), u, JSON.stringify({ title: titlu, body: text, tag: (tag || 'info') + '-' + Date.now().toString(36), url: './' }), { TTL: 86400, urgency: 'high' }, vapid);
     return r.trimise || 0;
   } catch (e) { return 0; }
 }
@@ -2756,7 +2770,8 @@ async function _anuntaAdminii(env, titlu, text, tag) {
   try { lista = await getJSON(urlBroadcast(env, 'config/adminNotif.json')); } catch (e) { return 0; }
   if (!lista || typeof lista !== 'object') return 0;
   const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
-  const payload = JSON.stringify({ title: titlu, body: text, tag: tag || 'admin', url: './' });
+  // [4.3] sufix unic: fiecare cerere / mesaj / eroare rămâne separat în bara de notificări
+  const payload = JSON.stringify({ title: titlu, body: text, tag: (tag || 'admin') + '-' + Date.now().toString(36), url: './' });
   let trimise = 0;
   for (const nr of Object.keys(lista)) {
     if (!lista[nr]) continue;
@@ -3234,7 +3249,7 @@ async function _rezLista(env) {
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste',
   'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
-  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine']);
+  'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine', 'rulareStare']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
 // Acțiuni care nu se pot face pe numărul unui admin.
@@ -3380,6 +3395,7 @@ async function admin(request, env) {
   const _rezCtx = REZ_ACTIUNI.has(cerere.actiune) ? await _rezContext(env, cerere).catch(() => null) : null;
   const rez = await (async () => { switch (cerere.actiune) {
     case 'rezolvateLista': return { status: 200, corp: { ok: true, lista: await _rezLista(env) } };   // [4.1]
+    case 'rulareStare': return { status: 200, corp: { ok: true, rulare: await getJSON(urlBroadcast(env, 'adminJetoane/_rulare.json')).catch(() => null) } };   // [4.3]
     case 'chatCine': {   // [4.2] cine a scris un mesaj în chat
       const uid = String(cerere.uid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 64);
       if (!uid) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul de chat.' } };
