@@ -149,9 +149,36 @@ function abonamentele(u) {
 
 // Trimite același mesaj pe toate telefoanele omului. Abonamentele moarte se
 // șterg pe loc, fiecare din locul lui, ca să nu se adune gunoi în cloud.
+// ══════════════════════════════════════════════════════════════
+// [5.2] BUGETUL DE CERERI AL UNEI RULĂRI
+// Planul gratuit Cloudflare oprește orice cerere peste 50 într-o rulare
+// („Too many subrequests”). Când chatul era activ, notificările de chat
+// consumau tot, iar restul rulării (anunțuri, arhivă, curățenie și chiar
+// rezumatul pentru panou) cădea. Acum numărăm cererile, păstrăm o rezervă
+// pentru marcaje și rezumat, iar ce nu încape se trimite la rularea următoare.
+// ══════════════════════════════════════════════════════════════
+const LIMITA_CERERI = 50, REZERVA_CERERI = 12;
+let _SR_ACTIV = null;
+const _fetchCF = globalThis.fetch;
+globalThis.fetch = function (...a) { if (_SR_ACTIV) _SR_ACTIV.n++; return _fetchCF(...a); };
+function _srRamase(env) { const b = env && env._sr; return b ? LIMITA_CERERI - b.n - b.pend : 99; }
+// pentru o notificare: lasă rezerva neatinsă
+function _srRezerva(env, k) {
+  const b = env && env._sr; if (!b) return true;
+  if (b.n + b.pend + k > LIMITA_CERERI - REZERVA_CERERI) { b.amanate++; return false; }
+  b.pend += k; return true;
+}
+function _srElibereaza(env, k) { const b = env && env._sr; if (b) b.pend = Math.max(0, b.pend - k); }
+
 async function trimiteToate(env, nr, u, text, optiuni, vapid) {
   const lista = abonamentele(u);
   if (!lista.length) return { trimise: 0, moarte: 0 };
+  // [5.2] nu mai încape în rularea asta: rămâne pentru următoarea (fără marcaj)
+  if (!_srRezerva(env, lista.length)) return { trimise: 0, moarte: 0, amanat: true };
+  try { return await _trimiteToate(env, nr, u, text, optiuni, vapid, lista); }
+  finally { _srElibereaza(env, lista.length); }
+}
+async function _trimiteToate(env, nr, u, text, optiuni, vapid, lista) {
   let trimise = 0, moarte = 0, ultimaEroare = null;
   for (const { id, sub } of lista) {
     try {
@@ -433,6 +460,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
         const r = await trimiteToate(env, nr, u, payload, { TTL: 3600, urgency: 'high' }, vapid);
         // Marcăm ca trimisă doar dacă a ajuns pe cel puțin un telefon. Altfel,
         // dacă toate abonamentele erau moarte, am pierde alerta definitiv.
+        if (r.amanat) return { amanat: 1 };   // [5.2] la rularea următoare
         if (!r.trimise) return { expirat: 1 };
         marcaje[`${nr}/trimise`] = trimiseDeja.concat(marcaj).slice(-12);   // [4.5] scrise toate odată, mai jos
         return { trimis: 1 };
@@ -707,8 +735,9 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
       return;
     }
 
-    let okPentruAcesta = false;
+    let okPentruAcesta = false, ultimOk = 0, amanat = false;
     for (const [, a] of noi) {
+      if (amanat) break;
       try {
         await trimiteToate(env, nr, u, JSON.stringify({
           title: a.titlu || '📢 Anunț Program STB',
@@ -720,7 +749,8 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
           // [FIX v12.6] marcajul `broadcastNotificat` se punea și când toate
           // abonamentele erau moarte, deci anunțul se pierdea definitiv pentru
           // omul care se reabona după aceea.
-          if (r && r.trimise) { okPentruAcesta = true; trimise++; telefoane += r.trimise; }
+          if (r && r.amanat) { amanat = true; return; }   // [5.2]
+          if (r && r.trimise) { okPentruAcesta = true; ultimOk = a.t; trimise++; telefoane += r.trimise; }
           if (r && r.moarte) expirate += r.moarte;
         });
       } catch (e) {
@@ -731,17 +761,14 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
         }
       }
     }
-    if (okPentruAcesta) marcaje[`${nr}/broadcastNotificat`] = celMaiNou;   // [4.5]
+    if (okPentruAcesta) marcaje[`${nr}/broadcastNotificat`] = amanat ? ultimOk : celMaiNou;   // [4.5] [5.2]
   });
   await _marcajeScrie(env, 'push', marcaje);
 
   // curățăm anunțurile mai vechi de 7 zile
-  const limita = Date.now() - 7 * 24 * 3600 * 1000;
-  for (const [k, a] of Object.entries(anunturi)) {
-    if (!a || !a.t || a.t < limita) {
-      await fetch(urlBroadcast(env, `broadcast/${k}.json`), { method: 'DELETE' }).catch(() => {});
-    }
-  }
+  const limita = Date.now() - 7 * 24 * 3600 * 1000, vechi = {};
+  for (const [k, a] of Object.entries(anunturi)) if (!a || !a.t || a.t < limita) vechi[k] = null;
+  await _fbPatch(env, 'broadcast', vechi);   // [5.2] o singură cerere, nu una pe anunț
 
   return { trimise, telefoane, expirate, faraTelefon, erori };
 }
@@ -795,7 +822,14 @@ async function facArhiva(env) {
   return { azi, numere, zile, sterse };
 }
 
-async function ruleaza(env) {
+async function ruleaza(envOrig) {
+  // [5.2] contorul de cereri al acestei rulări
+  const _sr = { n: 0, pend: 0, amanate: 0 };
+  const env = Object.assign({}, envOrig, { _sr });
+  const anterior = _SR_ACTIV; _SR_ACTIV = _sr;
+  try { return await _ruleaza(env); } finally { _SR_ACTIV = anterior; }
+}
+async function _ruleaza(env) {
   const pornit = Date.now();
   const raport = [];
   const log = (s) => { raport.push(s); console.log(s); };
@@ -867,28 +901,33 @@ async function ruleaza(env) {
     for (const x of seara.erori) log('    ' + x);
   }
 
+  // [5.2] anunțurile înaintea chatului: dacă bugetul nu ajunge, chatul așteaptă, nu anunțurile
+  const anunt = await trimiteAnunturi(env, toti, numere, vapid);
+  _rul.anunturi = anunt.trimise || 0;
+  if (anunt.eroare) _rul.erori.push('anunțuri · ' + anunt.eroare);
+  for (const x of (anunt.erori || [])) _rul.erori.push('anunțuri · ' + x);
+
   const { chatTrimise, eroare } = await trimiteChat(env, toti, numere, vapid);
   if (eroare) log('Chat: eroare — ' + eroare);
   else log(`Chat: ${chatTrimise} notificări trimise`);
   _rul.chat = chatTrimise || 0; if (eroare) _rul.erori.push('chat · ' + eroare);
+  if (env._sr.amanate) { log(`Amânate pentru rularea următoare (limita de 50 de cereri): ${env._sr.amanate} notificări`); _rul.amanate = env._sr.amanate; }
 
-  // Copia zilnică, înainte de restul: dacă ceva se strică mai încolo, măcar
-  // programele oamenilor sunt puse deoparte.
-  try {
+  // [4.3] rezumatul rulării: panoul îl arată în „De rezolvat” doar dacă ceva nu merge
+  if (/subrequest/i.test(JSON.stringify(_rul.erori))) _rul.erori.unshift('Cloudflare: s-a atins limita de cereri pe rulare (planul gratuit are 50) — unii colegi n-au primit notificarea');   // [4.5]
+  _rul.erori = _rul.erori.slice(0, 6); _rul.durata = Date.now() - pornit; _rul.cereri = env._sr.n;
+  await _fbPut(env, 'adminJetoane/_rulare', _rul).catch(() => {});
+
+  // [5.2] întreținerea (arhivă, statistici, curățenie) doar cu ce a mai rămas din buget;
+  // ce nu încape se face la o rulare mai liniștită (sunt 288 de rulări pe zi)
+  const poate = (cat, ce) => { if (_srRamase(env) >= cat) return true; log(`${ce}: amânat, nu mai încape în rularea asta`); return false; };
+  if (poate(7, 'Arhivă')) try {
     const arh = await facArhiva(env);
     if (arh.sarit) log('Arhivă: deja făcută azi');
     else if (arh.eroare) log('Arhivă: eroare — ' + arh.eroare);
     else log(`Arhivă ${arh.azi}: ${arh.numere} colegi · ${arh.zile} zile` + (arh.sterse ? ` · ${arh.sterse} copii vechi șterse` : ''));
   } catch (e) { log('Arhivă: eroare — ' + e.message); }
 
-  const anunt = await trimiteAnunturi(env, toti, numere, vapid);
-  _rul.anunturi = anunt.trimise || 0;
-  if (anunt.eroare) _rul.erori.push('anunțuri · ' + anunt.eroare);
-  for (const x of (anunt.erori || [])) _rul.erori.push('anunțuri · ' + x);
-  // [4.3] rezumatul rulării: panoul îl arată în „De rezolvat” doar dacă ceva nu merge
-  if (/subrequest/i.test(JSON.stringify(_rul.erori))) _rul.erori.unshift('Cloudflare: s-a atins limita de cereri pe rulare (planul gratuit are 50) — unii colegi n-au primit notificarea');   // [4.5]
-  _rul.erori = _rul.erori.slice(0, 6); _rul.durata = Date.now() - pornit;
-  await _fbPut(env, 'adminJetoane/_rulare', _rul).catch(() => {});
   if (anunt.eroare) log('Anunțuri: eroare — ' + anunt.eroare);
   else {
     log(`Anunțuri: ${anunt.trimise} trimise · ${anunt.telefoane || 0} telefoane · ${anunt.expirate || 0} expirate · ${anunt.faraTelefon || 0} fără abonament`);
@@ -899,7 +938,7 @@ async function ruleaza(env) {
   }
 
   // ── Raport de utilizare ─────────────────────────────────────
-  try {
+  if (poate(3, 'Statistici')) try {
     const stats = await getJSON(`${env.FB_URL}/stats.json`);
     if (stats) {
       const v = Object.values(stats);
@@ -931,12 +970,12 @@ async function ruleaza(env) {
     }
   } catch (e) { log('Statistici: ' + e.message); }
 
-  await _repAmintireAutomata(env, log);   // [1.0]
-  await _curataTrimiteri(env, log);       // [1.2]
-  await _sterge6Luni(env, log);           // [1.6]
+  if (poate(6, 'Amintire repartizare')) await _repAmintireAutomata(env, log);   // [1.0]
+  if (poate(9, 'Curățenie')) await _curataTrimiteri(env, log);       // [1.2]
+  if (poate(12, 'Ștergere 6 luni')) await _sterge6Luni(env, log);           // [1.6]
 
   log('');
-  log(`Rulare terminată în ${Date.now() - pornit} ms.`);
+  log(`Rulare terminată în ${Date.now() - pornit} ms · ${env._sr.n} cereri din ${LIMITA_CERERI}.`);
   return raport.join('\n');
 }
 
@@ -1077,6 +1116,10 @@ export default {
       try { r = url.pathname === '/eroare' ? await raportEroare(request, env) : url.pathname === '/mesaj-admin' ? await mesajAdmin(request, env) : await dateleMele(request, env); }
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
+    if (url.pathname === '/live/diag') {                // [5.2] diagnostic: coduri de linie necunoscute
+      let t; try { t = await mersLiveDiag(); } catch (e) { t = 'Eroare: ' + (e && e.message || e); }
+      return new Response(t, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
     }
     if (url.pathname === '/live' || url.pathname === '/live/sosiri' || url.pathname === '/live/test') {   // [4.6] mers live
       let r;
@@ -2275,6 +2318,15 @@ async function _repAmintireAutomata(env, log) {
 const _id12 = () => Date.now().toString(36) + [...crypto.getRandomValues(new Uint8Array(5))].map(x => (x % 36).toString(36)).join('');
 const _aziRo = () => acumRo().data;   // [2.7] fusul orar real (vara +3, iarna +2)
 const _txt = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
+// [5.2] mai multe scrieri/ștergeri într-o singură cerere (cale '' = rădăcina)
+async function _fbPatch(env, cale, m) {
+  const chei = Object.keys(m || {}); if (!chei.length) return;
+  for (let i = 0; i < chei.length; i += 300) {
+    const parte = {}; for (const k of chei.slice(i, i + 300)) parte[k] = m[k];
+    const r = await fetch(urlBroadcast(env, (cale || '') + '.json'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parte) });
+    if (!r.ok) throw new Error('Firebase ' + r.status);
+  }
+}
 async function _fbPut(env, cale, v) {
   const r = await fetch(urlBroadcast(env, cale + '.json'), { method: v === null ? 'DELETE' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: v === null ? undefined : JSON.stringify(v) });
   if (!r.ok) { const d = await r.text().catch(() => ''); throw new Error(`Firebase ${r.status} ${d.slice(0, 120)}`); }
@@ -2433,21 +2485,23 @@ async function _curataTrimiteri(env, log) {
     await _fbPut(env, 'config/curatat', azi);
     const t = await getJSON(urlBroadcast(env, 'trimiteri.json')) || {};
     let n = 0;
+    const sterg = {};   // [5.2] toate ștergerile într-o singură cerere, nu câte una
     for (const [id, x] of Object.entries(t)) {
-      if (x && x.la && (Date.now() - x.la > 30 * 864e5 || (x.incomplet && Date.now() - x.la > 864e5))) { await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {}); await _fbPut(env, `trimiteri/${id}`, null).catch(() => {}); n++; }
+      if (x && x.la && (Date.now() - x.la > 30 * 864e5 || (x.incomplet && Date.now() - x.la > 864e5))) { sterg[`trimiteriFisiere/${id}`] = null; sterg[`trimiteri/${id}`] = null; n++; }
     }
     const r = await getJSON(urlBroadcast(env, 'raportOre.json')) || {};
     for (const [id, x] of Object.entries(r)) {
-      if (x && x.la && Date.now() - x.la > 60 * 864e5) { await _fbPut(env, `raportOre/${id}`, null).catch(() => {}); await _fbPut(env, `raportOrePoza/${id}`, null).catch(() => {}); n++; }
+      if (x && x.la && Date.now() - x.la > 60 * 864e5) { sterg[`raportOre/${id}`] = null; sterg[`raportOrePoza/${id}`] = null; n++; }
     }
     const er = await getJSON(urlBroadcast(env, 'erori.json')) || {};
-    for (const [id, x] of Object.entries(er)) if (!x || !x.ultima || Date.now() - x.ultima > 30 * 864e5) { await _fbPut(env, `erori/${id}`, null).catch(() => {}); n++; }
+    for (const [id, x] of Object.entries(er)) if (!x || !x.ultima || Date.now() - x.ultima > 30 * 864e5) { sterg[`erori/${id}`] = null; n++; }
     // [2.3] jurnalul adminului 2: 90 de zile
     const jr = await getJSON(urlBroadcast(env, ADM2_JURNAL + '.json')).catch(() => null) || {};
     for (const [nrA, intrari] of Object.entries(jr)) {
-      for (const [id, x] of Object.entries(intrari || {})) if (!x || !x.la || Date.now() - x.la > 90 * 864e5) { await _fbPut(env, `${ADM2_JURNAL}/${nrA}/${id}`, null).catch(() => {}); n++; }
+      for (const [id, x] of Object.entries(intrari || {})) if (!x || !x.la || Date.now() - x.la > 90 * 864e5) { sterg[`${ADM2_JURNAL}/${nrA}/${id}`] = null; n++; }
     }
-    await _fbPut(env, 'limite', null).catch(() => {});
+    sterg['limite'] = null;
+    await _fbPatch(env, '', sterg);
     if (n) log(`Curățenie: ${n} trimiteri/rapoarte vechi șterse`);
   } catch (e) { log('Curățenie: ' + e.message); }
 }
@@ -2589,6 +2643,22 @@ async function _liveVehicule() {
     return lista;
   })();
   try { return await _liveBus.p; } finally { _liveBus.p = null; }
+}
+// [5.2] Liniile din GTFS (cod → nume), ca /live/diag să arate ce coduri trimite STB
+// care nu sunt în GTFS și ce linii n-au acum niciun vehicul.
+const GTFS_LINII = {"1013":"4","1015":"290","1037":"228","112":"382","113":"330","116":"282","117":"335","119":"605","121":"205","124":"162","126":"163","133":"178","134":"312","136":"311","137":"N113","139":"N112","140":"N111","141":"N110","143":"106","144":"105","145":"N119","146":"104","147":"N118","148":"103","149":"N117","150":"102","152":"N116","154":"N115","155":"N114","158":"221","159":"222","160":"223","165":"227","167":"N122","169":"N121","174":"N120","175":"185","180":"116","181":"117","183":"112","184":"381","186":"243","189":"246","191":"125","192":"N105","194":"N106","196":"N103","197":"N104","199":"N109","201":"301","202":"123","203":"304","204":"N107","207":"N108","208":"N101","209":"N102","210":"232","214":"135","217":"138","218":"139","228":"143","232":"253","233":"141","234":"331","235":"331B","245":"137","247":"97","365":"448","395":"477","404":"385","430":"City Tour","464":"343","54":"11","55":"21","57":"41","61":"47","620":"241","621":"655","63":"23","65":"25","66":"27","661":"619","67":"10","68":"1","69":"7","70":"32","72":"66","73":"79","732":"203","735":"N10","74":"96","75":"69","76":"93","78":"90","803":"322","804":"487","81":"62","812":"N1","814":"5","820":"484","821":"485","824":"101","825":"122","826":"168","827":"182","828":"196","829":"216","83":"86","830":"220","831":"226","832":"323","833":"368","835":"422","836":"423","837":"425","84":"61","843":"425B","844":"421","845":"424","848":"431","849":"432","85":"74","850":"433","851":"434","855":"441","856":"442","857":"443","858":"444","859":"446","86":"76","87":"85","874":"441B","884":"484B","887":"100","888":"478","889":"640","901":"483","902":"443B","910":"63","915":"53","916":"95","924":"72","925":"73","942":"627","952":"642","980":"301B"};
+async function mersLiveDiag() {
+  const v = await _liveVehicule(), pe = {};
+  let fara = 0;
+  for (const x of v) { if (!x.r) { fara++; continue; } (pe[x.r] = pe[x.r] || []).push(x); }
+  const nec = Object.keys(pe).filter(r => !GTFS_LINII[r]).sort((a, b) => pe[b].length - pe[a].length);
+  const goale = Object.keys(GTFS_LINII).filter(r => !pe[r]).map(r => GTFS_LINII[r]).sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
+  const f = n => n.toFixed(4);
+  let t = `Vehicule: ${v.length} · fără linie: ${fara} · coduri de linie: ${Object.keys(pe).length}\n\n`;
+  t += `CODURI CARE NU SUNT ÎN GTFS (${nec.length}):\n`;
+  for (const r of nec) { const l = pe[r]; t += `• ${r}: ${l.length} veh. — ` + l.slice(0, 3).map(x => `${x.p} @ ${f(x.la)},${f(x.lo)} s${x.d}`).join(' | ') + '\n'; }
+  t += `\nLINII DIN GTFS FĂRĂ NICIUN VEHICUL ACUM (${goale.length}):\n${goale.join(', ')}\n`;
+  return t;
 }
 async function mersLive(url) {
   if (url.pathname === '/live/test') {
