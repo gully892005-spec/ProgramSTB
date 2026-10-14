@@ -157,7 +157,7 @@ function abonamentele(u) {
 // rezumatul pentru panou) cădea. Acum numărăm cererile, păstrăm o rezervă
 // pentru marcaje și rezumat, iar ce nu încape se trimite la rularea următoare.
 // ══════════════════════════════════════════════════════════════
-const LIMITA_CERERI = 50, REZERVA_CERERI = 12;
+const LIMITA_CERERI = 50, REZERVA_CERERI = 14;
 let _SR_ACTIV = null;
 const _fetchCF = globalThis.fetch;
 globalThis.fetch = function (...a) { if (_SR_ACTIV) _SR_ACTIV.n++; return _fetchCF(...a); };
@@ -907,6 +907,12 @@ async function _ruleaza(env) {
   if (anunt.eroare) _rul.erori.push('anunțuri · ' + anunt.eroare);
   for (const x of (anunt.erori || [])) _rul.erori.push('anunțuri · ' + x);
 
+  // [5.6] alertă TPBI nouă pe linia turei de azi / mâine
+  const alL = await trimiteAlerteLinii(env, toti, numere, now, vapid);
+  if (alL.trimise) log(`Alerte linii: ${alL.trimise} notificări trimise`);
+  if (alL.eroare) log('Alerte linii: ' + alL.eroare);
+  _rul.alerte = alL.trimise || 0;
+
   const { chatTrimise, eroare } = await trimiteChat(env, toti, numere, vapid);
   if (eroare) log('Chat: eroare — ' + eroare);
   else log(`Chat: ${chatTrimise} notificări trimise`);
@@ -1116,6 +1122,12 @@ export default {
       try { r = url.pathname === '/eroare' ? await raportEroare(request, env) : url.pathname === '/mesaj-admin' ? await mesajAdmin(request, env) : await dateleMele(request, env); }
       catch (e) { r = { status: 500, corp: { ok: false, eroare: e.message } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
+    if (url.pathname === '/live/alerte') {              // [5.6] alertele TPBI (devieri, întreruperi)
+      let r;
+      try { const a = await alerteTpbi(); r = { status: 200, corp: { ok: true, la: a.la, alerte: a.lista, ...(url.searchParams.get('brut') ? { brut: a.brut } : {}) } }; }
+      catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
+      return new Response(JSON.stringify(r.corp), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
     }
     if (url.pathname === '/live/diag') {                // [5.2] diagnostic: coduri de linie necunoscute
       let t; try { t = await mersLiveDiag(); } catch (e) { t = 'Eroare: ' + (e && e.message || e); }
@@ -2646,7 +2658,111 @@ async function _liveVehicule() {
 }
 // [5.2] Liniile din GTFS (cod → nume), ca /live/diag să arate ce coduri trimite STB
 // care nu sunt în GTFS și ce linii n-au acum niciun vehicul.
-const GTFS_LINII = {"1013":"4","1015":"290","1037":"228","112":"382","113":"330","116":"282","117":"335","119":"605","121":"205","124":"162","126":"163","133":"178","134":"312","136":"311","137":"N113","139":"N112","140":"N111","141":"N110","143":"106","144":"105","145":"N119","146":"104","147":"N118","148":"103","149":"N117","150":"102","152":"N116","154":"N115","155":"N114","158":"221","159":"222","160":"223","165":"227","167":"N122","169":"N121","174":"N120","175":"185","180":"116","181":"117","183":"112","184":"381","186":"243","189":"246","191":"125","192":"N105","194":"N106","196":"N103","197":"N104","199":"N109","201":"301","202":"123","203":"304","204":"N107","207":"N108","208":"N101","209":"N102","210":"232","214":"135","217":"138","218":"139","228":"143","232":"253","233":"141","234":"331","235":"331B","245":"137","247":"97","365":"448","395":"477","404":"385","430":"City Tour","464":"343","54":"11","55":"21","57":"41","61":"47","620":"241","621":"655","63":"23","65":"25","66":"27","661":"619","67":"10","68":"1","69":"7","70":"32","72":"66","73":"79","732":"203","735":"N10","74":"96","75":"69","76":"93","78":"90","803":"322","804":"487","81":"62","812":"N1","814":"5","820":"484","821":"485","824":"101","825":"122","826":"168","827":"182","828":"196","829":"216","83":"86","830":"220","831":"226","832":"323","833":"368","835":"422","836":"423","837":"425","84":"61","843":"425B","844":"421","845":"424","848":"431","849":"432","85":"74","850":"433","851":"434","855":"441","856":"442","857":"443","858":"444","859":"446","86":"76","87":"85","874":"441B","884":"484B","887":"100","888":"478","889":"640","901":"483","902":"443B","910":"63","915":"53","916":"95","924":"72","925":"73","942":"627","952":"642","980":"301B"};
+const GTFS_LINII = {"1013":"4","1015":"290","1037":"228","112":"382","113":"330","116":"282","117":"335","119":"605","121":"205","124":"162","126":"163","133":"178","134":"312","136":"311","137":"N113","139":"N112","140":"N111","141":"N110","143":"106","144":"105","145":"N119","146":"104","147":"N118","148":"103","149":"N117","150":"102","152":"N116","154":"N115","155":"N114","158":"221","159":"222","160":"223","165":"227","167":"N122","169":"N121","174":"N120","175":"185","180":"116","181":"117","183":"112","184":"381","186":"243","189":"246","191":"125","192":"N105","194":"N106","196":"N103","197":"N104","199":"N109","201":"301","202":"123","203":"304","204":"N107","207":"N108","208":"N101","209":"N102","210":"232","214":"135","217":"138","218":"139","228":"143","232":"253","233":"141","234":"331","235":"331B","245":"137","247":"97","365":"448","395":"477","404":"385","430":"City Tour","464":"343","54":"11","55":"21","57":"41","61":"47","620":"241","621":"655","63":"23","65":"25","66":"27","661":"619","67":"10","68":"1","69":"7","70":"32","72":"66","73":"79","732":"203","735":"N10","74":"96","75":"69","76":"93","78":"90","803":"322","804":"487","81":"62","812":"N1","814":"5","820":"484","821":"485","824":"101","825":"122","826":"168","827":"182","828":"196","829":"216","83":"86","830":"220","831":"226","832":"323","833":"368","835":"422","836":"423","837":"425","84":"61","843":"425B","844":"421","845":"424","848":"431","849":"432","85":"74","850":"433","851":"434","855":"441","856":"442","857":"443","858":"444","859":"446","86":"76","87":"85","874":"441B","884":"484B","887":"100","888":"478","889":"640","901":"483","902":"443B","910":"63","915":"53","916":"95","924":"72","925":"73","942":"627","952":"642","980":"301B","PV1_403":"403","PV1_405":"405","PV1_407":"407","PV1_408":"408","PV1_409":"409","PV1_409B":"409B","PV1_411":"411","PV1_412":"412","PV1_413":"413","PV1_416":"416","PV1_417":"417","PV1_418":"418","PV1_419":"419","PV1_426":"426","PV1_427":"427","PV1_428":"428","PV1_438":"438","PV1_439":"439","PV1_440":"440","PV1_447":"447","PV1_447B":"447B","PV1_449":"449","PV1_450":"450","PV1_451":"451","PV1_452":"452","PV1_454":"454","PV1_455":"455","PV1_457":"457","PV1_458":"458","PV1_459":"459","PV1_464":"464","PV1_465":"465","PV1_467":"467","PV1_468":"468","PV1_468B":"468B","PV1_472":"472","PV1_473":"473","PV1_475":"475","PV1_479":"479","PV1_480":"480","PV1_488":"488","PV2_429":"429","PV2_435":"435","PV2_436":"436","PV2_470":"470","PV2_476":"476","PV2_481":"481","PV2_482":"482","PV9_462":"462","PV9_466":"466"};
+// ══════════════════════════════════════════════════════════════
+// [5.6] ALERTE TPBI — fluxul public GTFS-Realtime „serviceAlerts”
+// (devieri, întreruperi, lucrări). Vine în format protobuf; îl desfacem aici,
+// fără biblioteci, doar câmpurile de care avem nevoie.
+// ══════════════════════════════════════════════════════════════
+const TPBI_ALERTE = 'https://gtfs.tpbi.ro/api/gtfs-rt/serviceAlerts';
+const EFECT_RO = { 1: 'Întrerupere', 2: 'Circulație redusă', 3: 'Întârzieri mari', 4: 'Deviere', 5: 'Curse suplimentare', 6: 'Program modificat', 7: 'Alertă', 8: 'Alertă', 9: 'Stație mutată', 10: 'Informare', 11: 'Accesibilitate' };
+function _pbCampuri(b, i, end) {   // [{ f, t, v }] — v: număr (varint/fix) sau [start, end] (bucată)
+  const out = [];
+  const varint = () => { let r = 0, m = 1, x; do { x = b[i++]; r += (x & 127) * m; m *= 128; } while (x & 128 && i < end); return r; };
+  while (i < end) {
+    const k = varint(), f = Math.floor(k / 8), t = k & 7;
+    if (t === 0) out.push({ f, t, v: varint() });
+    else if (t === 2) { const n = varint(); out.push({ f, t, v: [i, i + n] }); i += n; }
+    else if (t === 1) { let r = 0; for (let j = 7; j >= 0; j--) r = r * 256 + b[i + j]; out.push({ f, t, v: r }); i += 8; }
+    else if (t === 5) { out.push({ f, t, v: b[i] | b[i + 1] << 8 | b[i + 2] << 16 | (b[i + 3] << 24 >>> 0) }); i += 4; }
+    else break;
+  }
+  return out;
+}
+const _pbTxt = (b, [a, z]) => new TextDecoder().decode(b.subarray(a, z));
+function _pbTradus(b, r) {   // TranslatedString → textul (româna întâi)
+  let txt = '', ro = '';
+  for (const tr of _pbCampuri(b, r[0], r[1]).filter(x => x.f === 1 && x.t === 2)) {
+    const c = _pbCampuri(b, tr.v[0], tr.v[1]);
+    const t = c.find(x => x.f === 1 && x.t === 2), l = c.find(x => x.f === 2 && x.t === 2);
+    const text = t ? _pbTxt(b, t.v) : '', lang = l ? _pbTxt(b, l.v).toLowerCase() : '';
+    if (!txt) txt = text;
+    if (!ro && (lang === 'ro' || lang.startsWith('ro'))) ro = text;
+  }
+  return ro || txt;
+}
+function _alerteDinProtobuf(b) {
+  const lista = [];
+  for (const ent of _pbCampuri(b, 0, b.length).filter(x => x.f === 2 && x.t === 2)) {
+    const ce = _pbCampuri(b, ent.v[0], ent.v[1]);
+    const id = ce.find(x => x.f === 1 && x.t === 2), al = ce.find(x => x.f === 5 && x.t === 2);
+    if (!al) continue;
+    const ca = _pbCampuri(b, al.v[0], al.v[1]);
+    const a = { id: id ? _pbTxt(b, id.v) : '', rute: [], perioade: [], efect: 0, titlu: '', text: '' };
+    for (const c of ca) {
+      if (c.f === 1 && c.t === 2) { const p = _pbCampuri(b, c.v[0], c.v[1]); const s0 = p.find(x => x.f === 1), s1 = p.find(x => x.f === 2); a.perioade.push([s0 ? s0.v : 0, s1 ? s1.v : 0]); }
+      else if (c.f === 5 && c.t === 2) { const p = _pbCampuri(b, c.v[0], c.v[1]); const r = p.find(x => x.f === 2 && x.t === 2); if (r) a.rute.push(_pbTxt(b, r.v)); }
+      else if (c.f === 7 && c.t === 0) a.efect = c.v;
+      else if (c.f === 10 && c.t === 2) a.titlu = _pbTradus(b, c.v);
+      else if (c.f === 11 && c.t === 2) a.text = _pbTradus(b, c.v);
+    }
+    lista.push(a);
+  }
+  return lista;
+}
+function _alerteDinJson(d) {   // același flux, dacă vine ca JSON
+  const tr = x => { const l = (x && x.translation) || []; const ro = l.find(t => /^ro/i.test(t.language || '')); return ((ro || l[0]) || {}).text || ''; };
+  return ((d && (d.entity || d.entities)) || []).filter(e => e && e.alert).map(e => {
+    const a = e.alert;
+    return { id: String(e.id || ''), rute: (a.informedEntity || a.informed_entity || []).map(x => x.routeId || x.route_id).filter(Boolean).map(String),
+      perioade: (a.activePeriod || a.active_period || []).map(p => [Number(p.start) || 0, Number(p.end) || 0]),
+      efect: typeof a.effect === 'number' ? a.effect : ({ NO_SERVICE: 1, REDUCED_SERVICE: 2, SIGNIFICANT_DELAYS: 3, DETOUR: 4, ADDITIONAL_SERVICE: 5, MODIFIED_SERVICE: 6, OTHER_EFFECT: 7, UNKNOWN_EFFECT: 8, STOP_MOVED: 9, NO_EFFECT: 10, ACCESSIBILITY_ISSUE: 11 })[a.effect] || 0,
+      titlu: tr(a.headerText || a.header_text), text: tr(a.descriptionText || a.description_text) };
+  });
+}
+let _alerteCache = { t: 0, v: null };
+async function alerteTpbi() {
+  if (_alerteCache.v && Date.now() - _alerteCache.t < 120000) return _alerteCache.v;
+  const r = await fetch(TPBI_ALERTE, { headers: { 'Accept': 'application/x-protobuf, application/json;q=0.5, */*' }, cf: { cacheTtl: 60, cacheEverything: true } });
+  if (!r.ok) throw new Error('TPBI ' + r.status);
+  const buf = new Uint8Array(await r.arrayBuffer());
+  let lista;
+  const inceput = String.fromCharCode(...buf.subarray(0, 1)).trim();
+  if (inceput === '{') lista = _alerteDinJson(JSON.parse(new TextDecoder().decode(buf)));
+  else lista = _alerteDinProtobuf(buf);
+  const acum = Math.floor(Date.now() / 1000);
+  lista = lista.filter(a => !a.perioade.length || a.perioade.some(([s0, s1]) => (!s0 || s0 <= acum + 86400) && (!s1 || s1 >= acum)))   // active acum sau de mâine
+    .map(a => ({ ...a, linii: [...new Set(a.rute.map(r => GTFS_LINII[r]).filter(Boolean))], efectTxt: EFECT_RO[a.efect] || 'Alertă' }));
+  const v = { la: Date.now(), lista, brut: buf.length };
+  _alerteCache = { t: Date.now(), v };
+  return v;
+}
+// notificare: alertă nouă pe linia turei de azi sau de mâine (o singură dată pe alertă)
+const _linieDinTura = t => { const x = String((t && (t.linie || t.text)) || '').trim().split(/\s+/)[0].toUpperCase(); return x.replace(/^L(?=\d)/, ''); };
+async function trimiteAlerteLinii(env, toti, numere, now, vapid) {
+  let al; try { al = await alerteTpbi(); } catch (e) { return { trimise: 0, eroare: 'alerte TPBI: ' + e.message }; }
+  const cuLinii = al.lista.filter(a => a.linii.length); if (!cuLinii.length) return { trimise: 0 };
+  const maine = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE', { timeZone: 'Europe/Bucharest' });
+  let trimise = 0; const marcaje = {}, erori = [];
+  await peGrupuri(numere, async (nr) => {
+    const u = toti[nr];
+    if (!u || !abonamentele(u).length || u.alerteTura === false || !Array.isArray(u.ture)) return;
+    const linii = new Set(u.ture.filter(t => t && (t.data === now.data || t.data === maine)).map(_linieDinTura).filter(Boolean));
+    if (!linii.size) return;
+    const vazute = Array.isArray(u.alerteVazute) ? u.alerteVazute : [];
+    const noi = cuLinii.filter(a => a.id && !vazute.includes(a.id) && a.linii.some(l => linii.has(String(l).toUpperCase())));
+    if (!noi.length) return;
+    const a = noi[0], l = a.linii.find(x => linii.has(String(x).toUpperCase()));
+    try {
+      const rez = await trimiteToate(env, nr, u, JSON.stringify({ title: `⚠️ Linia ${l}: ${a.efectTxt}`, body: (a.titlu || a.text || '').slice(0, 180), tag: 'alerta-' + a.id, url: './?deschide=alerte', urgent: false, discret: true }), { TTL: 6 * 3600, urgency: 'normal' }, vapid);   // [5.8] mai puțin importantă decât tura: prioritate normală, fără să rămână fixată, vibrație scurtă
+      if (!rez.trimise) return;
+      marcaje[`${nr}/alerteVazute`] = vazute.concat(noi.map(x => x.id)).slice(-30);   // toate cele de acum: una singură pe rulare
+      trimise++;
+    } catch (e) { if (erori.length < 2) erori.push(`${nr}: ${e.statusCode || '-'} ${String(e.message || e).slice(0, 60)}`); }
+  });
+  await _marcajeScrie(env, 'push', marcaje);
+  return { trimise, erori };
+}
 async function mersLiveDiag() {
   const v = await _liveVehicule(), pe = {};
   let fara = 0;
@@ -2678,7 +2794,7 @@ async function mersLive(url) {
     _liveSos.set(s, { t: Date.now(), corp });
     return { status: 200, corp };
   }
-  const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 10);
+  const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z_]/g, '').slice(0, 12);   // [5.6] și liniile regionale (PV1_455)
   if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
   const v = await _liveVehicule();
   return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt).map(({ r, ...x }) => x) } };
