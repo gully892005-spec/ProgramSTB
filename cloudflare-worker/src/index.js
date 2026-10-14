@@ -1125,7 +1125,7 @@ export default {
     }
     if (url.pathname === '/live/alerte') {              // [5.6] alertele TPBI (devieri, întreruperi)
       let r;
-      try { const a = await alerteTpbi(); r = { status: 200, corp: { ok: true, la: a.la, alerte: a.lista, ...(url.searchParams.get('brut') ? { brut: a.brut } : {}) } }; }
+      try { const a = await alerteTpbi(env); r = { status: 200, corp: { ok: true, la: a.la, alerte: a.lista, ...(url.searchParams.get('brut') ? { brut: a.brut } : {}) } }; }
       catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
       return new Response(JSON.stringify(r.corp), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
     }
@@ -2721,7 +2721,7 @@ function _alerteDinJson(d) {   // același flux, dacă vine ca JSON
   });
 }
 let _alerteCache = { t: 0, v: null };
-async function alerteTpbi() {
+async function alerteTpbi(env) {
   if (_alerteCache.v && Date.now() - _alerteCache.t < 120000) return _alerteCache.v;
   const r = await fetch(TPBI_ALERTE, { headers: { 'Accept': 'application/x-protobuf, application/json;q=0.5, */*' }, cf: { cacheTtl: 60, cacheEverything: true } });
   if (!r.ok) throw new Error('TPBI ' + r.status);
@@ -2733,6 +2733,22 @@ async function alerteTpbi() {
   const acum = Math.floor(Date.now() / 1000);
   lista = lista.filter(a => !a.perioade.length || a.perioade.some(([s0, s1]) => (!s0 || s0 <= acum + 86400) && (!s1 || s1 >= acum)))   // active acum sau de mâine
     .map(a => ({ ...a, linii: [...new Set(a.rute.map(r => GTFS_LINII[r]).filter(Boolean))], efectTxt: EFECT_RO[a.efect] || 'Alertă' }));
+  // [6.1] ora la care a fost dată alerta: începutul oficial (dacă TPBI îl trimite), altfel prima dată când am văzut-o noi
+  if (env && env.FB_URL) {
+    try {
+      const k = id => String(id).replace(/[.$#\[\]\/]/g, '_').slice(0, 120);
+      const vechi = (await getJSON(urlBroadcast(env, 'adminJetoane/_alerteLa.json'))) || {};
+      const nou = {}, acumMs = Date.now(); let schimbat = false;
+      for (const a of lista) { if (!a.id) continue; const c = k(a.id); nou[c] = vechi[c] || acumMs; if (!vechi[c]) schimbat = true; }
+      for (const c of Object.keys(vechi)) if (!(c in nou)) { if (acumMs - vechi[c] < 3 * 864e5) nou[c] = vechi[c]; else schimbat = true; }   // ținem 3 zile
+      if (schimbat) await _fbPut(env, 'adminJetoane/_alerteLa', nou);
+      for (const a of lista) if (a.id) a.vazutLa = nou[k(a.id)];
+    } catch (e) { /* fără ora primei apariții, alertele merg mai departe */ }
+  }
+  for (const a of lista) {
+    const st = (a.perioade || []).map(p => p[0]).filter(x => x && x <= acum).sort((x, y) => y - x)[0];
+    a.dataLa = st ? st * 1000 : (a.vazutLa || null);
+  }
   const v = { la: Date.now(), lista, brut: buf.length };
   _alerteCache = { t: Date.now(), v };
   return v;
@@ -2740,7 +2756,7 @@ async function alerteTpbi() {
 // notificare: alertă nouă pe linia turei de azi sau de mâine (o singură dată pe alertă)
 const _linieDinTura = t => { const x = String((t && (t.linie || t.text)) || '').trim().split(/\s+/)[0].toUpperCase(); return x.replace(/^L(?=\d)/, ''); };
 async function trimiteAlerteLinii(env, toti, numere, now, vapid) {
-  let al; try { al = await alerteTpbi(); } catch (e) { return { trimise: 0, eroare: 'alerte TPBI: ' + e.message }; }
+  let al; try { al = await alerteTpbi(env); } catch (e) { return { trimise: 0, eroare: 'alerte TPBI: ' + e.message }; }
   // [6.0] „funcționează normal / circulă normal / reluat” nu e o problemă: fără notificare
   const NORMAL = /(func[țt]ioneaz[ăa]|circul[ăa])\s+normal|(s-a|a fost|au fost)\s+reluat|revenit\S*\s+la\s+normal/i;
   const cuLinii = al.lista.filter(a => a.linii.length && !NORMAL.test((a.titlu || '') + ' ' + (a.text || ''))); if (!cuLinii.length) return { trimise: 0 };
