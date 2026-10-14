@@ -2741,7 +2741,9 @@ async function alerteTpbi() {
 const _linieDinTura = t => { const x = String((t && (t.linie || t.text)) || '').trim().split(/\s+/)[0].toUpperCase(); return x.replace(/^L(?=\d)/, ''); };
 async function trimiteAlerteLinii(env, toti, numere, now, vapid) {
   let al; try { al = await alerteTpbi(); } catch (e) { return { trimise: 0, eroare: 'alerte TPBI: ' + e.message }; }
-  const cuLinii = al.lista.filter(a => a.linii.length); if (!cuLinii.length) return { trimise: 0 };
+  // [6.0] „funcționează normal / circulă normal / reluat” nu e o problemă: fără notificare
+  const NORMAL = /(func[țt]ioneaz[ăa]|circul[ăa])\s+normal|(s-a|a fost|au fost)\s+reluat|revenit\S*\s+la\s+normal/i;
+  const cuLinii = al.lista.filter(a => a.linii.length && !NORMAL.test((a.titlu || '') + ' ' + (a.text || ''))); if (!cuLinii.length) return { trimise: 0 };
   const maine = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE', { timeZone: 'Europe/Bucharest' });
   let trimise = 0; const marcaje = {}, erori = [];
   await peGrupuri(numere, async (nr) => {
