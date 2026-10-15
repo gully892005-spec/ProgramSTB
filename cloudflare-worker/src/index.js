@@ -1015,6 +1015,10 @@ export default {
     // Trimite o notificare de probă chiar acum, către telefonul unui coleg.
     // Fără asta, când cineva zice „nu-mi vin notificările" nu ai cum să afli
     // unde se rupe lanțul: la abonament, la worker sau la setările telefonului.
+    if (url.pathname === '/testtura') {               // [6.8] test „ca la tură” pentru oricine, pe propriul telefon
+      const r = await testTura(request, env, ctx);
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+    }
     if (url.pathname === '/testpush') {
       const r = await testPush(request, env, ctx);
       return new Response(JSON.stringify(r.corp), {
@@ -1244,6 +1248,29 @@ async function _telefonulAreVoie(env, nr, dev) {
   }
 }
 
+// [6.8] Oricine își poate testa PROPRIUL telefon: aplicația trimite abonamentul
+// ei de notificări, iar worker-ul trimite pe el, peste 20 de secunde, exact
+// notificarea de tură. Nu poate ajunge la altcineva (abonamentul e al telefonului).
+const _testTuraLa = new Map();
+async function testTura(request, env, ctx) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
+  const sub = c && c.sub;
+  let gazda = '';
+  try { gazda = new URL(String(sub && sub.endpoint || '')).hostname; } catch (e) {}
+  const permis = /(^|\.)(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/i;
+  if (!gazda || !permis.test(gazda) || !sub.keys || !sub.keys.p256dh || !sub.keys.auth)
+    return { status: 400, corp: { ok: false, eroare: 'Abonament de notificări invalid. Oprește și pornește notificările push.' } };
+  const ultim = _testTuraLa.get(sub.endpoint) || 0;
+  if (Date.now() - ultim < 60000) return { status: 429, corp: { ok: false, eroare: 'Așteaptă un minut între teste.' } };
+  _testTuraLa.set(sub.endpoint, Date.now());
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return { status: 500, corp: { ok: false, eroare: 'VAPID neconfigurat' } };
+  const vapid = { subject: 'mailto:programstb@example.com', publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
+  const tp = JSON.stringify({ title: '🚃 Tură în 1h (TEST)', body: 'Notificare de probă, ca la tură. Dacă a vibrat telefonul (și ceasul), e totul în regulă.', tag: 'tura-test', url: './' });
+  const trimite = async () => { await new Promise(r => setTimeout(r, 20000)); try { await trimitePush(sub, tp, { TTL: 600, urgency: 'high' }, vapid); } catch (e) {} };
+  if (ctx && ctx.waitUntil) ctx.waitUntil(trimite()); else await trimite();
+  return { status: 200, corp: { ok: true, programat: 20 } };
+}
 async function testPush(request, env, ctx) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
   let c;
