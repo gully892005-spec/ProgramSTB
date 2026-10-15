@@ -1016,7 +1016,7 @@ export default {
     // Fără asta, când cineva zice „nu-mi vin notificările" nu ai cum să afli
     // unde se rupe lanțul: la abonament, la worker sau la setările telefonului.
     if (url.pathname === '/testpush') {
-      const r = await testPush(request, env);
+      const r = await testPush(request, env, ctx);
       return new Response(JSON.stringify(r.corp), {
         status: r.status,
         headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors }
@@ -1244,7 +1244,7 @@ async function _telefonulAreVoie(env, nr, dev) {
   }
 }
 
-async function testPush(request, env) {
+async function testPush(request, env, ctx) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
   let c;
   try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
@@ -1294,6 +1294,14 @@ async function testPush(request, env) {
   // Titlul și mesajul pot veni din panou. Goale → textul de probă obișnuit.
   const titlu = String(c.titlu || '').trim().slice(0, 60);
   const mesaj = String(c.mesaj || '').trim().slice(0, 300);
+  // [6.7] „ca la tură”: exact aceeași notificare ca reminderul de tură, trimisă
+  // după 20 de secunde — ca să apuci să închizi ecranul și să vezi dacă vibrează.
+  if (c.tura) {
+    const tp = JSON.stringify({ title: '🚃 Tură în 1h (TEST)', body: 'Notificare de probă, ca la tură. Dacă a vibrat telefonul (și ceasul), e totul în regulă.', tag: 'tura-test', url: './' });
+    const trimite = async () => { await new Promise(r => setTimeout(r, 20000)); try { await trimiteToate(env, nr, u, tp, { TTL: 3600, urgency: 'high' }, vapid); } catch (e) {} };
+    if (ctx && ctx.waitUntil) ctx.waitUntil(trimite()); else await trimite();
+    return { status: 200, corp: { ok: true, nr, programat: 20, telefoane: cateTelefoane } };
+  }
   const payload = JSON.stringify({
     title: titlu || '✅ Notificare de probă',
     body: mesaj || `Merge. În cloud sunt ${cateTure} ture pe următoarele 10 zile.`,
