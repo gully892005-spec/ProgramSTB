@@ -521,7 +521,7 @@ async function trimiteChat(env, toti, numere, vapid) {
       // rețea la scriere ieșea din try și notificarea de chat se repeta la
       // fiecare rulare de cinci minute.
       const rez = await trimiteToate(env, nr, u, JSON.stringify({
-        title: '💬 Chat STB', body, tag: 'chat', urgent: false, url: './?deschide=chat'   // [4.5] atingerea deschide chatul
+        title: '💬 Chat STB', body, tag: 'chat', urgent: false, discret: true, url: './?deschide=chat'   // [4.5] atingerea deschide chatul
       }), { TTL: 1800, urgency: 'normal' }, vapid);
       if (!rez.trimise) return;
       marcaje[`${nr}/chatNotificat`] = ultimul;   // [4.5]
