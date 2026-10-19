@@ -2375,11 +2375,11 @@ async function _repAminteste(env, depouri, luna, bazeLipsa) {
   }
   return { trimise, oameni };
 }
-// Rulează din cron: pe 25 ale lunii, după 10:00, o singură dată pe lună.
+// Rulează din cron: pe 28 ale lunii, după 10:00, o singură dată pe lună.
 async function _repAmintireAutomata(env, log) {
   try {
     const { data, minute } = acumRo();
-    if (Number(data.slice(8, 10)) !== 25 || minute < 600) return;
+    if (Number(data.slice(8, 10)) !== 28 || minute < 600) return;   // [7.7] pe 28: foile încep să apară abia de atunci
     const luna = _lunaUrm(data.slice(0, 7));
     const oprit = await getJSON(urlBroadcast(env, 'config/repAmintireOprita.json')).catch(() => null);
     if (oprit) return;
