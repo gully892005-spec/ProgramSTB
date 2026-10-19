@@ -252,7 +252,8 @@ async function peGrupuri(elemente, treaba) {
   const rezultate = [];
   for (let i = 0; i < elemente.length; i += GRUP) {
     const felie = elemente.slice(i, i + GRUP);
-    rezultate.push(...await Promise.all(felie.map(treaba)));
+    // [7.3] o înregistrare stricată (ex. start care nu e text) nu mai oprește toată rularea
+    rezultate.push(...await Promise.all(felie.map(x => Promise.resolve().then(() => treaba(x)).catch(e => ({ eroare: `${x}: ${String((e && e.message) || e).slice(0, 80)}` })))));
   }
   return rezultate;
 }
@@ -295,13 +296,22 @@ function inainteDeAbonare(u, momentMs) {
 // ca s-o putem compara cu pushDin. Ora României e UTC+3 vara, UTC+2 iarna —
 // o luăm din diferența dintre ceasul local formatat și UTC, ca să nu greșim
 // la schimbarea orei.
-function momentulZilei(dataISO, minute) {
-  const [a, l, z] = dataISO.split('-').map(Number);
-  const utc = Date.UTC(a, l - 1, z, 0, minute, 0);
-  const proba = new Date(utc);
-  const local = new Date(proba.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
-  const decalaj = local.getTime() - new Date(proba.toLocaleString('en-US', { timeZone: 'UTC' })).getTime();
-  return utc - decalaj;
+function momentulZilei(dataISO, minute) { return momentRo(dataISO, minute); }
+// [7.4] Ora României → timp real, corect și în nopțile cu schimbarea orei
+// (25.10.2026: 04:00 → 03:00; 28.03.2027: 03:00 → 04:00). Înainte se lucra
+// cu minutele ceasului, iar în noaptea de 25.10 alerta de la 04:30 pleca
+// cu 2 ore înainte, iar primăvara se pierdeau alertele dintre 03:00 și 04:00.
+const _fmtRo = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Bucharest', hourCycle: 'h23',
+  year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+function _decalajRo(ms) {
+  const p = {}; for (const x of _fmtRo.formatToParts(new Date(ms))) p[x.type] = x.value;
+  const h = Number(p.hour) % 24;
+  return Date.UTC(+p.year, +p.month - 1, +p.day, h, +p.minute, +p.second) - Math.floor(ms / 1000) * 1000;
+}
+function momentRo(dataISO, minute) {
+  const [a, l, z] = String(dataISO).split('-').map(Number);
+  const u = Date.UTC(a, l - 1, z, 0, minute, 0);
+  return u - _decalajRo(u - _decalajRo(u));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -315,6 +325,8 @@ function momentulZilei(dataISO, minute) {
 // Dacă FB_SECRET nu e configurat, funcționează exact ca înainte — util ca să
 // poți urca worker-ul fără să blochezi nimic până schimbi regula.
 // ══════════════════════════════════════════════════════════════
+// [7.3] ?shallow=true trebuie pus după ?auth=…, altfel se pierde parola
+function _urlShallow(env, cale) { const u = urlBroadcast(env, cale); return u + (u.includes('?') ? '&' : '?') + 'shallow=true'; }
 function urlBroadcast(env, cale) {
   // [2.7] Nicio cale cu „..”, „#”, „\” sau „.”/„/” codate: fetch le-ar rezolva și ar
   // scrie în alt loc din Firebase decât cel cerut (ex. adminJetoane).
@@ -388,6 +400,22 @@ async function trimiteTure(env, toti, numere, now, vapid) {
 
   const rezultate = await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
+    // [7.4] Telefonul urcă turele pe câteva săptămâni înainte. Cine nu deschide aplicația
+    // rămâne fără alerte când se termină lista — fără să afle. Acum primește o notificare
+    // (cel mult o dată la 3 zile, între 10 și 20) cu câteva zile înainte să se termine.
+    if (u && abonamentele(u).length && u.alerteTura !== false && now.minute >= 600 && now.minute < 1200) {
+      const ultima = (Array.isArray(u.ture) ? u.ture : []).map(t => t && t.data).filter(Boolean).sort().pop() || '';
+      const urcat = Date.parse(u.updat || '') || 0;
+      const peste4 = (() => { const [a, l, z] = now.data.split('-').map(Number); return new Date(Date.UTC(a, l - 1, z + 4)).toISOString().slice(0, 10); })();
+      if (urcat && Date.now() - urcat > 7 * 864e5 && ultima < peste4 && (Number(u.expiraAnuntat) || 0) < Date.now() - 3 * 864e5) {
+        try {
+          const r = await trimiteToate(env, nr, u, JSON.stringify({ title: '📅 Deschide aplicația Program STB',
+            body: 'N-ai mai deschis-o de ceva vreme și se termină turele pentru care primești alerte. Deschide-o o dată ca să le primești în continuare.',
+            tag: 'expira-ture', url: './' }), { TTL: 12 * 3600, urgency: 'normal' }, vapid);
+          if (r.trimise) { marcaje[`${nr}/expiraAnuntat`] = Date.now(); return {}; }
+        } catch (e) {}
+      }
+    }
     if (!u || !abonamentele(u).length || !Array.isArray(u.ture)) return { sarit: 1 };
     if (u.alerteTura === false) return { sarit: 1 };   // [4.5] omul a apăsat „Dezactivează” la alertele dinainte de tură
 
@@ -400,8 +428,8 @@ async function trimiteTure(env, toti, numere, now, vapid) {
     // fiecărei zile. Dacă acolo scrie că azi e liber sau concediu, nu trimitem
     // alerta de tură, oricât de veche ar fi lista de ture. Așa nu mai ajunge
     // pe telefon tura rămasă în cloud de la alt depou sau de la un coleg.
-    const ziAzi = Array.isArray(u.zile) ? u.zile.find(x => x && x.data === now.data) : null;
-    const aziLiber = !!(ziAzi && ziAzi.lucrata === false);
+    const _liber = d => { const x = Array.isArray(u.zile) ? u.zile.find(y => y && y.data === d) : null; return !!(x && x.lucrata === false); };   // [7.4] și pentru mâine
+    const acumMs = Date.now();
 
     // [2.7] O tură care începe după miezul nopții (ex. 00:30, liniile de noapte)
     // are alerta de „cu o oră înainte" în ziua de dinainte. Înainte nu pleca.
@@ -409,23 +437,21 @@ async function trimiteTure(env, toti, numere, now, vapid) {
     for (const t of u.ture) {
       if (!t || !t.data || !t.start) continue;
       if (t.data !== now.data && t.data !== maine) continue;
-      const peMaine = t.data === maine;
-      if (!peMaine && aziLiber) continue;
+      if (_liber(t.data)) continue;
 
-      const [h, m] = t.start.split(':').map(Number);
+      const [h, m] = String(t.start).split(':').map(Number);
       if (isNaN(h) || isNaN(m)) continue;
-      if (peMaine && h * 60 + m >= 240) continue;     // doar turele de mâine dinainte de 04:00
+      const startMs = momentRo(t.data, h * 60 + m);   // [7.4] în timp real
 
       const timpi = Array.isArray(t.mins) && t.mins.length
         ? t.mins.map(Number).filter(x => x > 0)
         : [Number(t.minBefore) || 60];
 
-      const startMin = h * 60 + m + (peMaine ? 1440 : 0);
       let minBefore = null, tinta = null, marcaj = null;
 
       for (const cat of timpi) {
-        const t2 = startMin - cat;
-        const d2 = now.minute - t2;
+        const t2 = startMs - cat * 60000;
+        const d2 = (acumMs - t2) / 60000;
         if (d2 < 0 || d2 >= INTARZIERE_MAX) continue;
         const mc = `${t.data}_${t.start}_${cat}`;
         if (trimiseDeja.includes(mc)) continue;
@@ -435,11 +461,11 @@ async function trimiteTure(env, toti, numere, now, vapid) {
       if (marcaj === null) continue;
 
       // s-a abonat după ce trecuse momentul reminderului
-      if (inainteDeAbonare(u, momentulZilei(peMaine ? now.data : t.data, tinta))) return { sarit: 1 };
+      if (inainteDeAbonare(u, tinta)) return { sarit: 1 };
 
       // Timpul real rămas — poate diferi puțin de minBefore dacă a durat
       // câteva minute până la rulare.
-      const ramase = startMin - now.minute;
+      const ramase = Math.round((startMs - acumMs) / 60000);
       // „Tură în 116 minute" se citește greu. Peste o oră scriem „1h 56m".
       const cat = ramase >= 60
         ? `${Math.floor(ramase / 60)}h${ramase % 60 ? ' ' + (ramase % 60) + 'm' : ''}`
@@ -768,7 +794,7 @@ async function trimiteAnunturi(env, toti, numere, vapid) {
   // curățăm anunțurile mai vechi de 7 zile
   const limita = Date.now() - 7 * 24 * 3600 * 1000, vechi = {};
   for (const [k, a] of Object.entries(anunturi)) if (!a || !a.t || a.t < limita) vechi[k] = null;
-  await _fbPatch(env, 'broadcast', vechi);   // [5.2] o singură cerere, nu una pe anunț
+  await _fbPatch(env, 'broadcast', vechi).catch(() => {});   // [7.3] o eroare aici nu mai oprește restul rulării · [5.2] o singură cerere, nu una pe anunț
 
   return { trimise, telefoane, expirate, faraTelefon, erori };
 }
@@ -811,7 +837,7 @@ async function facArhiva(env) {
   // Ștergem copiile mai vechi decât ARHIVA_ZILE, ca să nu creștem la nesfârșit.
   let sterse = 0;
   try {
-    const index = await getJSON(urlBroadcast(env, 'arhiva.json?shallow=true'));
+    const index = await getJSON(_urlShallow(env, 'arhiva.json'));
     const date = Object.keys(index || {}).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
     for (const d of date.slice(0, Math.max(0, date.length - ARHIVA_ZILE))) {
       await fetch(urlBroadcast(env, `arhiva/${d}.json`), { method: 'DELETE' }).catch(() => {});
@@ -827,7 +853,7 @@ async function ruleaza(envOrig) {
   const _sr = { n: 0, pend: 0, amanate: 0 };
   const env = Object.assign({}, envOrig, { _sr });
   const anterior = _SR_ACTIV; _SR_ACTIV = _sr;
-  try { return await _ruleaza(env); } finally { _SR_ACTIV = anterior; }
+  try { return await _ruleaza(env); } finally { if (_SR_ACTIV === _sr) _SR_ACTIV = anterior; }   // [7.4]
 }
 async function _ruleaza(env) {
   const pornit = Date.now();
@@ -902,7 +928,7 @@ async function _ruleaza(env) {
   }
 
   // [5.2] anunțurile înaintea chatului: dacă bugetul nu ajunge, chatul așteaptă, nu anunțurile
-  const anunt = await trimiteAnunturi(env, toti, numere, vapid);
+  const anunt = await trimiteAnunturi(env, toti, numere, vapid).catch(e => ({ trimise: 0, eroare: e.message }));
   _rul.anunturi = anunt.trimise || 0;
   if (anunt.eroare) _rul.erori.push('anunțuri · ' + anunt.eroare);
   for (const x of (anunt.erori || [])) _rul.erori.push('anunțuri · ' + x);
@@ -976,9 +1002,9 @@ async function _ruleaza(env) {
     }
   } catch (e) { log('Statistici: ' + e.message); }
 
-  if (poate(6, 'Amintire repartizare')) await _repAmintireAutomata(env, log);   // [1.0]
+  if (poate(30, 'Amintire repartizare')) await _repAmintireAutomata(env, log);   // [1.0]
   if (poate(9, 'Curățenie')) await _curataTrimiteri(env, log);       // [1.2]
-  if (poate(12, 'Ștergere 6 luni')) await _sterge6Luni(env, log);           // [1.6]
+  if (poate(16, 'Ștergere 6 luni')) await _sterge6Luni(env, log);           // [1.6]
 
   log('');
   log(`Rulare terminată în ${Date.now() - pornit} ms · ${env._sr.n} cereri din ${LIMITA_CERERI}.`);
@@ -1061,7 +1087,12 @@ export default {
           publicKey: env.VAPID_PUBLIC,
           privateKey: env.VAPID_PRIVATE
         };
-        const r = await trimiteChat(env, toti, Object.keys(toti), vapid);
+        // [7.3] și aici cu contor de cereri, ca la rularea automată
+        // [7.4] dacă rulează deja ceva, împarte același contor (prudent); altfel are contorul lui
+        const alMeu = !_SR_ACTIV, _sr = _SR_ACTIV || { n: 0, pend: 0, amanate: 0 };
+        const env2 = Object.assign({}, env, { _sr });
+        if (alMeu) _SR_ACTIV = _sr;
+        let r; try { r = await trimiteChat(env2, toti, Object.keys(toti), vapid); } finally { if (alMeu && _SR_ACTIV === _sr) _SR_ACTIV = null; }
         return raspuns({ ok: true, trimise: r.chatTrimise || 0 });
       } catch (e) {
         return raspuns({ ok: false, eroare: e.message }, 500);
@@ -1517,8 +1548,16 @@ async function backup(request, env) {
     // fără îmbinare — adică exact înlocuirea pe care îmbinarea trebuia s-o
     // împiedice: un telefon cu două zile putea acoperi luni întregi. Acum,
     // fără citire reușită nu scriem nimic; aplicația reîncearcă singură.
-    let vechiCitit;
-    try { vechiCitit = await getJSON(cale); }
+    let vechiCitit, _etag = null;
+    // [7.4] Cu ETag: dacă alt telefon pe același număr scrie între citire și scriere,
+    // Firebase refuză scrierea (412) și telefonul reîncearcă peste 15 s, peste datele noi.
+    // Înainte ultima scriere le acoperea pe zilele celuilalt telefon.
+    try {
+      const rg = await fetch(cale, { headers: { 'X-Firebase-ETag': 'true', 'Cache-Control': 'no-cache' } });
+      if (!rg.ok) throw new Error('HTTP ' + rg.status);
+      _etag = rg.headers.get('ETag');
+      vechiCitit = await rg.json();
+    }
     catch (e) {
       return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi backupul existent. Reîncerc mai târziu.' } };
     }
@@ -1627,9 +1666,10 @@ async function backup(request, env) {
     }
 
     const r = await fetch(cale, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      method: 'PUT', headers: { 'Content-Type': 'application/json', ...(_etag ? { 'if-match': _etag } : {}) },
       body: JSON.stringify(deScris)
     });
+    if (r.status === 412) return { status: 409, corp: { ok: false, reincearca: true, eroare: 'Alt telefon de pe numărul tău a salvat chiar acum. Reîncerc singur.' } };   // [7.4]
     if (!r.ok) {
       const d = await r.text().catch(() => '');
       return { status: 502, corp: { ok: false, eroare: `Firebase ${r.status} ${d.slice(0, 120)}` } };
@@ -1683,7 +1723,7 @@ async function _accesSolicitant(env, c) {
   const dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
   if (!dev) return null;
   const nrPropriu = nrCurat(c.nrPropriu);
-  if (nrPropriu && await _telefonulAreVoie(env, nrPropriu, dev)) {
+  if (nrPropriu && await _dispInregistrat(env, nrPropriu, dev)) {   // [7.3]
     return { cheie: _accesCheie(nrPropriu), tip: 'nr', cine: nrPropriu, dev };
   }
   // Fără număr dovedit, rămâne telefonul. Tot o identitate: stabilă, dar anonimă.
@@ -1712,7 +1752,7 @@ async function _accesStare(env, nrTinta, cheie) {
 // Are voie să citească programul lui `nrTinta`? Proprietarul, mereu.
 async function _areVoieLaProgram(env, nrTinta, c) {
   const dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
-  if (dev && await _telefonulAreVoie(env, nrTinta, dev)) return { ok: true, motiv: 'proprietar' };
+  if (dev && await _dispInregistrat(env, nrTinta, dev)) return { ok: true, motiv: 'proprietar' };   // [7.3] număr fără telefon ≠ al oricui
   const s = await _accesSolicitant(env, c);
   if (!s) return { ok: false, motiv: 'necunoscut' };
   let inreg = await _accesStare(env, nrTinta, s.cheie);
@@ -1806,7 +1846,7 @@ async function acces(request, env) {
   if (c.actiune === 'cereri') {
     const nr = nrCurat(c.nr);
     if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul' } };
-    if (!(await _telefonulAreVoie(env, nr, dev))) {
+    if (!(await _dispInregistrat(env, nr, dev))) {   // [7.3]
       return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
     }
     try {
@@ -1833,7 +1873,7 @@ async function acces(request, env) {
     let cheie = _accesCheie(c.cheie);
     const da = c.raspuns === 'da';
     if (!nr || !cheie) return { status: 400, corp: { ok: false, eroare: 'Cerere incompletă' } };
-    if (!(await _telefonulAreVoie(env, nr, dev))) {
+    if (!(await _dispInregistrat(env, nr, dev))) {   // [7.3]
       return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
     }
     cheie = await _accesDinAlias(env, nr, cheie);
@@ -1857,7 +1897,7 @@ async function acces(request, env) {
     const nr = nrCurat(c.nr);
     let cheie = _accesCheie(c.cheie);
     if (!nr || !cheie) return { status: 400, corp: { ok: false, eroare: 'Cerere incompletă' } };
-    if (!(await _telefonulAreVoie(env, nr, dev))) {
+    if (!(await _dispInregistrat(env, nr, dev))) {   // [7.3]
       return { status: 403, corp: { ok: false, eroare: 'Telefonul ăsta nu e înregistrat pe numărul ' + nr } };
     }
     cheie = await _accesDinAlias(env, nr, cheie);
@@ -2287,9 +2327,14 @@ async function indicatoriActiune(env, cerere, cine) {
 // [1.0] FOILE DE REPARTIZARE PE LUNI + REAMINTIRE CĂTRE RESPONSABILI
 // ══════════════════════════════════════════════════════════════
 const _lunaUrm = (luna) => { const [a, l] = luna.split('-').map(Number); const d = new Date(Date.UTC(a, l, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
-async function _repStareLuna(env, dep, luna, cuNumere) {
+async function _repStareLuna(env, dep, luna, cuNumere, usor) {
   let urcat = null, urcatDe = null, nrs = [];
   try { urcat = await getJSON(urlBroadcast(env, `repartizare/${dep}/${luna}/urcat.json`)); } catch (e) {}
+  if (usor) {   // [7.4] pentru reamintirea din cron: doar „e urcată?” (+ autobazele), 1–2 cereri
+    let baze = null;
+    if (dep === 'autobuze' && urcat) { try { baze = await getJSON(urlBroadcast(env, `repartizare/${dep}/${luna}/baze.json`)); } catch (e) {} }
+    return { urcat: urcat || 0, ...(baze ? { baze } : {}) };
+  }
   try { urcatDe = await getJSON(urlBroadcast(env, `repartizare/${dep}/${luna}/urcatDe.json`)); } catch (e) {}
   if (urcat || cuNumere) {
     try {
@@ -2344,7 +2389,8 @@ async function _repAmintireAutomata(env, log) {
     let bazeUrcate = {};
     for (const dep of DEPOURI) {
       if (dep === 'troleibuze') continue;                       // troleibuzele stau la Autobuze
-      const st = await _repStareLuna(env, dep, luna, false);
+      if (env._sr && _srRamase(env) < 8) { log('Reamintire repartizare: continui la rularea următoare'); return; }   // [7.3]
+      const st = await _repStareLuna(env, dep, luna, false, true);
       if (!st.urcat) lipsa.push(dep);
       if (dep === 'autobuze') bazeUrcate = st.baze || {};
     }
@@ -2352,8 +2398,10 @@ async function _repAmintireAutomata(env, log) {
     const rr = await getJSON(urlBroadcast(env, 'repartitori.json')).catch(() => null) || {};
     const toate = [...new Set(Object.values(rr).flatMap(v => _autobaze(v && v.autobaze)))];
     const bazeLipsa = toate.filter(b => !bazeUrcate[b]);
+    // [7.4] marcăm întâi, ca o rulare tăiată la jumătate să nu trimită aceeași reamintire iar și iar
+    await _fbPut(env, `config/repAmintit/${luna}`, { la: Date.now(), lipsa });
     const r = await _repAminteste(env, lipsa, luna, bazeLipsa);
-    await fetch(urlBroadcast(env, `config/repAmintit/${luna}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ la: Date.now(), lipsa, ...r }) });
+    await _fbPut(env, `config/repAmintit/${luna}`, { la: Date.now(), lipsa, ...r }).catch(() => {});
     log(`Reamintire repartizare ${luna}: ${lipsa.length} depouri fără foaie · ${r.oameni} responsabili anunțați`);
   } catch (e) { log('Reamintire repartizare: ' + e.message); }
 }
@@ -2613,7 +2661,7 @@ function _convFisierValid(f) {
   if (!f || typeof f !== 'object') return null;
   const tip = String(f.tip || ''), d = String(f.d || '');
   if (!_CONVF_TIP.includes(tip)) return { eroare: 'Se pot trimite doar poze și PDF-uri.' };
-  if (!d || !/^[A-Za-z0-9+/=]+$/.test(d.slice(0, 2000))) return { eroare: 'Fișier stricat.' };
+  if (!d || !/^[A-Za-z0-9+/]+={0,2}$/.test(d)) return { eroare: 'Fișier stricat.' };   // [7.3] tot șirul, nu doar începutul
   if (d.length > 7000000) return { eroare: 'Fișierul e prea mare (peste 5 MB).' };
   const nume = String(f.nume || (tip === 'application/pdf' ? 'document.pdf' : 'poza.jpg')).replace(/[\u0000-\u001f\/\\]/g, ' ').trim().slice(0, 80) || 'fisier';
   return { nume, tip, d, kb: Math.round(d.length * 0.75 / 1024), w: Number(f.w) || 0, h: Number(f.h) || 0 };
@@ -2817,9 +2865,10 @@ const _linieDinTura = t => { const x = String((t && (t.linie || t.text)) || '').
 async function trimiteAlerteLinii(env, toti, numere, now, vapid) {
   let al; try { al = await alerteTpbi(env); } catch (e) { return { trimise: 0, eroare: 'alerte TPBI: ' + e.message }; }
   // [6.0] „funcționează normal / circulă normal / reluat” nu e o problemă: fără notificare
-  const NORMAL = /(func[țt]ioneaz[ăa]|circul[ăa])\s+normal|(s-a|a fost|au fost)\s+reluat|revenit\S*\s+la\s+normal/i;
+  // [7.3] „nu circulă normal” / „nu a fost reluată” SUNT probleme; și cu ţ (sedilă)
+  const NORMAL = /(?<!\bnu\s{1,3})(?:func[țţt]ioneaz[ăa]|circul[ăa])\s+normal|(?<!\bnu\s{1,3})(?:s-a|a\s+fost|au\s+fost)\s+reluat|revenit\S*\s+la\s+normal/i;
   const cuLinii = al.lista.filter(a => a.linii.length && !NORMAL.test((a.titlu || '') + ' ' + (a.text || ''))); if (!cuLinii.length) return { trimise: 0 };
-  const maine = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE', { timeZone: 'Europe/Bucharest' });
+  const maine = (() => { const [a, l, z] = now.data.split('-').map(Number); return new Date(Date.UTC(a, l - 1, z + 1)).toISOString().slice(0, 10); })();   // [7.3] corect și la schimbarea orei
   let trimise = 0; const marcaje = {}, erori = [];
   await peGrupuri(numere, async (nr) => {
     const u = toti[nr];
@@ -2833,7 +2882,7 @@ async function trimiteAlerteLinii(env, toti, numere, now, vapid) {
     try {
       const rez = await trimiteToate(env, nr, u, JSON.stringify({ title: `⚠️ Linia ${l}: ${a.efectTxt}`, body: (a.titlu || a.text || '').slice(0, 180), tag: 'alerta-' + a.id, url: './?deschide=alerte', urgent: false, discret: true }), { TTL: 6 * 3600, urgency: 'normal' }, vapid);   // [5.8] mai puțin importantă decât tura: prioritate normală, fără să rămână fixată, vibrație scurtă
       if (!rez.trimise) return;
-      marcaje[`${nr}/alerteVazute`] = vazute.concat(noi.map(x => x.id)).slice(-30);   // toate cele de acum: una singură pe rulare
+      marcaje[`${nr}/alerteVazute`] = vazute.concat(noi.map(x => x.id)).slice(-80);   // [7.4] ultimele 80 (o alertă de weekend nu mai revine)   // toate cele de acum: una singură pe rulare
       trimise++;
     } catch (e) { if (erori.length < 2) erori.push(`${nr}: ${e.statusCode || '-'} ${String(e.message || e).slice(0, 60)}`); }
   });
@@ -2925,9 +2974,11 @@ async function conversatie(request, env) {
 }
 // Ce ține despre un număr: căile din Firebase (pentru „Descarcă” și „Șterge”).
 const CAI_NR = ['backup', 'backupIstoric', 'stats', 'push', 'proprietar'];
-async function _stergeNr(env, nr) {
-  for (const c of CAI_NR) await _fbPut(env, `${c}/${nr}`, null).catch(() => {});
-  await _convStergeTot(env, nr);   // [3.8] [7.0] și fișierele
+async function _stergeNr(env, nr, singur) {
+  // [7.3] toate căile într-o singură cerere (înainte ~10), plus agenda și accesele
+  const m = {}; for (const c of [...CAI_NR, CONV, CONVF, 'acces', ...(singur ? ['agenda'] : [])]) m[`${c}/${nr}`] = null;   // [7.4] agenda e a adminului
+  try { await _fbPatch(env, '', m); }
+  catch (e) { for (const c of CAI_NR) await _fbPut(env, `${c}/${nr}`, null).catch(() => {}); await _convStergeTot(env, nr); }
   try { const cn = await getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)); if (cn && cn.uid) await _fbPut(env, `${CHATU}/${cn.uid}`, null); } catch (e) {}   // [4.2]
   await _fbPut(env, `${CHATN}/${nr}`, null).catch(() => {});
   for (const col of ['trimiteri', 'raportOre', 'mesajeAdmin']) {
@@ -2944,7 +2995,7 @@ async function dateleMele(request, env) {
   const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
   if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Doar telefonul înregistrat pe numărul ăsta poate cere datele.' } };
   if (c.actiune === 'sterge') {
-    await _stergeNr(env, nr);
+    await _stergeNr(env, nr, true);
     await _anuntaAdminii(env, '🗑 Date șterse', `${nr} și-a șters singur datele din cloud`, 'date-sterse').catch(() => 0);
     return { status: 200, corp: { ok: true, sters: true } };
   }
@@ -2979,12 +3030,13 @@ async function _sterge6Luni(env, log) {
     for (const [nr, x] of Object.entries(bk || {})) { pune(nr, timp(x && x.ts)); pune(nr, timp(x && (x.updated || x.updat))); }
     for (const [nr, x] of Object.entries(pr || {})) { const { disp } = _normalizeaza(x); for (const d of Object.values(disp || {})) pune(nr, timp(d && (d.ultima || d.la))); }
     const vechi = Object.entries(ultim).filter(([nr, t]) => t && t < prag).map(([nr]) => nr);
-    for (const nr of vechi.slice(0, 3)) await _stergeNr(env, nr);
-    // [2.7] cel mult 3 pe rulare și cel mult 30 pe zi
+    // [7.3] unul pe rulare: ștergerea unui număr costă ~8 cereri, trei nu mai încăpeau în limită
+    for (const nr of vechi.slice(0, 1)) await _stergeNr(env, nr);
+    // [2.7] cel mult 30 pe zi
     const cate = Number(await getJSON(urlBroadcast(env, `limite/sterse6luni/${azi}.json`)).catch(() => 0)) || 0;
-    await _fbPut(env, `limite/sterse6luni/${azi}`, cate + Math.min(3, vechi.length)).catch(() => {});
-    if (vechi.length <= 3 || cate + 3 >= 30) await _fbPut(env, 'config/sterse6luni', azi).catch(() => {});
-    if (vechi.length) log(`6 luni fără activitate: șterse ${Math.min(3, vechi.length)} (${vechi.slice(0, 3).join(', ')})`);
+    await _fbPut(env, `limite/sterse6luni/${azi}`, cate + Math.min(1, vechi.length)).catch(() => {});
+    if (vechi.length <= 1 || cate + 1 >= 30) await _fbPut(env, 'config/sterse6luni', azi).catch(() => {});
+    if (vechi.length) log(`6 luni fără activitate: șters ${vechi[0]}`);
   } catch (e) { log('Ștergere 6 luni: ' + e.message); }
 }
 
@@ -3670,6 +3722,10 @@ async function admin(request, env) {
     }
     cerere.inlocuieste = false;          // responsabilul nu poate șterge luna
     cerere._urcatDe = rep.nr || rep.id;
+    cerere._dinRep = true;               // [7.4] fără ștergeri de rânduri
+    // [7.4] responsabilul unei autobaze marchează ca urcată doar autobaza lui
+    if (dep === 'autobuze' && rep.autobaze.length && cerere.baze && typeof cerere.baze === 'object')
+      cerere.baze = Object.fromEntries(Object.entries(cerere.baze).filter(([k]) => rep.autobaze.includes(k)));
   }
 
   if (!cuParola && !cuJeton && !rep && !adm2) {
@@ -3702,7 +3758,7 @@ async function admin(request, env) {
     const o = adm2.opriri;
     if (o.definitiv && (a === 'blocheaza' || a === 'blocareFel') && cerere.fel === 'definitiv')
       return { status: 403, corp: { ok: false, eroare: 'Blocarea definitivă e oprită pentru tine. Folosește „număr greșit”.' } };
-    if (o.sterge && (a === 'stergeUtilizator' || a === 'stergeToateDispozitivele' || a === 'stergeDepouDinBackup'))
+    if (o.sterge && (a === 'stergeUtilizator' || a === 'stergeToateDispozitivele' || a === 'stergeDepouDinBackup' || a === 'convSterge'))
       return { status: 403, corp: { ok: false, eroare: 'Ștergerea datelor e oprită pentru tine.' } };
     if (o.fortat && a === 'versiuneMinima')
       return { status: 403, corp: { ok: false, eroare: 'Actualizarea obligatorie e oprită pentru tine.' } };
@@ -4505,10 +4561,13 @@ async function admin(request, env) {
       }
 
       const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x)) ? x : {};
-      const lunara  = obj(cerere.lunara);
+      // [7.4] rândurile goale (null) ar șterge oameni urcați de altcineva: un responsabil nu poate face asta
+      const faraNul = (x) => cerere._dinRep ? Object.fromEntries(Object.entries(x).filter(([, v]) => v !== null && v !== undefined)) : x;
+      const lunara  = faraNul(obj(cerere.lunara));
       const zilnica = obj(cerere.zilnica);
-      const schimb  = obj(cerere.schimb);
+      const schimb  = faraNul(obj(cerere.schimb));
       const ore     = obj(cerere.ore);
+      if (JSON.stringify(cerere).length > 3000000) return { status: 413, corp: { ok: false, eroare: 'Foaia e prea mare.' } };   // [7.4]
 
       const baza = `repartizare/${depou}/${luna}`;
 
@@ -4542,8 +4601,8 @@ async function admin(request, env) {
         }
       };
 
+      const zl = {};
       try {
-        await scrie(baza, { luna, depou, urcat: Date.now(), urcatDe: cerere._urcatDe || 'admin' }, 'PATCH');
         if (Object.keys(lunara).length)  await scrie(`${baza}/lunara`,  lunara,  'PATCH');
         // [3.0] autobazele de pe foaie (le recunoaște aplicația după ture): data urcării pe fiecare
         if (depou === 'autobuze' && cerere.baze && typeof cerere.baze === 'object') {
@@ -4555,10 +4614,18 @@ async function admin(request, env) {
         if (Object.keys(ore).length)     await scrie(`${baza}/ore`,     ore,     'PATCH');
         // Zilnica e pe zile, iar o zi urcată din nou trebuie să o înlocuiască
         // pe cea veche, nu să se amestece cu ea: PATCH pe fiecare zi în parte.
+        // [7.4] Toate zilele într-o singură cerere (înainte una pe zi: peste ~40 se atingea limita de
+        // cereri și foaia rămânea pe jumătate). Fiecare zi o ÎNLOCUIEȘTE pe cea veche (nu se amestecă),
+        // iar cheile sunt aduse la forma pe care o caută aplicația: luna-ZZ, doar din luna foii.
         for (const zi of Object.keys(zilnica)) {
-          if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(zi)) continue;      // [2.7] doar date, altfel cheia ar putea ieși din /repartizare
-          await scrie(`${baza}/zilnica/${zi}`, obj(zilnica[zi]), 'PATCH');
+          const mz = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(zi); if (!mz) continue;   // [2.7] doar date
+          const k = `${mz[1]}-${mz[2].padStart(2, '0')}-${mz[3].padStart(2, '0')}`;
+          if (!k.startsWith(luna + '-') || Number(mz[3]) < 1 || Number(mz[3]) > 31) continue;
+          zl[k] = obj(zilnica[zi]);
         }
+        if (Object.keys(zl).length) await scrie(`${baza}/zilnica`, zl, 'PATCH');
+        // [7.4] „urcat” se scrie ULTIMUL: telefoanele care verifică între timp nu iau o foaie pe jumătate
+        await scrie(baza, { luna, depou, urcat: Date.now(), urcatDe: cerere._urcatDe || 'admin' }, 'PATCH');
       } catch (e) {
         return { status: 502, corp: { ok: false, eroare: String(e.message || e) } };
       }
@@ -4566,7 +4633,7 @@ async function admin(request, env) {
       // Câți sunt în total după îmbinare — ca să vezi dacă s-au adunat foile
       let total = Object.keys(lunara).length;
       try {
-        const rc = await fetch(urlBroadcast(env, `${baza}/lunara.json?shallow=true`));
+        const rc = await fetch(_urlShallow(env, `${baza}/lunara.json`));
         if (rc.ok) {
           const d = await rc.json();
           if (d && typeof d === 'object') total = Object.keys(d).length;
@@ -4579,7 +4646,7 @@ async function admin(request, env) {
           ok: true, luna, depou,
           oameni: Object.keys(lunara).length,
           total,
-          zile: Object.keys(zilnica).length,
+          zile: Object.keys(zl).length,
           inlocuit: cerere.inlocuieste === true
         }
       };
@@ -4847,7 +4914,7 @@ async function admin(request, env) {
     // ── [v17.9] Copiile zilnice: ce avem și de când ──
     case 'arhive': {
       let index = null;
-      try { index = await getJSON(urlBroadcast(env, 'arhiva.json?shallow=true')); } catch (e) {}
+      try { index = await getJSON(_urlShallow(env, 'arhiva.json')); } catch (e) {}
       const date = Object.keys(index || {}).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
       // Pentru un număr anume spunem și câte zile are în fiecare copie —
       // așa se vede dintr-o privire de unde merită recuperat.
