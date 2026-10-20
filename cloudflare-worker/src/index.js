@@ -2744,11 +2744,42 @@ async function chatNumeLeaga(request, env) {
 const MOBI = 'https://maps.mo-bi.ro/api';
 const MOBI_HDR = { 'Accept': 'application/json, text/plain, */*', 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36', 'Referer': 'https://info.stb.ro/' };
 let _liveBus = { t: 0, v: null, p: null }, _liveSos = new Map();
+// [7.8] A doua listă de la același server (o folosește și proiectul NexTB): pentru fiecare
+// număr de înmatriculare dă codul vehiculului din evidența STB (th_id) și câți călători are.
+// La tramvaiele noi (Astra Imperio) codul din poziții e al aparatului GPS, nu numărul de parc.
+let _liveDs = { t: 0, m: null, p: null, err: '' };
+const _plNorm = x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+async function _liveDataset() {
+  if (_liveDs.m && Date.now() - _liveDs.t < 30000) return _liveDs.m;
+  if (_liveDs.p) return _liveDs.p;
+  _liveDs.p = (async () => {
+    try {
+      const r = await fetch(MOBI + '/dataset', { headers: MOBI_HDR, cf: { cacheTtl: 20, cacheEverything: true } });
+      if (!r.ok) throw new Error('dataset ' + r.status);
+      const d = await r.json(), m = new Map();
+      for (const x of (Array.isArray(d) ? d : [])) {
+        const vv = (x && x.vehicle && x.vehicle.vehicle) || {}, pl = _plNorm(vv.license_plate || vv.licensePlate);
+        if (!pl) continue;
+        const th = Number(vv.th_id) || 0, ob = x.vehicle.passenger_info && x.vehicle.passenger_info.on_board;
+        m.set(pl, { t: th > 0 ? th : 0, o: Number.isFinite(Number(ob)) && ob !== null ? Number(ob) : null });
+      }
+      _liveDs = { t: Date.now(), m, p: null, err: '' };
+      return m;
+    } catch (e) {
+      _liveDs = { t: Date.now() - 20000, m: _liveDs.m || new Map(), p: null, err: String(e.message || e).slice(0, 80) };   // reîncercăm peste ~10 s
+      return _liveDs.m;
+    }
+  })();
+  try { return await _liveDs.p; } finally { _liveDs.p = null; }
+}
 async function _liveVehicule() {
   if (_liveBus.v && Date.now() - _liveBus.t < 8000) return _liveBus.v;
   if (_liveBus.p) return _liveBus.p;
   _liveBus.p = (async () => {
-    const r = await fetch(MOBI + '/busData', { headers: MOBI_HDR, cf: { cacheTtl: 10, cacheEverything: true } });
+    const [r, ds] = await Promise.all([
+      fetch(MOBI + '/busData', { headers: MOBI_HDR, cf: { cacheTtl: 10, cacheEverything: true } }),
+      _liveDataset().catch(() => new Map())   // [7.8] dacă lista a doua nu merge, Mers live merge ca înainte
+    ]);
     if (!r.ok) throw new Error('mo-bi ' + r.status);
     const d = await r.json();
     const lista = (Array.isArray(d) ? d : []).map(x => {
@@ -2756,7 +2787,14 @@ async function _liveVehicule() {
       if (!isFinite(p.latitude) || !isFinite(p.longitude)) return null;
       return { r: tr.routeId != null ? String(tr.routeId) : '', d: tr.directionId != null ? Number(tr.directionId) : null,
         p: String(vv.label || vv.th_id || vv.id || ''), n: String(vv.licensePlate || vv.license_plate || ''),
-        la: Math.round(p.latitude * 1e5) / 1e5, lo: Math.round(p.longitude * 1e5) / 1e5, ts: Number(v.timestamp) || 0, st: tr.startTime || '' };
+        la: Math.round(p.latitude * 1e5) / 1e5, lo: Math.round(p.longitude * 1e5) / 1e5, ts: Number(v.timestamp) || 0, st: tr.startTime || '',
+        ...(() => {   // [7.8] codul din evidență (lista a doua, după înmatriculare) și călătorii
+          const e = ds.get(_plNorm(vv.licensePlate || vv.license_plate)), o = {};
+          const t = (e && e.t) || (Number(vv.th_id) > 0 ? Number(vv.th_id) : 0);
+          if (t && String(t) !== String(vv.label || vv.th_id || vv.id || '')) o.t = t;
+          if (e && e.o != null) o.o = e.o;
+          return o;
+        })() };
     }).filter(Boolean);
     _liveBus = { t: Date.now(), v: lista, p: null };
     return lista;
@@ -2906,7 +2944,11 @@ async function mersLive(url) {
   if (url.pathname === '/live/test') {
     const t0 = Date.now(), v = await _liveVehicule();
     const peLinie = {}; for (const x of v) if (x.r) peLinie[x.r] = (peLinie[x.r] || 0) + 1;
-    return { status: 200, corp: { ok: true, vehicule: v.length, cuLinie: v.filter(x => x.r).length, linii: Object.keys(peLinie).length, ms: Date.now() - t0, exemplu: v.slice(0, 2) } };
+    // [7.8] și starea listei a doua: câte vehicule au cod din evidență diferit de cel GPS
+    const cuT = v.filter(x => x.t), cuO = v.filter(x => x.o != null);
+    return { status: 200, corp: { ok: true, vehicule: v.length, cuLinie: v.filter(x => x.r).length, linii: Object.keys(peLinie).length, ms: Date.now() - t0, exemplu: v.slice(0, 2),
+      dataset: { inLista: _liveDs.m ? _liveDs.m.size : 0, eroare: _liveDs.err || '', cuCodDiferit: cuT.length, cuCalatori: cuO.length,
+        exempleCod: cuT.slice(0, 25).map(x => `${x.r}: GPS ${x.p} → ${x.t} (${x.n})`) } } };
   }
   if (url.pathname === '/live/sosiri') {
     const s = String(url.searchParams.get('s') || '').replace(/[^0-9]/g, '').slice(0, 8);
