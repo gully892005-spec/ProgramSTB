@@ -2757,13 +2757,15 @@ async function _liveDataset() {
       const r = await fetch(MOBI + '/dataset', { headers: MOBI_HDR, cf: { cacheTtl: 20, cacheEverything: true } });
       if (!r.ok) throw new Error('dataset ' + r.status);
       const d = await r.json(), m = new Map();
+      _liveDs.mostra = JSON.stringify(Array.isArray(d) ? d.slice(0, 2) : d).slice(0, 1500);   // [7.9] pentru verificare
+      _liveDs.n0 = Array.isArray(d) ? d.length : -1;
       for (const x of (Array.isArray(d) ? d : [])) {
         const vv = (x && x.vehicle && x.vehicle.vehicle) || {}, pl = _plNorm(vv.license_plate || vv.licensePlate);
         if (!pl) continue;
         const th = Number(vv.th_id) || 0, ob = x.vehicle.passenger_info && x.vehicle.passenger_info.on_board;
         m.set(pl, { t: th > 0 ? th : 0, o: Number.isFinite(Number(ob)) && ob !== null ? Number(ob) : null });
       }
-      _liveDs = { t: Date.now(), m, p: null, err: '' };
+      _liveDs = { t: Date.now(), m, p: null, err: '', mostra: _liveDs.mostra, n0: _liveDs.n0 };
       return m;
     } catch (e) {
       _liveDs = { t: Date.now() - 20000, m: _liveDs.m || new Map(), p: null, err: String(e.message || e).slice(0, 80) };   // reîncercăm peste ~10 s
@@ -2946,6 +2948,15 @@ async function mersLive(url) {
     const peLinie = {}; for (const x of v) if (x.r) peLinie[x.r] = (peLinie[x.r] || 0) + 1;
     // [7.8] și starea listei a doua: câte vehicule au cod din evidență diferit de cel GPS
     const cuT = v.filter(x => x.t), cuO = v.filter(x => x.o != null);
+    // [7.9] ?l=5,10,21: toate vehiculele de pe liniile astea, cu tot ce trimite STB despre ele
+    const cer = String(url.searchParams.get('l') || '').split(',').map(x => x.trim().toUpperCase()).filter(Boolean).slice(0, 12);
+    if (cer.length) {
+      const cod = {}; for (const [k, n] of Object.entries(GTFS_LINII)) cod[k] = String(n).toUpperCase();
+      const acum = Math.round(Date.now() / 1000), out = {};
+      for (const x of v) { const n = cod[x.r]; if (!n || !cer.includes(n)) continue;
+        (out['linia ' + n] = out['linia ' + n] || []).push(`GPS ${x.p} · înmatriculare ${x.n || '—'} · evidență ${x.t || '—'}${x.o != null ? ' · ' + x.o + ' călători' : ''} · sens ${x.d} · acum ${Math.max(0, acum - x.ts)} s`); }
+      return { status: 200, corp: { ok: true, dataset: { inLista: _liveDs.n0, eroare: _liveDs.err || '' }, vehicule: out, mostraDataset: _liveDs.mostra || '' } };
+    }
     return { status: 200, corp: { ok: true, vehicule: v.length, cuLinie: v.filter(x => x.r).length, linii: Object.keys(peLinie).length, ms: Date.now() - t0, exemplu: v.slice(0, 2),
       dataset: { inLista: _liveDs.m ? _liveDs.m.size : 0, eroare: _liveDs.err || '', cuCodDiferit: cuT.length, cuCalatori: cuO.length,
         exempleCod: cuT.slice(0, 25).map(x => `${x.r}: GPS ${x.p} → ${x.t} (${x.n})`) } } };
