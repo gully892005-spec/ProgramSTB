@@ -2804,7 +2804,9 @@ async function _liveVehicule() {
     const acumM = Date.now();
     for (const x of lista) {
       const k = x.p || x.n; if (!k) continue;
-      if (x.r) _liveUltLinie.set(k, { r: x.r, d: x.d, t: acumM });
+      // [9.5] la tramvaie ținem minte doar liniile de tramvai (nu „102”/„97” date greșit la capăt)
+      const bun = x.r && (_TRAM_RUTE.has(x.r) || !/^B\d{5}$/.test(_plNorm(x.n)));
+      if (bun) _liveUltLinie.set(k, { r: x.r, d: x.d, t: acumM });
       else { const u = _liveUltLinie.get(k); if (u && acumM - u.t < 40 * 60000) { x.u = u.r; x.ud = u.d; } }
     }
     if (_liveUltLinie.size > 6000) for (const [k, u] of _liveUltLinie) if (acumM - u.t > 40 * 60000) _liveUltLinie.delete(k);
@@ -3011,7 +3013,7 @@ async function mersLive(url) {
   // tramvaie cunoscute și chiar pe traseul liniei.
   const eTr = _TRAM_RUTE.has(rt);
   return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt || (!x.r && (!x.u || x.u === rt))
-      || (eTr && x.r && !_TRAM_RUTE.has(x.r) && /^B\d{5}$/.test(_plNorm(x.n))))
+      || (eTr && x.r && !_TRAM_RUTE.has(x.r) && /^B\d{5}$/.test(_plNorm(x.n)) && (!x.u || x.u === rt)))   // [9.5] nu și cele știute pe altă linie
     .map(({ r, u, ud, ...x }) => (r === rt ? x : Object.assign(x, { cap: 1, du: ud }, u === rt ? { ul: 1 } : {}, r ? { alt: GTFS_LINII[r] || r } : {}))) } };
 }
 
