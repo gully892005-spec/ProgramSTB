@@ -3005,16 +3005,7 @@ async function mersLive(url) {
   const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z_]/g, '').slice(0, 12);   // [5.6] și liniile regionale (PV1_455)
   if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
   const v = await _liveVehicule();
-  // [9.3] și vehiculele fără cursă (în tot orașul sunt doar câteva): telefonul le păstrează doar
-  // pe cele văzute înainte pe linia asta sau oprite chiar la capătul ei
-  // [9.4] La capăt, tramvaiele primesc de la STB o linie de autobuz la întâmplare (4016 și 4017 la C.F.R.
-  // Progresul: „102”, altul „97”) până pleacă în cursă. Pentru o linie de tramvai trimitem și tramvaiele
-  // (număr B + 5 cifre) care sunt pe o linie care nu e de tramvai; telefonul le păstrează doar dacă sunt
-  // tramvaie cunoscute și chiar pe traseul liniei.
-  const eTr = _TRAM_RUTE.has(rt);
-  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt || (!x.r && (!x.u || x.u === rt))
-      || (eTr && x.r && !_TRAM_RUTE.has(x.r) && /^B\d{5}$/.test(_plNorm(x.n)) && (!x.u || x.u === rt)))   // [9.5] nu și cele știute pe altă linie
-    .map(({ r, u, ud, ...x }) => (r === rt ? x : Object.assign(x, { cap: 1, du: ud }, u === rt ? { ul: 1 } : {}, r ? { alt: GTFS_LINII[r] || r } : {}))) } };
+  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt).map(({ r, u, ud, ...x }) => x) } };   // [9.7] înapoi: doar vehiculele liniei
 }
 
 async function conversatie(request, env) {
