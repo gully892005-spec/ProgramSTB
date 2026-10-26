@@ -2743,7 +2743,7 @@ async function chatNumeLeaga(request, env) {
 // ══════════════════════════════════════════════════════════════
 const MOBI = 'https://maps.mo-bi.ro/api';
 const MOBI_HDR = { 'Accept': 'application/json, text/plain, */*', 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36', 'Referer': 'https://info.stb.ro/' };
-let _liveBus = { t: 0, v: null, p: null }, _liveSos = new Map(), _liveUltLinie = new Map();   // [9.1]
+let _liveBus = { t: 0, v: null, p: null }, _liveSos = new Map(), _liveUltLinie = new Map(), _liveRaw = [];   // [9.1] [9.2]
 // [7.8] A doua listă de la același server (o folosește și proiectul NexTB): pentru fiecare
 // număr de înmatriculare dă codul vehiculului din evidența STB (th_id) și câți călători are.
 // La tramvaiele noi (Astra Imperio) codul din poziții e al aparatului GPS, nu numărul de parc.
@@ -2765,7 +2765,7 @@ async function _liveDataset() {
         const th = Number(vv.th_id) || 0, ob = x.vehicle.passenger_info && x.vehicle.passenger_info.on_board;
         m.set(pl, { t: th > 0 ? th : 0, o: Number.isFinite(Number(ob)) && ob !== null ? Number(ob) : null });
       }
-      _liveDs = { t: Date.now(), m, p: null, err: '', mostra: _liveDs.mostra, n0: _liveDs.n0 };
+      _liveDs = { t: Date.now(), m, p: null, err: '', mostra: _liveDs.mostra, n0: _liveDs.n0, raw: Array.isArray(d) ? d : [] };   // [9.2] raw: pentru /live/test?la=&lo=
       return m;
     } catch (e) {
       _liveDs = { t: Date.now() - 20000, m: _liveDs.m || new Map(), p: null, err: String(e.message || e).slice(0, 80) };   // reîncercăm peste ~10 s
@@ -2784,6 +2784,7 @@ async function _liveVehicule() {
     ]);
     if (!r.ok) throw new Error('mo-bi ' + r.status);
     const d = await r.json();
+    _liveRaw = Array.isArray(d) ? d : [];   // [9.2]
     const lista = (Array.isArray(d) ? d : []).map(x => {
       const v = x && x.vehicle || {}, tr = v.trip || {}, vv = v.vehicle || {}, p = v.position || {};
       if (!isFinite(p.latitude) || !isFinite(p.longitude)) return null;
@@ -2954,6 +2955,22 @@ async function mersLiveDiag() {
 async function mersLive(url) {
   if (url.pathname === '/live/test') {
     const t0 = Date.now(), v = await _liveVehicule();
+    // [9.2] ?la=44.369&lo=26.088&raza=600: TOT ce trimite STB în jurul unui punct (ex. un capăt de linie),
+    // din ambele liste, cu sau fără linie — ca să vedem ce se întâmplă cu tramvaiele care stau la capăt
+    const pla = Number(url.searchParams.get('la')), plo = Number(url.searchParams.get('lo'));
+    if (isFinite(pla) && isFinite(plo) && pla && plo) {
+      await _liveDataset().catch(() => null);
+      const raza = Math.min(3000, Number(url.searchParams.get('raza')) || 600), acum = Math.round(Date.now() / 1000);
+      const dist = (a, b) => Math.round(Math.hypot((b - plo) * 79620, (a - pla) * 110540));
+      const cod = r => r == null ? '—' : (GTFS_LINII[String(r)] ? 'linia ' + GTFS_LINII[String(r)] : 'cod ' + r);
+      const scurt = x => { const vh = (x && x.vehicle) || {}, tr = vh.trip || {}, vv = vh.vehicle || {}, po = vh.position || {};
+        const la = po.latitude, lo = po.longitude; if (!isFinite(la) || !isFinite(lo)) return null; const m = dist(la, lo); if (m > raza) return null;
+        const ts = Number(vh.timestamp) || 0;
+        return { m, txt: `${m} m · ${cod(tr.routeId ?? tr.route_id)} · sens ${tr.directionId ?? tr.direction_id ?? '—'} · GPS ${vv.label || vv.id || '—'} · nr ${vv.license_plate || vv.licensePlate || '—'} · evid ${vv.th_id || '—'} · acum ${ts ? Math.max(0, acum - (ts > 1e12 ? Math.round(ts / 1000) : ts)) + ' s' : '—'} · cursa ${tr.tripId || tr.trip_id || '—'}${vh.current_status != null || vh.currentStatus != null ? ' · stare ' + (vh.current_status ?? vh.currentStatus) : ''}` }; };
+      const lista = arr => arr.map(scurt).filter(Boolean).sort((a, b) => a.m - b.m).map(x => x.txt).slice(0, 40);
+      return { status: 200, corp: { ok: true, punct: [pla, plo], raza, pozitii: lista(_liveRaw), listaDoi: lista(_liveDs.raw || []),
+        tinutMinte: _liveUltLinie.size, laCapatAcum: v.filter(x => !x.r && x.u).length } };
+    }
     const peLinie = {}; for (const x of v) if (x.r) peLinie[x.r] = (peLinie[x.r] || 0) + 1;
     // [7.8] și starea listei a doua: câte vehicule au cod din evidență diferit de cel GPS
     const cuT = v.filter(x => x.t), cuO = v.filter(x => x.o != null);
@@ -2985,8 +3002,10 @@ async function mersLive(url) {
   const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z_]/g, '').slice(0, 12);   // [5.6] și liniile regionale (PV1_455)
   if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
   const v = await _liveVehicule();
-  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt || (!x.r && x.u === rt))
-    .map(({ r, u, ud, ...x }) => (r ? x : Object.assign(x, { cap: 1, du: ud }))) } };   // [9.1] cap: e la capăt, fără cursă
+  // [9.3] și vehiculele fără cursă (în tot orașul sunt doar câteva): telefonul le păstrează doar
+  // pe cele văzute înainte pe linia asta sau oprite chiar la capătul ei
+  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt || (!x.r && (!x.u || x.u === rt)))
+    .map(({ r, u, ud, ...x }) => (r ? x : Object.assign(x, { cap: 1, du: ud }, u ? { ul: 1 } : {}))) } };
 }
 
 async function conversatie(request, env) {
