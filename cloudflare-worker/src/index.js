@@ -2743,7 +2743,7 @@ async function chatNumeLeaga(request, env) {
 // ══════════════════════════════════════════════════════════════
 const MOBI = 'https://maps.mo-bi.ro/api';
 const MOBI_HDR = { 'Accept': 'application/json, text/plain, */*', 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36', 'Referer': 'https://info.stb.ro/' };
-let _liveBus = { t: 0, v: null, p: null }, _liveSos = new Map();
+let _liveBus = { t: 0, v: null, p: null }, _liveSos = new Map(), _liveUltLinie = new Map();   // [9.1]
 // [7.8] A doua listă de la același server (o folosește și proiectul NexTB): pentru fiecare
 // număr de înmatriculare dă codul vehiculului din evidența STB (th_id) și câți călători are.
 // La tramvaiele noi (Astra Imperio) codul din poziții e al aparatului GPS, nu numărul de parc.
@@ -2798,6 +2798,15 @@ async function _liveVehicule() {
           return o;
         })() };
     }).filter(Boolean);
+    // [9.1] La capăt de linie STB scoate cursa (fără linie) până pleacă iar: ținem minte
+    // pe ce linie a fost văzut ultima dată fiecare vehicul (40 min) și îl dăm tot pe linia aceea.
+    const acumM = Date.now();
+    for (const x of lista) {
+      const k = x.p || x.n; if (!k) continue;
+      if (x.r) _liveUltLinie.set(k, { r: x.r, d: x.d, t: acumM });
+      else { const u = _liveUltLinie.get(k); if (u && acumM - u.t < 40 * 60000) { x.u = u.r; x.ud = u.d; } }
+    }
+    if (_liveUltLinie.size > 6000) for (const [k, u] of _liveUltLinie) if (acumM - u.t > 40 * 60000) _liveUltLinie.delete(k);
     _liveBus = { t: Date.now(), v: lista, p: null };
     return lista;
   })();
@@ -2953,11 +2962,11 @@ async function mersLive(url) {
     if (cer.length) {
       const cod = {}; for (const [k, n] of Object.entries(GTFS_LINII)) cod[k] = String(n).toUpperCase();
       const acum = Math.round(Date.now() / 1000), out = {};
-      for (const x of v) { const n = cod[x.r]; if (!n || !cer.includes(n)) continue;
-        (out['linia ' + n] = out['linia ' + n] || []).push(`GPS ${x.p} · înmatriculare ${x.n || '—'} · evidență ${x.t || '—'}${x.o != null ? ' · ' + x.o + ' călători' : ''} · sens ${x.d} · acum ${Math.max(0, acum - x.ts)} s`); }
+      for (const x of v) { const n = cod[x.r || x.u]; if (!n || !cer.includes(n)) continue;
+        (out['linia ' + n] = out['linia ' + n] || []).push(`${x.r ? '' : 'LA CAPĂT (fără cursă) · '}GPS ${x.p} · înmatriculare ${x.n || '—'} · evidență ${x.t || '—'}${x.o != null ? ' · ' + x.o + ' călători' : ''} · sens ${x.d} · acum ${Math.max(0, acum - x.ts)} s`); }
       return { status: 200, corp: { ok: true, dataset: { inLista: _liveDs.n0, eroare: _liveDs.err || '' }, vehicule: out, mostraDataset: _liveDs.mostra || '' } };
     }
-    return { status: 200, corp: { ok: true, vehicule: v.length, cuLinie: v.filter(x => x.r).length, linii: Object.keys(peLinie).length, ms: Date.now() - t0, exemplu: v.slice(0, 2),
+    return { status: 200, corp: { ok: true, vehicule: v.length, cuLinie: v.filter(x => x.r).length, laCapat: v.filter(x => !x.r && x.u).length, faraLinie: v.filter(x => !x.r).length, linii: Object.keys(peLinie).length, ms: Date.now() - t0, exemplu: v.slice(0, 2),
       dataset: { inLista: _liveDs.m ? _liveDs.m.size : 0, eroare: _liveDs.err || '', cuCodDiferit: cuT.length, cuCalatori: cuO.length,
         exempleCod: cuT.slice(0, 25).map(x => `${x.r}: GPS ${x.p} → ${x.t} (${x.n})`) } } };
   }
@@ -2976,7 +2985,8 @@ async function mersLive(url) {
   const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z_]/g, '').slice(0, 12);   // [5.6] și liniile regionale (PV1_455)
   if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
   const v = await _liveVehicule();
-  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt).map(({ r, ...x }) => x) } };
+  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt || (!x.r && x.u === rt))
+    .map(({ r, u, ud, ...x }) => (r ? x : Object.assign(x, { cap: 1, du: ud }))) } };   // [9.1] cap: e la capăt, fără cursă
 }
 
 async function conversatie(request, env) {
