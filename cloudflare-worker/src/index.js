@@ -1168,7 +1168,7 @@ export default {
       let t; try { t = await mersLiveDiag(); } catch (e) { t = 'Eroare: ' + (e && e.message || e); }
       return new Response(t, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
     }
-    if (url.pathname === '/live' || url.pathname === '/live/sosiri' || url.pathname === '/live/test') {   // [4.6] mers live
+    if (url.pathname === '/live' || url.pathname === '/live/sosiri' || url.pathname === '/live/test' || url.pathname === '/live/tpbi') {   // [4.6] mers live; [9.8] /live/tpbi
       let r;
       try { r = await mersLive(url); }
       catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
@@ -2956,6 +2956,45 @@ async function mersLiveDiag() {
   return t;
 }
 async function mersLive(url) {
+  // [9.8] VERIFICARE: pozițiile din fluxul oficial TPBI (GTFS-Realtime), ca în aplicația lor.
+  // /live/tpbi?l=7 → vehiculele liniei 7 de acolo, cu număr, sens și vechime.
+  if (url.pathname === '/live/tpbi') {
+    const cer = String(url.searchParams.get('l') || '').split(',').map(x => x.trim().toUpperCase()).filter(Boolean).slice(0, 12);
+    const incercari = ['vehiclePositions', 'vehicle-positions', 'vehiclepositions', 'VehiclePositions'], stari = [];
+    let buf = null, folosit = '';
+    for (const n of incercari) {
+      try {
+        const r = await fetch('https://gtfs.tpbi.ro/api/gtfs-rt/' + n, { headers: { 'Accept': 'application/x-protobuf, application/json;q=0.5, */*' } });
+        stari.push(n + ': ' + r.status);
+        if (r.ok) { buf = new Uint8Array(await r.arrayBuffer()); folosit = n; break; }
+      } catch (e) { stari.push(n + ': ' + String(e.message || e).slice(0, 60)); }
+    }
+    if (!buf) return { status: 200, corp: { ok: false, stari } };
+    const acum = Math.round(Date.now() / 1000), lista = [];
+    const fl = v => { const dv = new DataView(new ArrayBuffer(4)); dv.setUint32(0, v >>> 0, true); return Math.round(dv.getFloat32(0, true) * 1e5) / 1e5; };
+    if (buf[0] === 0x7b) {   // JSON
+      const d = JSON.parse(new TextDecoder().decode(buf));
+      for (const e of (d.entity || d.entities || [])) { const v = e.vehicle; if (!v) continue; const t = v.trip || {}, vv = v.vehicle || {}, po = v.position || {};
+        lista.push({ r: String(t.routeId ?? t.route_id ?? ''), d: t.directionId ?? t.direction_id, trip: t.tripId ?? t.trip_id ?? '', id: vv.id || '', lab: vv.label || '', nr: vv.licensePlate || vv.license_plate || '', la: po.latitude, lo: po.longitude, ts: Number(v.timestamp) || 0 }); }
+    } else {
+      for (const ent of _pbCampuri(buf, 0, buf.length).filter(x => x.f === 2 && x.t === 2)) {
+        const vp = _pbCampuri(buf, ent.v[0], ent.v[1]).find(x => x.f === 4 && x.t === 2); if (!vp) continue;
+        const o = { r: '', d: null, trip: '', id: '', lab: '', nr: '', la: null, lo: null, ts: 0 };
+        for (const c of _pbCampuri(buf, vp.v[0], vp.v[1])) {
+          if (c.f === 1 && c.t === 2) for (const x of _pbCampuri(buf, c.v[0], c.v[1])) { if (x.f === 1 && x.t === 2) o.trip = _pbTxt(buf, x.v); if (x.f === 5 && x.t === 2) o.r = _pbTxt(buf, x.v); if (x.f === 6 && x.t === 0) o.d = x.v; }
+          if (c.f === 2 && c.t === 2) for (const x of _pbCampuri(buf, c.v[0], c.v[1])) { if (x.f === 1 && x.t === 5) o.la = fl(x.v); if (x.f === 2 && x.t === 5) o.lo = fl(x.v); }
+          if (c.f === 5 && c.t === 0) o.ts = c.v;
+          if (c.f === 8 && c.t === 2) for (const x of _pbCampuri(buf, c.v[0], c.v[1])) { if (x.f === 1 && x.t === 2) o.id = _pbTxt(buf, x.v); if (x.f === 2 && x.t === 2) o.lab = _pbTxt(buf, x.v); if (x.f === 3 && x.t === 2) o.nr = _pbTxt(buf, x.v); }
+        }
+        lista.push(o);
+      }
+    }
+    const nume = r => GTFS_LINII[r] || ('cod ' + (r || '—'));
+    const out = {};
+    for (const x of lista) { const n = String(GTFS_LINII[x.r] || '').toUpperCase(); if (cer.length && !cer.includes(n)) continue;
+      (out['linia ' + nume(x.r)] = out['linia ' + nume(x.r)] || []).push(`${x.lab || x.id || '—'} · nr ${x.nr || '—'} · sens ${x.d ?? '—'} · acum ${x.ts ? Math.max(0, acum - x.ts) + ' s' : '—'} · ${x.la},${x.lo} · cursa ${x.trip || '—'}`); }
+    return { status: 200, corp: { ok: true, sursa: folosit, stari, vehicule: lista.length, cuLinie: lista.filter(x => x.r).length, exemplu: lista.slice(0, 2), linii: cer.length ? out : Object.keys(out).length } };
+  }
   if (url.pathname === '/live/test') {
     const t0 = Date.now(), v = await _liveVehicule();
     // [9.2] ?la=44.369&lo=26.088&raza=600: TOT ce trimite STB în jurul unui punct (ex. un capăt de linie),
