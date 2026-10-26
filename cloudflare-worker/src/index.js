@@ -2955,6 +2955,72 @@ async function mersLiveDiag() {
   t += `\nLINII DIN GTFS FĂRĂ NICIUN VEHICUL ACUM (${goale.length}):\n${goale.join(', ')}\n`;
   return t;
 }
+// [9.9] Pozițiile din fluxul oficial TPBI (GTFS-Realtime). Are linia CORECTĂ (cursa TRIP_LV_69_0_123 =
+// linia 7, sensul 0) și numărul de parc (4017), chiar și când maps.mo-bi.ro dă tramvaiului „102” sau „N113”.
+let _liveTp = { t: 0, v: null, p: null, err: '' };
+function _tpParse(buf) {
+  const lista = [];
+  const fl = v => { const dv = new DataView(new ArrayBuffer(4)); dv.setUint32(0, v >>> 0, true); return Math.round(dv.getFloat32(0, true) * 1e5) / 1e5; };
+  if (buf[0] === 0x7b) {
+    const d = JSON.parse(new TextDecoder().decode(buf));
+    for (const e of (d.entity || d.entities || [])) { const v = e.vehicle; if (!v) continue; const t = v.trip || {}, vv = v.vehicle || {}, po = v.position || {};
+      lista.push({ r: String(t.routeId ?? t.route_id ?? ''), d: t.directionId ?? t.direction_id ?? null, trip: String(t.tripId ?? t.trip_id ?? ''), id: String(vv.id || ''), lab: String(vv.label || ''), nr: String(vv.licensePlate || vv.license_plate || ''), la: po.latitude, lo: po.longitude, ts: Number(v.timestamp) || 0 }); }
+  } else {
+    for (const ent of _pbCampuri(buf, 0, buf.length).filter(x => x.f === 2 && x.t === 2)) {
+      const vp = _pbCampuri(buf, ent.v[0], ent.v[1]).find(x => x.f === 4 && x.t === 2); if (!vp) continue;
+      const o = { r: '', d: null, trip: '', id: '', lab: '', nr: '', la: null, lo: null, ts: 0 };
+      for (const c of _pbCampuri(buf, vp.v[0], vp.v[1])) {
+        if (c.f === 1 && c.t === 2) for (const x of _pbCampuri(buf, c.v[0], c.v[1])) { if (x.f === 1 && x.t === 2) o.trip = _pbTxt(buf, x.v); if (x.f === 5 && x.t === 2) o.r = _pbTxt(buf, x.v); if (x.f === 6 && x.t === 0) o.d = x.v; }
+        if (c.f === 2 && c.t === 2) for (const x of _pbCampuri(buf, c.v[0], c.v[1])) { if (x.f === 1 && x.t === 5) o.la = fl(x.v); if (x.f === 2 && x.t === 5) o.lo = fl(x.v); }
+        if (c.f === 5 && c.t === 0) o.ts = c.v;
+        if (c.f === 8 && c.t === 2) for (const x of _pbCampuri(buf, c.v[0], c.v[1])) { if (x.f === 1 && x.t === 2) o.id = _pbTxt(buf, x.v); if (x.f === 2 && x.t === 2) o.lab = _pbTxt(buf, x.v); if (x.f === 3 && x.t === 2) o.nr = _pbTxt(buf, x.v); }
+      }
+      lista.push(o);
+    }
+  }
+  for (const o of lista) {   // sensul din cursă când lipsește: TRIP_LV_69_0_123 → linia 69, sensul 0
+    const m = /_([A-Za-z0-9]+)_([01])_\d+$/.exec(o.trip || '');
+    if (m) { if (o.d == null) o.d = Number(m[2]); if (!o.r) o.r = m[1]; }
+  }
+  return lista.filter(o => isFinite(o.la) && isFinite(o.lo) && o.la && o.lo);
+}
+async function _liveTpbi() {
+  if (_liveTp.v && Date.now() - _liveTp.t < 9000) return _liveTp.v;
+  if (_liveTp.p) return _liveTp.p;
+  _liveTp.p = (async () => {
+    try {
+      const r = await fetch('https://gtfs.tpbi.ro/api/gtfs-rt/vehiclePositions', { headers: { 'Accept': 'application/x-protobuf, application/json;q=0.5, */*' }, cf: { cacheTtl: 8, cacheEverything: true } });
+      if (!r.ok) throw new Error('TPBI ' + r.status);
+      const v = _tpParse(new Uint8Array(await r.arrayBuffer()));
+      _liveTp = { t: Date.now(), v, p: null, err: '' };
+      return v;
+    } catch (e) {
+      _liveTp = { t: Date.now() - 4000, v: _liveTp.v && Date.now() - _liveTp.t < 120000 ? _liveTp.v : [], p: null, err: String(e.message || e).slice(0, 80) };
+      return _liveTp.v;
+    }
+  })();
+  try { return await _liveTp.p; } finally { _liveTp.p = null; }
+}
+// Vehiculele unei linii: cele din TPBI (linia sigură), cu poziția cea mai nouă dintre TPBI și mo-bi
+// (după înmatriculare), plus cele pe care mo-bi le dă pe linia asta și TPBI nu le are.
+async function _liveLinie(rt) {
+  const [v, tp] = await Promise.all([_liveVehicule(), _liveTpbi().catch(() => [])]);
+  const dupaNr = new Map(); for (const x of v) { const k = _plNorm(x.n); if (k) dupaNr.set(k, x); }
+  const out = [], vazute = new Set();
+  for (const o of tp) {
+    if (o.r !== rt) continue;
+    const k = _plNorm(o.nr), m = k ? dupaNr.get(k) : null;
+    const nou = m && m.ts > o.ts;
+    const parc = Number(o.lab) > 0 ? Number(o.lab) : 0;
+    const x = { d: o.d != null ? Number(o.d) : (m ? m.d : null), p: m ? m.p : (o.lab || o.id), n: o.nr || (m ? m.n : ''),
+      la: nou ? m.la : o.la, lo: nou ? m.lo : o.lo, ts: nou ? m.ts : o.ts, st: m ? m.st : '', tp: 1 };
+    if (parc) x.t = parc; else if (m && m.t) x.t = m.t;
+    if (m && m.o != null) x.o = m.o;
+    out.push(x); if (k) vazute.add(k); if (m) vazute.add(m.p);
+  }
+  for (const x of v) { if (x.r !== rt) continue; if (vazute.has(_plNorm(x.n)) || vazute.has(x.p)) continue; const { r, u, ud, ...y } = x; out.push(y); }
+  return out;
+}
 async function mersLive(url) {
   // [9.8] VERIFICARE: pozițiile din fluxul oficial TPBI (GTFS-Realtime), ca în aplicația lor.
   // /live/tpbi?l=7 → vehiculele liniei 7 de acolo, cu număr, sens și vechime.
@@ -3043,8 +3109,7 @@ async function mersLive(url) {
   }
   const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z_]/g, '').slice(0, 12);   // [5.6] și liniile regionale (PV1_455)
   if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
-  const v = await _liveVehicule();
-  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: v.filter(x => x.r === rt).map(({ r, u, ud, ...x }) => x) } };   // [9.7] înapoi: doar vehiculele liniei
+  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: await _liveLinie(rt) } };   // [9.9] TPBI + mo-bi
 }
 
 async function conversatie(request, env) {
