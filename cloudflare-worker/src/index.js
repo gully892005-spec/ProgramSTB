@@ -1209,7 +1209,7 @@ export default {
       let t; try { t = await mersLiveDiag(); } catch (e) { t = 'Eroare: ' + (e && e.message || e); }
       return new Response(t, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
     }
-    if (url.pathname === '/live' || url.pathname === '/live/sosiri' || url.pathname === '/live/test' || url.pathname === '/live/tpbi') {   // [4.6] mers live; [9.8] /live/tpbi
+    if (url.pathname === '/live' || url.pathname === '/live/sosiri' || url.pathname === '/live/test' || url.pathname === '/live/tpbi' || url.pathname === '/live/traseu') {   // [4.6] mers live; [9.8] /live/tpbi
       let r;
       try { r = await mersLive(url); }
       catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
@@ -3150,6 +3150,34 @@ async function mersLive(url) {
     for (const x of lista) { const n = String(GTFS_LINII[x.r] || '').toUpperCase(); if (cer.length && !cer.includes(n)) continue;
       (out['linia ' + nume(x.r)] = out['linia ' + nume(x.r)] || []).push(`${x.lab || x.id || '—'} · nr ${x.nr || '—'} · sens ${x.d ?? '—'} · acum ${x.ts ? Math.max(0, acum - x.ts) + ' s' : '—'} · ${x.la},${x.lo} · cursa ${x.trip || '—'}`); }
     return { status: 200, corp: { ok: true, sursa: folosit, stari, vehicule: lista.length, cuLinie: lista.filter(x => x.r).length, faraCursaTinuteMinte: (_liveTp.v || []).filter(x => x.capat).length, exemplu: lista.slice(0, 2), linii: cer.length ? out : Object.keys(out).length } };
+  }
+  // [10.4] /live/traseu?l=7 — TOATE vehiculele aflate pe traseul liniei (cel mult 120 m de el), din
+  // ambele surse (TPBI și STB), indiferent pe ce linie le declară. Așa vedem unde „se ascund” tramvaiele
+  // pe care aplicația STB le arată pe linie, iar noi nu.
+  if (url.pathname === '/live/traseu') {
+    const ln = String(url.searchParams.get('l') || '').trim().toUpperCase();
+    const raza = Math.min(400, Number(url.searchParams.get('raza')) || 120);
+    if (!ln) return { status: 400, corp: { ok: false, eroare: 'Lipsește ?l=' } };
+    let D; try { D = await (await fetch('https://programstb.com/live.json', { cf: { cacheTtl: 3600, cacheEverything: true } })).json(); }
+    catch (e) { return { status: 200, corp: { ok: false, eroare: 'live.json: ' + String(e.message || e).slice(0, 80) } }; }
+    const rid = Object.keys(D.r || {}).find(k => String(D.r[k].n).toUpperCase() === ln);
+    if (!rid) return { status: 200, corp: { ok: false, eroare: 'linia nu e în live.json' } };
+    const segs = []; for (const dk of Object.keys(D.r[rid].d || {})) { const P = D.r[rid].d[dk].p || []; for (let i = 0; i + 1 < P.length; i++) segs.push([P[i], P[i + 1], dk]); }
+    const dist = (la, lo) => { let best = 1e9, sens = null;
+      for (const [A, B, dk] of segs) { const ax = A[1] * 79620, ay = A[0] * 110540, bx = B[1] * 79620, by = B[0] * 110540, px = lo * 79620, py = la * 110540;
+        const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L)) : 0;
+        const d = Math.hypot(px - ax - t * dx, py - ay - t * dy); if (d < best) { best = d; sens = dk; } }
+      return [Math.round(best), sens]; };
+    const acum = Math.round(Date.now() / 1000), nume = r => r == null || r === '' ? '—' : (GTFS_LINII[String(r)] || 'cod ' + r);
+    const vechime = ts => ts ? Math.max(0, acum - (ts > 1e12 ? Math.round(ts / 1000) : ts)) + ' s' : '—';
+    const [tp] = await Promise.all([_liveTpbi().catch(() => []), _liveVehicule().catch(() => []), _liveDataset().catch(() => null)]);
+    const dinTpbi = [], dinStb = [], dinStb2 = [];
+    for (const o of tp) { const [m, sk] = dist(o.la, o.lo); if (m <= raza) dinTpbi.push(`${o.lab || o.id || '—'} · linia ${nume(o.r)}${o.capat ? ' (la capăt)' : ''} · sens ${o.d ?? '—'} · nr ${o.nr || '—'} · ${m} m de traseu (pe sensul ${sk}) · acum ${vechime(o.ts)} · ${o.la},${o.lo}`); }
+    const deLaStb = (arr, out) => { for (const x of arr || []) { const vh = (x && x.vehicle) || {}, tr = vh.trip || {}, vv = vh.vehicle || {}, po = vh.position || {};
+      if (!isFinite(po.latitude) || !isFinite(po.longitude)) continue; const [m, sk] = dist(po.latitude, po.longitude); if (m > raza) continue;
+      out.push(`${vv.label || vv.id || '—'} · linia ${nume(tr.routeId ?? tr.route_id)} · sens ${tr.directionId ?? tr.direction_id ?? '—'} · nr ${vv.license_plate || vv.licensePlate || '—'} · ${m} m (sensul ${sk}) · acum ${vechime(Number(vh.timestamp) || 0)} · ${po.latitude},${po.longitude}`); } };
+    deLaStb(_liveRaw, dinStb); deLaStb(_liveDs.raw, dinStb2);
+    return { status: 200, corp: { ok: true, linia: ln, raza, tpbi: dinTpbi, stb: dinStb, stbLista2: dinStb2 } };
   }
   if (url.pathname === '/live/test') {
     const t0 = Date.now(), v = await _liveVehicule();
