@@ -3229,7 +3229,7 @@ async function mersLive(url) {
   }
   const rt = String(url.searchParams.get('r') || '').replace(/[^0-9A-Za-z_]/g, '').slice(0, 12);   // [5.6] și liniile regionale (PV1_455)
   if (!rt) return { status: 400, corp: { ok: false, eroare: 'Lipsește linia.' } };
-  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: await _liveLinie(rt) } };   // [9.9] TPBI + mo-bi
+  return { status: 200, corp: { ok: true, acum: Math.round(Date.now() / 1000), v: (await _liveVehicule()).filter(x => x.r === rt).map(({ r, u, ud, ...y }) => y) } };   // [10.4] fără TPBI, ca înainte de 9.9 (cerut de ea); _liveLinie rămâne doar pentru verificări
 }
 
 async function conversatie(request, env) {
