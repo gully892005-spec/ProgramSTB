@@ -270,7 +270,9 @@ async function _marcajeScrie(env, cale, m) {
   const chei = Object.keys(m || {}); if (!chei.length) return;
   for (let i = 0; i < chei.length; i += 300) {
     const parte = {}; for (const k of chei.slice(i, i + 300)) parte[k] = m[k];
-    await fetch(`${env.FB_URL}/${cale}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parte) }).catch(() => {});
+    // [10.4] cu cheia de server (ca _fbPatch): fără ea, scrierea în adminJetoane era refuzată de reguli
+    // și panoul arăta „Worker-ul n-a mai rulat”, deși rula
+    await fetch(urlBroadcast(env, cale + '.json'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parte) }).catch(() => {});
   }
 }
 
