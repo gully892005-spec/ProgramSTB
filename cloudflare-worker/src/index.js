@@ -1045,6 +1045,18 @@ async function _ruleaza(env, programatLa) {
     }
   } catch (e) { log('Statistici: ' + e.message); }
 
+  // [10.6] amintire pentru Mara: abonamentul Cloudflare Workers Paid (5 $) se plătește pe 27 ale lunii
+  // (cumpărat pe 27.10.2026). Pe 25, între 10:00 și 21:00, o singură notificare pe lună, doar pe telefonul ei.
+  if (poate(3, 'Amintire plată')) try {
+    const NR_PLATA = '10890', luna = now.data.slice(0, 7), u = toti[NR_PLATA];
+    if (now.data.slice(8) === '25' && now.minute >= 600 && now.minute < 1260 && u && u.plataAnuntata !== luna && abonamentele(u).length) {
+      const r = await trimiteToate(env, NR_PLATA, u, JSON.stringify({ title: '💳 Plata Cloudflare peste 2 zile',
+        body: 'Pe 27 se ia abonamentul Workers Paid (5 $). Pune bani pe card ca să nu pice plata.',
+        tag: 'plata-' + luna, url: './' }), { TTL: 86400, urgency: 'high' }, vapid);
+      if (r.trimise) { await _fbPatch(env, `push/${NR_PLATA}`, { plataAnuntata: luna }); log('Amintire plată: trimisă'); }
+    }
+  } catch (e) { log('Amintire plată: ' + e.message); }
+
   if (poate(30, 'Amintire repartizare')) await _repAmintireAutomata(env, log);   // [1.0]
   if (poate(9, 'Curățenie')) await _curataTrimiteri(env, log);       // [1.2]
   if (poate(16, 'Ștergere 6 luni')) await _sterge6Luni(env, log);           // [1.6]
