@@ -157,15 +157,16 @@ function abonamentele(u) {
 // rezumatul pentru panou) cădea. Acum numărăm cererile, păstrăm o rezervă
 // pentru marcaje și rezumat, iar ce nu încape se trimite la rularea următoare.
 // ══════════════════════════════════════════════════════════════
-const LIMITA_CERERI = 50, REZERVA_CERERI = 14;
+const LIMITA_CERERI = 50, REZERVA_CERERI = 14, REZERVA_TURE = 6;
 let _SR_ACTIV = null;
 const _fetchCF = globalThis.fetch;
 globalThis.fetch = function (...a) { if (_SR_ACTIV) _SR_ACTIV.n++; return _fetchCF(...a); };
 function _srRamase(env) { const b = env && env._sr; return b ? LIMITA_CERERI - b.n - b.pend : 99; }
 // pentru o notificare: lasă rezerva neatinsă
-function _srRezerva(env, k) {
+function _srRezerva(env, k, prioritar) {
   const b = env && env._sr; if (!b) return true;
-  if (b.n + b.pend + k > LIMITA_CERERI - REZERVA_CERERI) { b.amanate++; return false; }
+  // [10.4] alertele de tură pot folosi și o parte din rezervă (rămân 6 cereri pentru scrierile de la final)
+  if (b.n + b.pend + k > LIMITA_CERERI - (prioritar ? REZERVA_TURE : REZERVA_CERERI)) { b.amanate++; return false; }
   b.pend += k; return true;
 }
 function _srElibereaza(env, k) { const b = env && env._sr; if (b) b.pend = Math.max(0, b.pend - k); }
@@ -174,7 +175,7 @@ async function trimiteToate(env, nr, u, text, optiuni, vapid) {
   const lista = abonamentele(u);
   if (!lista.length) return { trimise: 0, moarte: 0 };
   // [5.2] nu mai încape în rularea asta: rămâne pentru următoarea (fără marcaj)
-  if (!_srRezerva(env, lista.length)) return { trimise: 0, moarte: 0, amanat: true };
+  if (!_srRezerva(env, lista.length, !!(optiuni && optiuni.prioritar))) return { trimise: 0, moarte: 0, amanat: true };
   try { return await _trimiteToate(env, nr, u, text, optiuni, vapid, lista); }
   finally { _srElibereaza(env, lista.length); }
 }
@@ -395,27 +396,18 @@ async function getJSON(url) {
 }
 
 async function trimiteTure(env, toti, numere, now, vapid) {
-  let trimise = 0, sarite = 0, expirate = 0;
+  let trimise = 0, sarite = 0, expirate = 0, intarziate = 0, maxIntarziere = 0; const listaIntarziate = [];
   const marcaje = {};   // [4.5]
+  const erori = [];
 
-  const rezultate = await peGrupuri(numere, async (nr) => {
+  // [10.4] Înainte, utilizatorii erau luați în ordinea numărului de serviciu.
+  // Când într-o rulare erau mai multe alerte decât încap în limita de cereri,
+  // restul se amânau — și tot ultimii din listă rămâneau pe dinafară la
+  // rularea următoare, de câteva ori la rând (alerta de „1 oră” venea cu
+  // 10–15 minute întârziere). Acum întâi găsim, fără nicio cerere, TOATE
+  // alertele de trimis, apoi le trimitem pe cele mai vechi primele.
+  const _gaseste = (nr) => {
     const u = toti[nr];
-    // [7.4] Telefonul urcă turele pe câteva săptămâni înainte. Cine nu deschide aplicația
-    // rămâne fără alerte când se termină lista — fără să afle. Acum primește o notificare
-    // (cel mult o dată la 3 zile, între 10 și 20) cu câteva zile înainte să se termine.
-    if (u && abonamentele(u).length && u.alerteTura !== false && now.minute >= 600 && now.minute < 1200) {
-      const ultima = (Array.isArray(u.ture) ? u.ture : []).map(t => t && t.data).filter(Boolean).sort().pop() || '';
-      const urcat = Date.parse(u.updat || '') || 0;
-      const peste4 = (() => { const [a, l, z] = now.data.split('-').map(Number); return new Date(Date.UTC(a, l - 1, z + 4)).toISOString().slice(0, 10); })();
-      if (urcat && Date.now() - urcat > 7 * 864e5 && ultima < peste4 && (Number(u.expiraAnuntat) || 0) < Date.now() - 3 * 864e5) {
-        try {
-          const r = await trimiteToate(env, nr, u, JSON.stringify({ title: '📅 Deschide aplicația Program STB',
-            body: 'N-ai mai deschis-o de ceva vreme și se termină turele pentru care primești alerte. Deschide-o o dată ca să le primești în continuare.',
-            tag: 'expira-ture', url: './' }), { TTL: 12 * 3600, urgency: 'normal' }, vapid);
-          if (r.trimise) { marcaje[`${nr}/expiraAnuntat`] = Date.now(); return {}; }
-        } catch (e) {}
-      }
-    }
     if (!u || !abonamentele(u).length || !Array.isArray(u.ture)) return { sarit: 1 };
     if (u.alerteTura === false) return { sarit: 1 };   // [4.5] omul a apăsat „Dezactivează” la alertele dinainte de tură
 
@@ -452,7 +444,9 @@ async function trimiteTure(env, toti, numere, now, vapid) {
       for (const cat of timpi) {
         const t2 = startMs - cat * 60000;
         const d2 = (acumMs - t2) / 60000;
-        if (d2 < 0 || d2 >= INTARZIERE_MAX) continue;
+        // [10.4] rularea cea mai apropiată de moment o trimite, chiar dacă e cu până la 2 minute înainte;
+        // altfel o alertă de la 13:57 aștepta rularea de la 14:00, iar una „la fix” pierdea rularea dacă ceasul o lua cu o clipă înainte
+        if (d2 < -2.5 || d2 >= INTARZIERE_MAX) continue;
         const mc = `${t.data}_${t.start}_${cat}`;
         if (trimiseDeja.includes(mc)) continue;
         minBefore = cat; tinta = t2; marcaj = mc;
@@ -461,10 +455,23 @@ async function trimiteTure(env, toti, numere, now, vapid) {
       if (marcaj === null) continue;
 
       // s-a abonat după ce trecuse momentul reminderului
-      if (inainteDeAbonare(u, tinta)) return { sarit: 1 };
+      if (inainteDeAbonare(u, tinta)) continue;
+      return { nr, u, t, startMs, minBefore, tinta, marcaj, trimiseDeja };
 
-      // Timpul real rămas — poate diferi puțin de minBefore dacă a durat
-      // câteva minute până la rulare.
+    }
+    return {};
+  };
+  const deTrimis = [];
+  for (const nr of numere) {
+    let r; try { r = _gaseste(nr); } catch (e) { r = { eroare: `${nr}: ${String((e && e.message) || e).slice(0, 80)}` }; }
+    if (r.marcaj) deTrimis.push(r);
+    else { sarite += r.sarit || 0; if (r.eroare && erori.length < 3) erori.push(r.eroare); }
+  }
+  deTrimis.sort((x, y) => x.tinta - y.tinta);   // cea mai întârziată întâi
+
+  const rezultate = await peGrupuri(deTrimis, async (c) => {
+    const { nr, u, t, startMs, minBefore, tinta, marcaj, trimiseDeja } = c;
+    const acumMs = Date.now();
       const ramase = Math.round((startMs - acumMs) / 60000);
       // „Tură în 116 minute" se citește greu. Peste o oră scriem „1h 56m".
       const cat = ramase >= 60
@@ -483,29 +490,52 @@ async function trimiteTure(env, toti, numere, now, vapid) {
       });
 
       try {
-        const r = await trimiteToate(env, nr, u, payload, { TTL: 3600, urgency: 'high' }, vapid);
-        // Marcăm ca trimisă doar dacă a ajuns pe cel puțin un telefon. Altfel,
-        // dacă toate abonamentele erau moarte, am pierde alerta definitiv.
-        if (r.amanat) return { amanat: 1 };   // [5.2] la rularea următoare
+        const r = await trimiteToate(env, nr, u, payload, { TTL: 3600, urgency: 'high', prioritar: true }, vapid);
+        if (r.amanat) { marcaje[`${nr}/amanatLa`] = acumMs; return { amanat: 1 }; }   // [5.2] la rularea următoare
         if (!r.trimise) return { expirat: 1 };
         marcaje[`${nr}/trimise`] = trimiseDeja.concat(marcaj).slice(-12);   // [4.5] scrise toate odată, mai jos
-        return { trimis: 1 };
+        // [10.4] urmă pentru diagnostic: când trebuia și când a plecat de fapt
+        const intarziere = Math.max(0, Math.round((acumMs - tinta) / 60000));
+        const urcat = Date.parse(u.updat || '') || 0;
+        marcaje[`${nr}/ultimaAlerta`] = { tura: `${t.data} ${t.start}`, cat: minBefore, trebuia: tinta, plecat: acumMs, intarziere,
+          motiv: intarziere < 5 ? 'ok' : (urcat > tinta ? 'tura urcată din aplicație după momentul alertei' : ((Number(u.amanatLa) || 0) >= tinta ? 'amânată (prea multe alerte în aceeași rulare)' : 'rularea automată a întârziat sau a eșuat')) };
+        return { trimis: 1, intarziere, nr, motiv: marcaje[`${nr}/ultimaAlerta`].motiv, tura: `${t.start}/${minBefore}` };
       } catch (e) {
         return { eroare: `${nr}: ${e.statusCode || '-'} ${String(e.message || e).slice(0, 80)}` };   // [4.3] apare în raport
       }
+  });
+  for (const r of rezultate) {
+    trimise  += r.trimis  || 0;
+    expirate += r.expirat || 0;
+    if (r.trimis && r.intarziere >= 5) { intarziate++; maxIntarziere = Math.max(maxIntarziere, r.intarziere); if (listaIntarziate.length < 20) listaIntarziate.push({ nr: r.nr, tura: r.tura, min: r.intarziere, motiv: r.motiv }); }
+    if (r.eroare && erori.length < 3) erori.push(r.eroare);
+  }
+  // cei care au primit acum alerta de tură nu mai primesc și anunțul de mai jos în aceeași rulare
+  const auPrimit = new Set(deTrimis.map(c => c.nr));
+
+  // [7.4] anunțul „deschide aplicația” — cel mai puțin urgent, după alertele de tură
+  await peGrupuri(numere.filter(nr => !auPrimit.has(nr)), async (nr) => {
+    const u = toti[nr];
+    // [7.4] Telefonul urcă turele pe câteva săptămâni înainte. Cine nu deschide aplicația
+    // rămâne fără alerte când se termină lista — fără să afle. Acum primește o notificare
+    // (cel mult o dată la 3 zile, între 10 și 20) cu câteva zile înainte să se termine.
+    if (u && abonamentele(u).length && u.alerteTura !== false && now.minute >= 600 && now.minute < 1200) {
+      const ultima = (Array.isArray(u.ture) ? u.ture : []).map(t => t && t.data).filter(Boolean).sort().pop() || '';
+      const urcat = Date.parse(u.updat || '') || 0;
+      const peste4 = (() => { const [a, l, z] = now.data.split('-').map(Number); return new Date(Date.UTC(a, l - 1, z + 4)).toISOString().slice(0, 10); })();
+      if (urcat && Date.now() - urcat > 7 * 864e5 && ultima < peste4 && (Number(u.expiraAnuntat) || 0) < Date.now() - 3 * 864e5) {
+        try {
+          const r = await trimiteToate(env, nr, u, JSON.stringify({ title: '📅 Deschide aplicația Program STB',
+            body: 'N-ai mai deschis-o de ceva vreme și se termină turele pentru care primești alerte. Deschide-o o dată ca să le primești în continuare.',
+            tag: 'expira-ture', url: './' }), { TTL: 12 * 3600, urgency: 'normal' }, vapid);
+          if (r.trimise) { marcaje[`${nr}/expiraAnuntat`] = Date.now(); }
+        } catch (e) {}
+      }
     }
-    return {};   // maxim o notificare de tură per utilizator per rulare
   });
 
   await _marcajeScrie(env, 'push', marcaje);   // [4.5]
-  const erori = [];
-  for (const r of rezultate) {
-    trimise  += r.trimis  || 0;
-    sarite   += r.sarit   || 0;
-    expirate += r.expirat || 0;
-    if (r.eroare && erori.length < 3) erori.push(r.eroare);
-  }
-  return { trimise, sarite, expirate, erori };
+  return { trimise, sarite, expirate, erori, intarziate, maxIntarziere, listaIntarziate };
 }
 
 async function trimiteChat(env, toti, numere, vapid) {
@@ -848,14 +878,14 @@ async function facArhiva(env) {
   return { azi, numere, zile, sterse };
 }
 
-async function ruleaza(envOrig) {
+async function ruleaza(envOrig, programatLa) {
   // [5.2] contorul de cereri al acestei rulări
   const _sr = { n: 0, pend: 0, amanate: 0 };
   const env = Object.assign({}, envOrig, { _sr });
   const anterior = _SR_ACTIV; _SR_ACTIV = _sr;
-  try { return await _ruleaza(env); } finally { if (_SR_ACTIV === _sr) _SR_ACTIV = anterior; }   // [7.4]
+  try { return await _ruleaza(env, programatLa); } finally { if (_SR_ACTIV === _sr) _SR_ACTIV = anterior; }   // [7.4]
 }
-async function _ruleaza(env) {
+async function _ruleaza(env, programatLa) {
   const pornit = Date.now();
   const raport = [];
   const log = (s) => { raport.push(s); console.log(s); };
@@ -905,10 +935,10 @@ async function _ruleaza(env) {
   }
   log(`${numere.length} abonamente de verificat.`);
 
-  const { trimise, sarite, expirate, erori: eroriTure } = await trimiteTure(env, toti, numere, now, vapid);
-  log(`Ture: ${trimise} trimise · ${sarite} sărite · ${expirate} expirate`);
+  const { trimise, sarite, expirate, erori: eroriTure, intarziate, maxIntarziere, listaIntarziate } = await trimiteTure(env, toti, numere, now, vapid);
+  log(`Ture: ${trimise} trimise · ${sarite} sărite · ${expirate} expirate` + (intarziate ? ` · ${intarziate} cu întârziere (max ${maxIntarziere} min)` : ''));
   for (const x of eroriTure || []) log('  ⚠ tură, refuzată: ' + x);
-  const _rul = { la: pornit, abonati: numere.length, ture: trimise, erori: (eroriTure || []).map(x => 'tură · ' + x) };   // [4.3]
+  const _rul = { la: pornit, abonati: numere.length, ture: trimise, tureIntarziate: intarziate || 0, amanateTure: env._sr.amanate, erori: (eroriTure || []).map(x => 'tură · ' + x) };   // [4.3]
 
   const sarb = await trimiteSarbatori(env, toti, numere, now, vapid);
   for (const x of (sarb.erori || [])) _rul.erori.push('sărbătoare · ' + x);
@@ -948,7 +978,16 @@ async function _ruleaza(env) {
   // [4.3] rezumatul rulării: panoul îl arată în „De rezolvat” doar dacă ceva nu merge
   if (/subrequest/i.test(JSON.stringify(_rul.erori))) _rul.erori.unshift('Cloudflare: s-a atins limita de cereri pe rulare (planul gratuit are 50) — unii colegi n-au primit notificarea');   // [4.5]
   _rul.erori = _rul.erori.slice(0, 6); _rul.durata = Date.now() - pornit; _rul.cereri = env._sr.n;
-  await _fbPut(env, 'adminJetoane/_rulare', _rul).catch(() => {});
+  // [10.4] cât a întârziat Cloudflare pornirea rulării față de ora programată (cron la 5 minute)
+  if (programatLa) _rul.pornireIntarziata = Math.max(0, Math.round((pornit - programatLa) / 1000));   // secunde
+  // [10.4] jurnal pe zile cu alertele de tură plecate cu ≥ 5 min întârziere și de ce
+  // (se vede în Firebase: adminJetoane → _intarzieri → data → ora rulării). Aceeași cerere ca raportul.
+  const _scr = { _rulare: _rul };
+  const _hm = String(Math.floor(now.minute / 60)).padStart(2, '0') + String(now.minute % 60).padStart(2, '0');
+  if (listaIntarziate && listaIntarziate.length) _scr[`_intarzieri/${now.data}/${_hm}`] = { pornireIntarziata: _rul.pornireIntarziata || 0, alerte: listaIntarziate };
+  if (_rul.pornireIntarziata > 120) _scr[`_intarzieri/${now.data}/${_hm}_pornire`] = _rul.pornireIntarziata;
+  if (now.minute < 5) { const [a8, l8, z8] = now.data.split('-').map(Number); _scr[`_intarzieri/${new Date(Date.UTC(a8, l8 - 1, z8 - 8)).toISOString().slice(0, 10)}`] = null; }   // păstrăm o săptămână
+  await _marcajeScrie(env, 'adminJetoane', _scr);
 
   // [5.2] întreținerea (arhivă, statistici, curățenie) doar cu ce a mai rămas din buget;
   // ce nu încape se face la o rulare mai liniștită (sunt 288 de rulări pe zi)
@@ -1015,7 +1054,7 @@ export default {
   // Rulare automată, la fiecare 5 minute (vezi wrangler.toml)
   async scheduled(event, env, ctx) {
     // [4.3] dacă rularea crapă la jumătate, rămâne scris de ce (îl vezi în „De rezolvat”)
-    ctx.waitUntil(ruleaza(env).catch(e => _fbPut(env, 'adminJetoane/_rulare', { la: Date.now(), crapat: String(e && e.message || e).slice(0, 200), erori: [] }).catch(() => {})));
+    ctx.waitUntil(ruleaza(env, event && event.scheduledTime).catch(e => _fbPut(env, 'adminJetoane/_rulare', { la: Date.now(), crapat: String(e && e.message || e).slice(0, 200), erori: [] }).catch(() => {})));
   },
 
   // Rulare manuală: deschide URL-ul workerului în browser, ca un buton
