@@ -2190,9 +2190,9 @@ async function _indCiteste(env) {
 async function _indAnuntaColegii(env, p) {
   const doc = p.panaLa ? {   // [9.8] temporari (lucrări)
     titlu: '🚧 Indicatori temporari (lucrări)',
-    text: `${IND_NUME[p.dep] || p.dep}: între ${_indDataRo(p.valabilDin)} și ${_indDataRo(p.panaLa)} sunt indicatori de ore temporari (${_indNumar(p)} ture). Orele din aplicație se schimbă singure în zilele astea, apoi revin cele obișnuite. Dacă ai alt tur în zilele astea, schimbă-l din Modifică.`,
+    text: `${IND_NUME[p.dep] || p.dep}: ${p.panaLa === '9999-12-31' ? 'din ' + _indDataRo(p.valabilDin) + ', până la nou ordin,' : 'între ' + _indDataRo(p.valabilDin) + ' și ' + _indDataRo(p.panaLa)} sunt indicatori de ore temporari (${_indNumar(p)} ture). Orele din aplicație se schimbă singure în zilele astea, apoi revin cele obișnuite. Dacă ai alt tur în zilele astea, schimbă-l din Modifică.`,
     target: [p.dep], tip: 'update', creat: Date.now(), de: 'indicatori',
-    expira: Date.parse(p.panaLa + 'T23:59:00Z')
+    expira: p.panaLa === '9999-12-31' ? Date.parse(p.valabilDin + 'T00:00:00Z') + 7 * 86400000 : Date.parse(p.panaLa + 'T23:59:00Z')
   } : {
     titlu: '⏱ Indicatori de ore noi',
     text: `${IND_NUME[p.dep] || p.dep}${p.bazaNume ? ' (' + p.bazaNume + ')' : ''}: indicatorii de ore se schimbă din ${_indDataRo(p.valabilDin)} (${_indNumar(p)} ture). Orele din aplicație se actualizează singure de la data asta.${p.nota ? '\n' + p.nota : ''}`,
@@ -2241,6 +2241,10 @@ async function indicatoriActiune(env, cerere, cine) {
     if (baza) { p.baza = baza; p.bazaNume = String(cerere.bazaNume || baza).slice(0, 40); }
     if (tip === 'tram') { p.zl = _indCurataTabel(cerere.zl, 'tram'); p.we = _indCurataTabel(cerere.we, 'tram'); }
     // [9.8] indicatori temporari (lucrări): valabili doar până la „panaLa” (inclusiv), apoi revin cei obișnuiți
+    if (cerere.faraSfarsit) cerere.panaLa = '9999-12-31';   // [9.9] până la nou ordin
+    if (cerere.mod === 'del') p.mod = 'del';                  // [9.9] doar turele din „del” se scot
+    if (cerere.reorg) p.reorg = true;                         // [9.9] urmărirea reorganizării
+    if (cerere.sursa) p.sursa = String(cerere.sursa).slice(0, 80);
     if (cerere.panaLa) {
       const P = String(cerere.panaLa);
       if (tip !== 'tram') return { status: 400, corp: { ok: false, eroare: 'Indicatorii temporari sunt doar pentru tramvaie.' } };
@@ -2323,6 +2327,20 @@ async function indicatoriActiune(env, cerere, cine) {
   if (a === 'indicatoriRespinge') {
     if (p.stare !== 'asteapta') return { status: 400, corp: { ok: false, eroare: 'Nu e în așteptare' } };
     await patch({ stare: 'respins', motiv: String(cerere.motiv || '').slice(0, 200), respinsLa: Date.now() });
+    return { status: 200, corp: { ok: true } };
+  }
+  // [9.9] temporari: data de sfârșit pusă mai târziu / făcuți definitivi
+  if (a === 'indicatoriSfarsit') {
+    if (p.stare !== 'aprobat' || !p.panaLa) return { status: 400, corp: { ok: false, eroare: 'Nu e o modificare temporară aprobată' } };
+    const P = String(cerere.panaLa || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(P) || P < p.valabilDin) return { status: 400, corp: { ok: false, eroare: 'Data de sfârșit e înainte de început.' } };
+    if (!(await patch({ panaLa: P, sfarsitPusLa: Date.now() }))) return { status: 502, corp: { ok: false, eroare: 'Firebase' } };
+    return { status: 200, corp: { ok: true } };
+  }
+  if (a === 'indicatoriDefinitiv') {
+    if (p.stare !== 'aprobat' || !p.panaLa) return { status: 400, corp: { ok: false, eroare: 'Nu e o modificare temporară aprobată' } };
+    if (p.mod !== 'del') return { status: 400, corp: { ok: false, eroare: 'Încarc-o din nou ca „Definitivi”.' } };
+    if (!(await patch({ panaLa: null, temporar: null, definitivLa: Date.now() }))) return { status: 502, corp: { ok: false, eroare: 'Firebase' } };
     return { status: 200, corp: { ok: true } };
   }
   if (a === 'indicatoriAnuleaza') {
@@ -4205,6 +4223,7 @@ async function admin(request, env) {
     }
     case 'indicatoriPropune': case 'indicatoriLista': case 'indicatoriAproba':
     case 'indicatoriRespinge': case 'indicatoriAnuleaza': case 'indicatoriAscunde':
+    case 'indicatoriSfarsit': case 'indicatoriDefinitiv':
       return await indicatoriActiune(env, cerere, { admin: true });
     // [v11.34] Cod nou pentru același responsabil (a pierdut codul, telefon nou).
     // Codul vechi nu mai merge; drepturile, depourile și istoricul rămân.
