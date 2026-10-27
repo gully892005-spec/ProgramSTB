@@ -3029,6 +3029,24 @@ async function mersLiveDiag() {
 // [9.9] Pozițiile din fluxul oficial TPBI (GTFS-Realtime). Are linia CORECTĂ (cursa TRIP_LV_69_0_123 =
 // linia 7, sensul 0) și numărul de parc (4017), chiar și când maps.mo-bi.ro dă tramvaiului „102” sau „N113”.
 let _liveTp = { t: 0, v: null, p: null, err: '' };
+// [10.4] La capăt de linie, între două curse, fluxul TPBI trimite tramvaiul FĂRĂ cursă (deci fără linie),
+// iar aplicația STB îl arată totuși pe linie. Ținem minte ultima linie și ultimul sens văzute la fiecare
+// vehicul și, cât stă fără cursă (cel mult 20 de minute), îl punem pe linia aceea, cu `capat: 1`.
+// Doar din TPBI: codurile mo-bi de la capăt sunt greșite (102, N113…), de aici tramvaiele în plus din 9.1–9.5.
+const _tpUlt = new Map(), TP_CAPAT_MAX = 20 * 60000;
+function _tpCompleteaza(lista) {
+  const acum = Date.now();
+  for (const o of lista) {
+    const k = o.id || o.lab || o.nr; if (!k) continue;
+    if (o.r) { _tpUlt.set(k, { r: o.r, d: o.d, t: acum, la: o.la, lo: o.lo }); continue; }
+    const u = _tpUlt.get(k);
+    // plecat la depou (s-a îndepărtat de locul unde i s-a terminat cursa) → nu mai e pe linie
+    const dep = u && isFinite(u.la) ? Math.hypot((o.la - u.la) * 111320, (o.lo - u.lo) * 79900) : 0;
+    if (u && acum - u.t < TP_CAPAT_MAX && dep < 700) { o.r = u.r; if (o.d == null) o.d = u.d; o.capat = 1; }
+  }
+  if (_tpUlt.size > 5000) for (const [k, u] of _tpUlt) if (acum - u.t > TP_CAPAT_MAX) _tpUlt.delete(k);
+  return lista;
+}
 function _tpParse(buf) {
   const lista = [];
   const fl = v => { const dv = new DataView(new ArrayBuffer(4)); dv.setUint32(0, v >>> 0, true); return Math.round(dv.getFloat32(0, true) * 1e5) / 1e5; };
@@ -3062,7 +3080,7 @@ async function _liveTpbi() {
     try {
       const r = await fetch('https://gtfs.tpbi.ro/api/gtfs-rt/vehiclePositions', { headers: { 'Accept': 'application/x-protobuf, application/json;q=0.5, */*' }, cf: { cacheTtl: 8, cacheEverything: true } });
       if (!r.ok) throw new Error('TPBI ' + r.status);
-      const v = _tpParse(new Uint8Array(await r.arrayBuffer()));
+      const v = _tpCompleteaza(_tpParse(new Uint8Array(await r.arrayBuffer())));
       _liveTp = { t: Date.now(), v, p: null, err: '' };
       return v;
     } catch (e) {
@@ -3085,6 +3103,7 @@ async function _liveLinie(rt) {
     const parc = Number(o.lab) > 0 ? Number(o.lab) : 0;
     const x = { d: o.d != null ? Number(o.d) : (m ? m.d : null), p: m ? m.p : (o.lab || o.id), n: o.nr || (m ? m.n : ''),
       la: nou ? m.la : o.la, lo: nou ? m.lo : o.lo, ts: nou ? m.ts : o.ts, st: m ? m.st : '', tp: 1 };
+    if (o.capat) x.capat = 1;   // [10.4] stă la capăt, între curse (NU `cap`: pe acelea aplicația le sare)
     if (parc) x.t = parc; else if (m && m.t) x.t = m.t;
     if (m && m.o != null) x.o = m.o;
     out.push(x); if (k) vazute.add(k); if (m) vazute.add(m.p);
@@ -3130,7 +3149,7 @@ async function mersLive(url) {
     const out = {};
     for (const x of lista) { const n = String(GTFS_LINII[x.r] || '').toUpperCase(); if (cer.length && !cer.includes(n)) continue;
       (out['linia ' + nume(x.r)] = out['linia ' + nume(x.r)] || []).push(`${x.lab || x.id || '—'} · nr ${x.nr || '—'} · sens ${x.d ?? '—'} · acum ${x.ts ? Math.max(0, acum - x.ts) + ' s' : '—'} · ${x.la},${x.lo} · cursa ${x.trip || '—'}`); }
-    return { status: 200, corp: { ok: true, sursa: folosit, stari, vehicule: lista.length, cuLinie: lista.filter(x => x.r).length, exemplu: lista.slice(0, 2), linii: cer.length ? out : Object.keys(out).length } };
+    return { status: 200, corp: { ok: true, sursa: folosit, stari, vehicule: lista.length, cuLinie: lista.filter(x => x.r).length, faraCursaTinuteMinte: (_liveTp.v || []).filter(x => x.capat).length, exemplu: lista.slice(0, 2), linii: cer.length ? out : Object.keys(out).length } };
   }
   if (url.pathname === '/live/test') {
     const t0 = Date.now(), v = await _liveVehicule();
