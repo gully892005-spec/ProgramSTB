@@ -2188,7 +2188,12 @@ async function _indCiteste(env) {
   } catch (e) { return null; }
 }
 async function _indAnuntaColegii(env, p) {
-  const doc = {
+  const doc = p.panaLa ? {   // [9.8] temporari (lucrări)
+    titlu: '🚧 Indicatori temporari (lucrări)',
+    text: `${IND_NUME[p.dep] || p.dep}: între ${_indDataRo(p.valabilDin)} și ${_indDataRo(p.panaLa)} sunt indicatori de ore temporari (${_indNumar(p)} ture). Orele din aplicație se schimbă singure în zilele astea, apoi revin cele obișnuite. Dacă ai alt tur în zilele astea, schimbă-l din Modifică.`,
+    target: [p.dep], tip: 'update', creat: Date.now(), de: 'indicatori',
+    expira: Date.parse(p.panaLa + 'T23:59:00Z')
+  } : {
     titlu: '⏱ Indicatori de ore noi',
     text: `${IND_NUME[p.dep] || p.dep}${p.bazaNume ? ' (' + p.bazaNume + ')' : ''}: indicatorii de ore se schimbă din ${_indDataRo(p.valabilDin)} (${_indNumar(p)} ture). Orele din aplicație se actualizează singure de la data asta.${p.nota ? '\n' + p.nota : ''}`,
     target: [p.dep], tip: 'update', creat: Date.now(), de: 'indicatori',
@@ -2235,6 +2240,13 @@ async function indicatoriActiune(env, cerere, cine) {
     const p = { id, dep, tip, valabilDin: v, cand: Date.now(), nota: String(cerere.nota || '').slice(0, 300) };
     if (baza) { p.baza = baza; p.bazaNume = String(cerere.bazaNume || baza).slice(0, 40); }
     if (tip === 'tram') { p.zl = _indCurataTabel(cerere.zl, 'tram'); p.we = _indCurataTabel(cerere.we, 'tram'); }
+    // [9.8] indicatori temporari (lucrări): valabili doar până la „panaLa” (inclusiv), apoi revin cei obișnuiți
+    if (cerere.panaLa) {
+      const P = String(cerere.panaLa);
+      if (tip !== 'tram') return { status: 400, corp: { ok: false, eroare: 'Indicatorii temporari sunt doar pentru tramvaie.' } };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(P) || P < v) return { status: 400, corp: { ok: false, eroare: 'Data „până la” e greșită.' } };
+      p.panaLa = P; p.temporar = true;
+    }
     else {
       // [v11.36] sâmbăta (s) și duminica (d) separat; aplicațiile vechi trimit un singur `we`
       p.l = _indCurataTabel(cerere.l, 'ore');
@@ -2258,7 +2270,7 @@ async function indicatoriActiune(env, cerere, cine) {
           `${p.de.nume || p.de.nr} a modificat indicatorii la ${IND_NUME[dep] || dep}${p.bazaNume ? ' (' + p.bazaNume + ')' : ''}: ${n} ture, din ${_indDataRo(v)}. Deschide panoul → Repartizare.`, 'ind-' + id);
       } catch (e) {}
     }
-    return { status: 200, corp: { ok: true, id, stare: p.stare, n } };
+    return { status: 200, corp: { ok: true, id, stare: p.stare, n, temporar: !!p.panaLa } };
   }
   if (a === 'indicatoriMele') {
     const toate = await _indCiteste(env) || {};
