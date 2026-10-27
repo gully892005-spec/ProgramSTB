@@ -157,7 +157,9 @@ function abonamentele(u) {
 // rezumatul pentru panou) cădea. Acum numărăm cererile, păstrăm o rezervă
 // pentru marcaje și rezumat, iar ce nu încape se trimite la rularea următoare.
 // ══════════════════════════════════════════════════════════════
-const LIMITA_CERERI = 50, REZERVA_CERERI = 14, REZERVA_TURE = 6;
+// [10.4] planul Workers Paid: 10.000 de cereri pe rulare (gratuit: 50). Ținem 1000, cu marjă mare.
+// Dacă revii vreodată la planul gratuit, pune înapoi 50 — altfel rularea crapă la cererea 51.
+const LIMITA_CERERI = 1000, REZERVA_CERERI = 14, REZERVA_TURE = 6;
 let _SR_ACTIV = null;
 const _fetchCF = globalThis.fetch;
 globalThis.fetch = function (...a) { if (_SR_ACTIV) _SR_ACTIV.n++; return _fetchCF(...a); };
@@ -973,10 +975,10 @@ async function _ruleaza(env, programatLa) {
   if (eroare) log('Chat: eroare — ' + eroare);
   else log(`Chat: ${chatTrimise} notificări trimise`);
   _rul.chat = chatTrimise || 0; if (eroare) _rul.erori.push('chat · ' + eroare);
-  if (env._sr.amanate) { log(`Amânate pentru rularea următoare (limita de 50 de cereri): ${env._sr.amanate} notificări`); _rul.amanate = env._sr.amanate; }
+  if (env._sr.amanate) { log(`Amânate pentru rularea următoare (limita de ${LIMITA_CERERI} de cereri): ${env._sr.amanate} notificări`); _rul.amanate = env._sr.amanate; }
 
   // [4.3] rezumatul rulării: panoul îl arată în „De rezolvat” doar dacă ceva nu merge
-  if (/subrequest/i.test(JSON.stringify(_rul.erori))) _rul.erori.unshift('Cloudflare: s-a atins limita de cereri pe rulare (planul gratuit are 50) — unii colegi n-au primit notificarea');   // [4.5]
+  if (/subrequest/i.test(JSON.stringify(_rul.erori))) _rul.erori.unshift(`Cloudflare: s-a atins limita de cereri pe rulare (${LIMITA_CERERI}) — unii colegi n-au primit notificarea`);   // [4.5]
   _rul.erori = _rul.erori.slice(0, 6); _rul.durata = Date.now() - pornit; _rul.cereri = env._sr.n;
   // [10.4] cât a întârziat Cloudflare pornirea rulării față de ora programată (cron la 5 minute)
   if (programatLa) _rul.pornireIntarziata = Math.max(0, Math.round((pornit - programatLa) / 1000));   // secunde
