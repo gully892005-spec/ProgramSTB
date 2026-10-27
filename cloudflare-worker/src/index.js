@@ -2876,7 +2876,12 @@ async function _liveVehicule() {
     // 27.10, 4005 (B 02828) și B 02831, pe șinele liniei 7. Doar la numere de tramvai (B + 5 cifre),
     // autobuzele 135 adevărate au alt fel de număr și rămân neatinse.
     for (const x of lista) { const a = LV_COD_TRAM[x.r]; if (a && /^B\d{5}$/.test(_plNorm(x.n))) { x.r = a; x.corectat = 1; } }
-    for (const x of lista) { const k = _plNorm(x.n), t = LV_PARC[k]; if (t) { x.t = t; x.et = String(t); } if (LV_ETICHETA[k]) x.et = LV_ETICHETA[k];   // [10.5] numărul confirmat de Mara apare sigur, chiar dacă lipsește din tabelul flotei }   // [10.4] numărul de vagon, când STB dă doar codul GPS
+    // [10.4] numărul de vagon confirmat de Mara apare sigur, chiar dacă lipsește din tabelul flotei
+    for (const x of lista) {
+      const k = _plNorm(x.n), t = LV_PARC[k];
+      if (t) { x.t = t; x.et = String(t); }
+      if (LV_ETICHETA[k]) x.et = LV_ETICHETA[k];
+    }
     // [9.1] La capăt de linie STB scoate cursa (fără linie) până pleacă iar: ținem minte
     // pe ce linie a fost văzut ultima dată fiecare vehicul (40 min) și îl dăm tot pe linia aceea.
     const acumM = Date.now();
