@@ -2190,7 +2190,7 @@ function _indCurataTabel(t, tip) {
   for (const [k, v] of Object.entries(set).slice(0, 900)) {
     if (!IND_CHEIE.test(k) || !v || typeof v !== 'object') continue;
     if (tip === 'tram') {
-      const sch = x => (x && IND_ORA.test(x.i) && IND_ORA.test(x.r)) ? { i: x.i, r: x.r, c: String(x.c || '').slice(0, 40) } : null;
+      const sch = x => (x && IND_ORA.test(x.i) && IND_ORA.test(x.r)) ? { i: x.i, r: x.r, c: String(x.c || '').slice(0, 40), ...(x.dep ? { dep: String(x.dep).slice(0, 30) } : {}) } : null;   // [11.4] iese din alt depou
       const s1 = sch(v.s1), s2 = sch(v.s2);
       if (!s1 && !s2) continue;
       const o = { linie: String(v.linie || k.split('/')[1]).slice(0, 6) };
