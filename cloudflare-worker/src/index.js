@@ -485,6 +485,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
         title: `🚃 Tură în ${cat}`,
         body: t.text ? `${t.text}\nPregătește-te!` : `Plecare la ${t.start}. Pregătește-te!`,
         tag: 'tura-' + t.data,
+        start: startMs, ora: t.start,   // [11.8] telefonul recalculează „Tură în …” când o arată (iPhone o poate primi cu întârziere)
         url: './'
       } : {
         title: `🚃 Tura ta a început`,
@@ -494,7 +495,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
       });
 
       try {
-        const r = await trimiteToate(env, nr, u, payload, { TTL: 3600, urgency: 'high', prioritar: true }, vapid);
+        const r = await trimiteToate(env, nr, u, payload, { TTL: Math.max(300, Math.min(3600, Math.round((startMs - acumMs) / 1000) + 600)), urgency: 'high', prioritar: true }, vapid);   // [11.8] după începutul turei (+10 min) serverul de push n-o mai livrează
         if (r.amanat) { marcaje[`${nr}/amanatLa`] = acumMs; return { amanat: 1 }; }   // [5.2] la rularea următoare
         if (!r.trimise) return { expirat: 1 };
         marcaje[`${nr}/trimise`] = trimiseDeja.concat(marcaj).slice(-12);   // [4.5] scrise toate odată, mai jos
