@@ -2307,7 +2307,10 @@ async function indicatoriActiune(env, cerere, cine) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(P) || P < v) return { status: 400, corp: { ok: false, eroare: 'Data „până la” e greșită.' } };
       p.panaLa = P; p.temporar = true;
     }
-    else {
+    else if (tip !== 'tram') {
+      // [12.2] DOAR la autobuze/troleibuze. Înainte ramura asta rula și la tramvai, la indicatorii
+      // DEFINITIVI (fără panaLa): rescria `p.we` ca tabel de „ore” și pierdea turele de weekend
+      // (rămâneau doar cele scoase) — de aici „la Dudești la weekend lipsește linia 1”.
       // [v11.36] sâmbăta (s) și duminica (d) separat; aplicațiile vechi trimit un singur `we`
       p.l = _indCurataTabel(cerere.l, 'ore');
       if (cerere.s || cerere.d) { p.s = _indCurataTabel(cerere.s, 'ore'); p.d = _indCurataTabel(cerere.d, 'ore'); }
