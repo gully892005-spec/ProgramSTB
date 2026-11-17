@@ -1144,6 +1144,23 @@ async function _ruleaza(env, programatLa) {
     for (const x of seara.erori) log('    ' + x);
   }
 
+  // [15.04] o dată pe zi (după 10:00): câți colegi sunt „în așteptare”; curățăm ce e mai vechi de 60 de zile
+  if (now.minute >= 600 && now.minute < 615) {
+    try {
+      const marc = await getJSON(urlBroadcast(env, 'adminJetoane/_asteptAnunt.json')).catch(() => null);
+      if (marc !== now.data) {
+        await _fbPut(env, 'adminJetoane/_asteptAnunt', now.data);
+        const d = (await getJSON(urlBroadcast(env, `${AST}.json`))) || {}; let n = 0; const vechi = {};
+        for (const [nr, dv] of Object.entries(d)) for (const [dev, a] of Object.entries(dv || {})) {
+          if (!a || Date.now() - (Number(a.vazut) || Number(a.respins) || Number(a.la) || 0) > 60 * 864e5) { vechi[`${nr}/${dev}`] = null; continue; }
+          if (!a.respins) n++;
+        }
+        await _marcajeScrie(env, AST, vechi);
+        if (n) { await _anuntaAdminii(env, `⏳ ${n} ${n === 1 ? 'coleg' : 'colegi'} în așteptare`, 'Numere care nu sunt pe foaie sau au alt schimb. Deschide panoul → De rezolvat.', 'asteptare').catch(() => 0); log(`În așteptare: ${n} (adminii anunțați)`); }
+      }
+    } catch (e) {}
+  }
+
   // [14.11] foaie / indicatori schimbați, iar telefonul are în cloud turele vechi → „deschide aplicația”
   const desch = await trimiteDeschide(env, toti, numere, now, vapid).catch(e => ({ trimise: 0, eroare: e.message }));
   if (desch.trimise) log(`Foaie / indicatori schimbați: ${desch.trimise} colegi anunțați să deschidă aplicația`);
@@ -1607,7 +1624,7 @@ async function _telefonulAreVoie(env, nr, dev) {
     const { disp } = _normalizeaza(brut);
     // Număr nefolosit încă de nimeni: primul telefon care ajunge aici îl ia,
     // exact ca la revendicare. Altfel un coleg nou n-ar putea salva nimic.
-    if (!disp || Object.keys(disp).length === 0) return true;
+    if (!disp || Object.keys(disp).length === 0) return !(await getJSON(urlBroadcast(env, `${AST}/${nr}/${dev}.json`)).catch(() => null));   // [15.04] cel în așteptare (sau respins) nu
     return !!disp[dev];
   } catch (e) {
     return false;   // nu putem verifica → nu dăm acces
@@ -2376,6 +2393,58 @@ function _adresaCerere(request) {
   } catch (e) { return ''; }
 }
 
+// ══════════════════════════════════════════════════════════════
+// [15.04] VERIFICAREA NUMĂRULUI DE SERVICIU, PE SERVER
+//
+// Până acum telefonul verifica singur dacă numărul e pe foaie, iar omul putea apăsa „e corect”
+// și intra cu orice număr; worker-ul îl primea. Acum, la prima înregistrare a unui număr pe un
+// telefon, worker-ul caută numărul pe repartizarea depoului ales (luna trecută, asta, următoarea):
+//   • e pe foaie și schimbul ales e cel de pe foaie           → intră
+//   • nu e pe foaie / alt schimb                               → „în așteptare”: nu devine proprietar,
+//     deci backupul e refuzat; aplicația oprește și notificările și chatul. Se aprobă singur când
+//     apare pe foaie, sau îl aprobă adminul.
+//   • depoul / autobaza nu are nicio foaie urcată              → intră (nu avem cu ce compara)
+// Cei în așteptare stau în nodul lor (asteptare/<nr>/<dev>), NU în proprietar/<nr>/disp — restul
+// worker-ului (backup, dispozitive, fișă) rămâne neatins. Aplicațiile vechi (fără depou în cerere)
+// merg ca înainte.
+// ══════════════════════════════════════════════════════════════
+const AST = 'asteptare', NRA = 'nrAprobat';
+const _astTxt = (x, n) => String(x == null ? '' : x).replace(/[^\w .\-]/g, '').slice(0, n);
+function _luniVerif() {
+  const [a, l] = acumRo().data.split('-').map(Number);
+  return [-1, 0, 1].map(d => new Date(Date.UTC(a, l - 1 + d, 1)).toISOString().slice(0, 7));
+}
+async function _foaieVerifica(env, nr, dep, baza, sch) {
+  const bus = dep === 'autobuze' || dep === 'troleibuze';
+  const deps = bus ? ['autobuze', 'troleibuze'] : [dep], luni = _luniVerif();
+  const g = c => getJSON(urlBroadcast(env, c + '.json')).catch(() => undefined);
+  const cereri = [];
+  for (const d of deps) for (const l of luni) {
+    const b = `repartizare/${d}/${l}`;
+    cereri.push(Promise.all([g(`${b}/urcat`), g(`${b}/lunara/${nr}`), g(`${b}/schimb/${nr}`), (bus && d === 'autobuze' && baza) ? g(`${b}/baze/${baza}`) : Promise.resolve(null)])
+      .then(([urcat, rand, s, bz]) => ({ d, l, urcat, rand, s, bz })));
+  }
+  const R = await Promise.all(cereri);
+  if (R.some(x => x.urcat === undefined || x.rand === undefined)) return { necitit: true };
+  const peFoaie = R.some(x => x.rand !== null && x.rand !== undefined);
+  // are depoul lui vreo foaie? la autobuze contează autobaza aleasă (sub „Autobuze” stau 12 autobaze)
+  const areFoaie = bus ? R.some(x => x.d === 'autobuze' && x.bz) : R.some(x => x.urcat);
+  const schFoaie = [...new Set(R.map(x => Number(x.s)).filter(v => v === 1 || v === 2))];
+  let stare = 'ok', motiv = '';
+  if (peFoaie) { if ((sch === 1 || sch === 2) && schFoaie.length && !schFoaie.includes(sch)) { stare = 'astept'; motiv = 'schimb'; } }
+  else if (areFoaie) { stare = 'astept'; motiv = 'foaie'; }
+  else motiv = 'farafoaie';
+  return { stare, motiv, peFoaie, areFoaie, schFoaie };
+}
+// Ce trimite telefonul despre el la înregistrare
+function _astCeTrimite(c, request) {
+  const dep = String(c.dep || '').toLowerCase().replace(/[^a-z_]/g, '').slice(0, 20);
+  return { dep: DEPOURI.includes(dep) ? dep : '', baza: BAZA_RE.test(String(c.baza || '')) ? String(c.baza) : '', sch: Number(c.sch) === 1 ? 1 : Number(c.sch) === 2 ? 2 : 0,
+    plat: _astTxt(c.plat, 12), inst: c.inst === true, amp: _astTxt(c.amp, 40), v: _astTxt(c.v, 10),
+    ip: request.headers.get('CF-Connecting-IP') ? _ipCheie(request) : '' };
+}
+const _astDispozitiv = (T, acum, adresa) => ({ la: acum, ultima: acum, ...(adresa ? { adresa } : {}), ...(T.ip ? { ip: T.ip } : {}), ...(T.plat ? { plat: T.plat } : {}), ...(T.amp ? { amp: T.amp } : {}), inst: !!T.inst });
+
 async function revendica(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
 
@@ -2390,41 +2459,106 @@ async function revendica(request, env) {
   try {
     brut = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`));
   } catch (e) {
-    // Dacă nu putem citi, nu blocăm pe nimeni — altfel o pană de rețea
-    // ar lăsa oamenii pe dinafară.
     return { status: 200, corp: { ok: true, stare: 'necunoscut' } };
   }
 
   const { locuri, disp } = _normalizeaza(brut);
   const acum = Date.now();
-  // [v5.1] De pe ce adresă rulează aplicația telefonului. Colegii rămași pe
-  // vechea github.io, cu o versiune de dinainte de ecranul de mutare, rulează
-  // la nesfârșit copia veche din memoria telefonului — fișa trebuie să arate asta.
   const adresa = _adresaCerere(request);
+  const T = _astCeTrimite(c, request);
+  const nou1504 = !!T.dep;                     // aplicație cu verificarea nouă
 
-  // Dispozitiv cunoscut: îl lăsăm să intre. Actualizăm data ultimei intrări
-  // cel mult o dată pe zi, ca să nu scriem în bază la fiecare deschidere.
+  // ── telefonul e deja al numărului ──
   if (disp[dev]) {
     const ultima = Number(disp[dev].ultima) || 0;
-    if (acum - ultima > 24 * 3600 * 1000 || (adresa && disp[dev].adresa !== adresa)) {
+    const d0 = disp[dev];
+    const deScris = {};
+    if (acum - ultima > 24 * 3600 * 1000 || (adresa && d0.adresa !== adresa)) { deScris.ultima = acum; if (adresa) deScris.adresa = adresa; }
+    if (nou1504) {   // amprenta telefonului, pentru „același om pe alt browser”
+      if (T.ip && d0.ip !== T.ip) { deScris.ip = T.ip; deScris.ultima = acum; }
+      if (T.amp && d0.amp !== T.amp) deScris.amp = T.amp;
+      if (T.plat && d0.plat !== T.plat) deScris.plat = T.plat;
+      if (d0.inst !== T.inst) deScris.inst = T.inst;
+    }
+    if (Object.keys(deScris).length) {
       await fetch(urlBroadcast(env, `proprietar/${nr}/disp/${dev}.json`), {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adresa ? { ultima: acum, adresa } : { ultima: acum })
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(deScris)
       }).catch(() => {});
     }
     const curatat = await _curataNumarVechi(env, nrCurat(c.vechi), nr, dev);
     return { status: 200, corp: { ok: true, stare: 'al tau', ...(curatat ? { curatat } : {}) } };
   }
 
-  // Dispozitiv nou: intră doar dacă mai e loc liber
+  // ── adminul l-a respins pe telefonul ăsta ──
+  let ast = null;
+  if (nou1504) {
+    ast = await getJSON(urlBroadcast(env, `${AST}/${nr}/${dev}.json`)).catch(() => null);
+    if (ast && ast.respins) return { status: 200, corp: { ok: false, stare: 'respins' } };
+  }
+
+  // ── numărul e ținut de alt telefon ──
   const ocupate = Object.keys(disp).length;
   if (ocupate >= locuri && ocupate > 0) {
+    // [15.04] Același om, alt „telefon”: aplicația deschisă întâi din Facebook și apoi din Chrome, din
+    // Safari și apoi de pe ecran, sau după ce i s-a curățat memoria. Aceeași conexiune de internet +
+    // aceeași amprentă de telefon (ecran, procesor, memorie) ca un telefon al numărului văzut în
+    // ultimele 3 zile → îl adăugăm singuri (cel mult de 3 ori pe lună, până la 4 telefoane).
+    if (nou1504 && T.ip && T.amp && ocupate < 4) {
+      const frate = Object.values(disp).find(d => d && d.ip === T.ip && d.amp === T.amp && acum - (Number(d.ultima) || Number(d.la) || 0) < 3 * 864e5);
+      const cheieA = `limite/autoadd/${nr}/${acumRo().data.slice(0, 7)}`;
+      const nA = frate ? (Number(await getJSON(urlBroadcast(env, cheieA + '.json')).catch(() => 99)) || 0) : 99;
+      // un telefon scos de admin de pe numărul ăsta (Mută / Scoate telefonul) nu se readaugă singur
+      const scos = frate ? await getJSON(urlBroadcast(env, `scosi/${nr}/${dev}.json`)).catch(() => 1) : null;
+      if (frate && nA < 3 && !(scos && acum - Number(scos) < 30 * 864e5)) {
+        await _fbPut(env, cheieA, nA + 1).catch(() => {});
+        disp[dev] = _astDispozitiv(T, acum, adresa);
+        const r = await fetch(urlBroadcast(env, `proprietar/${nr}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length)), disp }) });
+        if (r.ok) {
+          if (ast) await _fbPut(env, `${AST}/${nr}/${dev}`, null).catch(() => {});
+          await _rezScrie(env, { fel: 'ok', nr, cine: 'automat', ce: 'adăugat singur și pe telefonul nou',
+            citat: `același telefon (${T.plat || '?'}${T.inst ? ', instalată' : ', din browser'}), aceeași conexiune de internet` }).catch(() => {});
+          return { status: 200, corp: { ok: true, stare: 'revendicat', automat: true } };
+        }
+      }
+    }
     let tel = '';
     try { tel = (await getJSON(`${env.FB_URL}/config/contact.json`)) || ''; } catch (e) {}
     return { status: 200, corp: { ok: false, stare: 'ocupat', tel: String(tel || ''), locuri, ocupate } };
   }
 
-  disp[dev] = adresa ? { la: acum, ultima: acum, adresa } : { la: acum, ultima: acum };
+  // ── număr liber: îl verificăm cu foaia ──
+  if (nou1504) {
+    // cel mult 3 numere diferite încercate pe zi de pe un telefon
+    const zi = acumRo().data, cheieI = `limite/nrincerc/${dev.slice(0, 40)}/${zi}`;
+    const inc = (await getJSON(urlBroadcast(env, cheieI + '.json')).catch(() => null)) || {};
+    if (!inc[nr]) {
+      if (Object.keys(inc).length >= 3) return { status: 200, corp: { ok: false, stare: 'limita' } };
+      await _fbPut(env, `${cheieI}/${nr}`, 1).catch(() => {});
+    }
+    const aprobat = await getJSON(urlBroadcast(env, `${NRA}/${nr}.json`)).catch(() => null);
+    let V = { stare: 'ok', motiv: aprobat ? 'aprobat' : '' };
+    if (!aprobat) {
+      V = await _foaieVerifica(env, nr, T.dep, T.baza, T.sch);
+      if (V.necitit) return { status: 200, corp: { ok: true, stare: 'necunoscut' } };
+      // peste 2 numere înregistrate luna asta de pe același telefon → așteaptă adminul
+      if (V.stare === 'ok') {
+        const cheieS = `limite/nrschimb/${dev.slice(0, 40)}/${zi.slice(0, 7)}`;
+        const sc = (await getJSON(urlBroadcast(env, cheieS + '.json')).catch(() => null)) || {};
+        if (!sc[nr] && Object.keys(sc).length >= 2) V = { stare: 'astept', motiv: 'schimbari', peFoaie: V.peFoaie, schFoaie: V.schFoaie };
+      }
+    }
+    if (V.stare === 'astept') {
+      const vechi = ast || {};
+      await _fbPut(env, `${AST}/${nr}/${dev}`, { la: vechi.la || acum, vazut: acum, motiv: V.motiv, dep: T.dep, baza: T.baza, sch: T.sch, plat: T.plat, inst: T.inst, v: T.v,
+        ...(V.schFoaie && V.schFoaie.length ? { schFoaie: V.schFoaie.join('/') } : {}) }).catch(() => {});
+      return { status: 200, corp: { ok: true, stare: 'asteptare', motiv: V.motiv, ...(V.schFoaie && V.schFoaie.length ? { schFoaie: V.schFoaie } : {}) } };
+    }
+    if (ast) await _fbPut(env, `${AST}/${nr}/${dev}`, null).catch(() => {});
+    await _fbPut(env, `limite/nrschimb/${dev.slice(0, 40)}/${zi.slice(0, 7)}/${nr}`, 1).catch(() => {});
+  }
+
+  disp[dev] = nou1504 ? _astDispozitiv(T, acum, adresa) : (adresa ? { la: acum, ultima: acum, adresa } : { la: acum, ultima: acum });
   const r = await fetch(urlBroadcast(env, `proprietar/${nr}.json`), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ locuri: Math.max(locuri, Object.keys(disp).length), disp })
@@ -2432,6 +2566,12 @@ async function revendica(request, env) {
   if (!r.ok) return { status: 200, corp: { ok: true, stare: 'nesalvat' } };
   const curatat = await _curataNumarVechi(env, nrCurat(c.vechi), nr, dev);
   return { status: 200, corp: { ok: true, stare: 'revendicat', locuri, ocupate: Object.keys(disp).length, ...(curatat ? { curatat } : {}) } };
+}
+// Telefonul e în așteptare pe numărul ăsta (nerespins)?
+async function _dispAsteapta(env, nr, dev) {
+  if (!nr || !dev) return false;
+  const a = await getJSON(urlBroadcast(env, `${AST}/${nr}/${dev}.json`)).catch(() => null);
+  return !!(a && !a.respins);
 }
 
 // [14.6] TELEFONUL A TRECUT PE ALT NUMĂR — numărul vechi nu mai rămâne „coleg” în panou.
@@ -3049,12 +3189,14 @@ async function raportEroare(request, env) {
 async function mesajAdmin(request, env) {
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
   const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
-  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  // [15.04] și cel „în așteptare” îi poate scrie adminului (doar scrie: conversația numărului rămâne a proprietarului)
+  const _ast1504 = !(await _dispInregistrat(env, nr, dev)) && await _dispAsteapta(env, nr, dev);
+  if (!_ast1504 && !(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
   const text = String(c.text == null ? '' : c.text).replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000);   // rândurile noi rămân
   if (text.length < 3) return { status: 400, corp: { ok: false, eroare: 'Scrie mesajul.' } };
-  if (!(await _limitaZi(env, 'mesaj', nr, 5))) return { status: 429, corp: { ok: false, eroare: 'Ai trimis deja 5 mesaje azi. Încearcă mâine.' } };
+  if (!(await _limitaZi(env, 'mesaj', _ast1504 ? 'a' + dev.slice(0, 30) : nr, _ast1504 ? 3 : 5))) return { status: 429, corp: { ok: false, eroare: `Ai trimis deja ${_ast1504 ? 3 : 5} mesaje azi. Încearcă mâine.` } };
   const id = _id12();
-  await _fbPut(env, `mesajeAdmin/${id}`, { nr, text, la: Date.now(), dep: _txt(c.dep, 20), v: _txt(c.v, 10), fel: ['problema', 'idee', 'altceva'].includes(c.fel) ? c.fel : 'altceva' });
+  await _fbPut(env, `mesajeAdmin/${id}`, { nr, text, la: Date.now(), dep: _txt(c.dep, 20), v: _txt(c.v, 10), fel: ['problema', 'idee', 'altceva'].includes(c.fel) ? c.fel : 'altceva', ...(_ast1504 ? { ast: 1 } : {}) });
   await _anuntaAdminii(env, '✉️ Mesaj de la ' + nr, text.slice(0, 120), 'mesaj-admin').catch(() => 0);
   return { status: 200, corp: { ok: true } };
 }
@@ -3895,6 +4037,18 @@ async function cerereAdmin(request, env) {
     if (disp[dev]) return { status: 200, corp: { ok: true, aprobat: true } };
     const la = Object.values(disp).map(x => Number(x && x.la) || 0).filter(Boolean);
     info.telefoane = Object.keys(disp).length; info.locuri = locuri; info.din = la.length ? Math.min(...la) : 0;
+    // [15.04] dovezi pentru admin: ce știm despre telefoanele de acum și despre cel care cere
+    try {
+      const T = _astCeTrimite(c, request);
+      const st = await getJSON(urlBroadcast(env, `stats/${nr}.json`)).catch(() => null);
+      info.dv = Object.entries(disp).slice(0, 4).map(([k, d]) => { const sd = (st && st.disp && st.disp[k]) || {};
+        return { plat: (d && d.plat) || sd.platforma || '', inst: d && typeof d.inst === 'boolean' ? d.inst : (typeof sd.instalat === 'boolean' ? sd.instalat : null),
+          ultima: Number(d && (d.ultima || d.la)) || 0, la: Number(d && d.la) || 0,
+          ip: T.ip && d && d.ip ? (d.ip === T.ip ? 1 : 0) : null, amp: T.amp && d && d.amp ? (d.amp === T.amp ? 1 : 0) : null }; });
+      info.nou = { inst: T.inst, sch: T.sch, baza: T.baza };
+      if (T.dep) { const V = await _foaieVerifica(env, nr, T.dep, T.baza, T.sch); if (!V.necitit) { info.nou.peFoaie = !!V.peFoaie; info.nou.areFoaie = !!V.areFoaie; info.nou.schFoaie = (V.schFoaie || []).join('/'); } }
+      info.depVechi = (st && st.depot) || '';
+    } catch (e) {}
   } else {
     let b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
     // [2.9] telefonul poate fi blocat definitiv prin alt număr (cel blocat inițial)
@@ -4394,6 +4548,8 @@ function _adm2Detaliu(c) {
     case 'bandaSeteaza': return c.banda ? _txt(c.banda.text, 80) : 'oprită';
     case 'versiuneMinima': return c.min == null || c.min === '' ? 'oprită' : String(c.min);
     case 'cerereRezolva': return String(c.fa || '');
+    case 'asteptareRezolva': return [c.nr, c.fa].filter(Boolean).join(' ');
+    case 'nrCorect': return String(c.nr || '');
     case 'stergeDepouDinBackup': return (Array.isArray(c.deps) ? c.deps : [c.dep]).join(', ');
     case 'anunt': case 'anuntEcran': return _txt(c.titlu || c.text || c.mesaj, 80);
     case 'mesajAdminCitit': return c.raspuns ? 'răspuns' : '';
@@ -4409,7 +4565,7 @@ function _adm2Detaliu(c) {
 // acțiunea îl șterge. Se scrie doar dacă acțiunea a reușit. 30 de zile.
 // ══════════════════════════════════════════════════════════════
 const REZ_CALE = 'adminJetoane/_rezolvate', REZ_ZILE = 30;
-const REZ_ACTIUNI = new Set(['aprobaNumar', 'respingeNumar', 'cerereRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
+const REZ_ACTIUNI = new Set(['aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
   'indicatoriAproba', 'indicatoriRespinge', 'raportOreInchide', 'trimiteGata']);
 const _rzT = (t, n) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, n || 140);
 async function _rezContext(env, c) {
@@ -4429,6 +4585,13 @@ async function _rezContext(env, c) {
     else ce = m.cerere ? 'cerere ignorată' : (c.raspuns ? 'mesaj — i-ai răspuns' : 'mesaj citit');
     return { fel: (a === 'mesajAdminCitit' && m.cerere) ? 'nu' : 'ok', nr: nrCurat(m.nr) || '', ce, citat: _rzT(m.text, 160) };
   }
+  if (a === 'asteptareRezolva') {   // [15.04]
+    const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+    const x = nr && dev ? await g(`${AST}/${nr}/${dev}.json`) : null; if (!x) return null;
+    const de = { foaie: 'nu era pe foaie', schimb: 'alt schimb decât pe foaie', schimbari: 'prea multe numere schimbate' }[x.motiv] || '';
+    return { fel: c.fa === 'aproba' ? 'ok' : 'nu', nr, ce: c.fa === 'aproba' ? 'număr în așteptare — aprobat' : 'număr în așteptare — respins', citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
+  }
+  if (a === 'nrCorect') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: c.fa === false ? 'scos din „numere corecte”' : 'marcat „număr corect” (nu e pe foaie)' };
   if (a === 'eroareRezolvata') {
     const ids = (Array.isArray(c.ids) ? c.ids : [c.id]).map(idc).filter(Boolean);
     const e = ids.length ? await g(`erori/${ids[0]}.json`) : null;
@@ -4472,7 +4635,7 @@ async function _rezLista(env) {
 // Acțiuni care doar citesc: nu intră în jurnal.
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste', 'convFisier',
-  'repartitori', 'programeLuni', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
+  'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine', 'rulareStare']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
@@ -5008,6 +5171,8 @@ async function admin(request, env) {
       if (cerere.fa === 'muta' || cerere.fa === 'adauga') {
         let _pr; try { _pr = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefonele numărului. Încearcă din nou.' } }; }
         const { locuri, disp } = _normalizeaza(_pr);
+        if (cerere.fa === 'muta') { const sc = {}; for (const k of Object.keys(disp)) if (k !== dev) sc[k] = acum; await _marcajeScrie(env, `scosi/${nr}`, sc); }   // [15.04]
+        await _fbPut(env, `scosi/${nr}/${dev}`, null).catch(() => {});
         const nou = cerere.fa === 'muta'
           ? { locuri: 1, disp: { [dev]: { la: acum, ultima: acum } } }
           : { locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length + 1)), disp: Object.assign({}, disp, { [dev]: { la: acum, ultima: acum } }) };
@@ -5018,6 +5183,52 @@ async function admin(request, env) {
       } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
       await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
       return { status: 200, corp: { ok: true, nr } };
+    }
+    // ── [15.04] Numere „în așteptare” (nu sunt pe foaie / alt schimb) ──
+    case 'asteptareLista': {
+      const d = await getJSON(urlBroadcast(env, `${AST}.json`)).catch(() => undefined);
+      if (d === undefined) return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi lista.' } };
+      const lista = [], luna = acumRo().data.slice(0, 7);
+      for (const [nr, dv] of Object.entries(d || {})) for (const [dev, a] of Object.entries(dv || {})) {
+        if (!a || a.respins) continue;
+        lista.push({ nr, dev: dev.slice(0, 64), la: a.la || 0, vazut: a.vazut || 0, motiv: a.motiv || '', dep: a.dep || '', baza: a.baza || '', sch: a.sch || 0, plat: a.plat || '', inst: !!a.inst, v: a.v || '', schFoaie: a.schFoaie || '' });
+      }
+      lista.sort((x, y) => y.la - x.la);
+      // pe ce alt depou e numărul (luna asta), pentru primele 15
+      await Promise.all(lista.slice(0, 15).map(async x => {
+        const g = await Promise.all(DEPOURI.map(dp => getJSON(urlBroadcast(env, `repartizare/${dp}/${luna}/lunara/${x.nr}.json`)).then(v => v ? dp : null).catch(() => null)));
+        x.peFoi = g.filter(Boolean);
+        const pr = await getJSON(urlBroadcast(env, `proprietar/${x.nr}.json`)).catch(() => null);
+        x.tinut = Object.keys(_normalizeaza(pr).disp).length;
+      }));
+      return { status: 200, corp: { ok: true, lista: lista.slice(0, 60), total: lista.length } };
+    }
+    case 'asteptareRezolva': {
+      const nr = nrCurat(cerere.nr), dev = String(cerere.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+      const a = nr && dev ? await getJSON(urlBroadcast(env, `${AST}/${nr}/${dev}.json`)).catch(() => null) : null;
+      if (!a) return { status: 404, corp: { ok: false, eroare: 'Nu mai e în așteptare.' } };
+      const acum = Date.now();
+      if (cerere.fa === 'aproba') {
+        let _pr; try { _pr = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefoanele numărului. Încearcă din nou.' } }; }
+        const { locuri, disp } = _normalizeaza(_pr);
+        disp[dev] = { la: acum, ultima: acum, ...(a.plat ? { plat: a.plat } : {}), inst: !!a.inst };
+        await _fbPut(env, `proprietar/${nr}`, { locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length)), disp });
+        await _fbPut(env, `${NRA}/${nr}`, { la: acum, de: adm2 ? String(adm2.nr) : 'admin' });
+        await _fbPut(env, `${AST}/${nr}/${dev}`, null);
+      } else if (cerere.fa === 'respinge') {
+        await _fbPut(env, `${AST}/${nr}/${dev}/respins`, acum);
+      } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
+      return { status: 200, corp: { ok: true, nr } };
+    }
+    // „✓ E corect”: numărul e bun chiar dacă nu apare pe foaie (angajat nou, caz știut)
+    case 'nrCorect': {
+      const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
+      await _fbPut(env, `${NRA}/${nr}`, cerere.fa === false ? null : { la: Date.now(), de: adm2 ? String(adm2.nr) : 'admin' });
+      return { status: 200, corp: { ok: true, nr } };
+    }
+    case 'nrAprobate': {
+      const d = await getJSON(urlBroadcast(env, `${NRA}.json`)).catch(() => null);
+      return { status: 200, corp: { ok: true, numere: Object.keys(d || {}) } };
     }
     case 'mesajAdminCitit': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
@@ -5314,6 +5525,7 @@ async function admin(request, env) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prop)
       });
       if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+      await _fbPut(env, `${NRA}/${nou}`, { la: Date.now(), de: 'propus' }).catch(() => {});   // [15.04] numărul propus de admin nu mai trece prin „în așteptare”
       let trimise = 0;
       try {
         if (env.VAPID_PUBLIC && env.VAPID_PRIVATE) {
@@ -5616,6 +5828,7 @@ async function admin(request, env) {
           instalat:  s ? s.instalat === true : null,
           versiune:  (s && s.versiune)  || null,
           baza:      (s && typeof s.baza === 'string' && s.baza) || null,   // [14.1] autobaza (la autobuze / troleibuze)
+          sch:       (s && (Number(s.sch) === 1 || Number(s.sch) === 2)) ? Number(s.sch) : null,   // [15.04] schimbul ales în aplicație
           telefoane: p ? abonamentele(p).length : 0,
           areBackup: !!(b || (chei && chei[nr])),
           blocat: !!blocatiU[nr]
@@ -6003,6 +6216,7 @@ async function admin(request, env) {
       if (!nr || !dev) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul sau dispozitivul' } };
       const r = await fetch(urlBroadcast(env, `proprietar/${nr}/disp/${dev}.json`), { method: 'DELETE' });
       if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+      await _fbPut(env, `scosi/${nr}/${dev}`, Date.now()).catch(() => {});   // [15.04] nu se readaugă singur
       return { status: 200, corp: { ok: true, nr, dev } };
     }
 
