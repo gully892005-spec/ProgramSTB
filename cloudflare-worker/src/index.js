@@ -2682,11 +2682,19 @@ async function statTelefon(request, env) {
   const r = await fetch(urlBroadcast(env, `stats/${nr}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corp) });
   return r.ok ? { status: 200, corp: { ok: true } } : { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
 }
+// [15.06] cel mult 120 de cereri pe minut de pe aceeași conexiune (în memoria worker-ului, fără scrieri în Firebase)
+const _blocLimM = new Map();
+function _blocLim(k) {
+  const m = Math.floor(Date.now() / 60000), x = _blocLimM.get(k);
+  if (!x || x.m !== m) { if (_blocLimM.size > 5000) _blocLimM.clear(); _blocLimM.set(k, { m, n: 1 }); return false; }
+  return ++x.n > 120;
+}
 async function blocatStare(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false } };
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
   const nr = nrCurat(c && c.nr); if (!nr) return { status: 400, corp: { ok: false } };
-  if (!(await _limitaZi(env, 'blocat-ip', _ipCheie(request), 300).catch(() => true))) return { status: 429, corp: { ok: false } };
+  // [15.06] limita stă în memoria worker-ului, nu în Firebase: o cerere = o singură citire în baza de date
+  if (_blocLim(_ipCheie(request))) return { status: 429, corp: { ok: false } };
   const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => undefined);
   if (b === undefined) return { status: 503, corp: { ok: false } };
   return { status: 200, corp: { ok: true, b: b || null } };
