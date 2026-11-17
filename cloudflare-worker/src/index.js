@@ -278,7 +278,7 @@ async function _marcajeScrie(env, cale, m) {
 
 // Un abonament expirat (utilizator care a șters aplicația) trebuie curățat.
 async function stergeAbonament(env, nr) {
-  await fetch(`${env.FB_URL}/push/${nr}.json`, { method: 'DELETE' }).catch(() => {});
+  await fetch(urlBroadcast(env, `push/${nr}.json`), { method: 'DELETE' }).catch(() => {});   // [15.05] cu cheia
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -360,7 +360,7 @@ const DEPOURI = ['dudesti', 'giurgiu', 'victoria', 'titan', 'alexandria',
 // ══════════════════════════════════════════════════════════════
 async function citesteBlocati(env) {
   try {
-    const b = await getJSON(`${env.FB_URL}/blocati.json`);
+    const b = await getJSON(urlBroadcast(env, 'blocati.json'));   // [15.05]
     return b && typeof b === 'object' ? b : {};
   } catch (e) {
     return {};   // dacă nu putem citi lista, nu blocăm pe nimeni din greșeală
@@ -555,7 +555,7 @@ async function trimiteTure(env, toti, numere, now, vapid) {
 
 async function trimiteChat(env, toti, numere, vapid) {
   let recent;
-  try { recent = await getJSON(`${env.FB_URL}/chat/recent.json`); }
+  try { recent = await getJSON(urlBroadcast(env, 'chat/recent.json')); }   // [15.05]
   catch (e) { return { chatTrimise: 0, eroare: e.message }; }
   if (!recent) return { chatTrimise: 0 };
 
@@ -939,7 +939,7 @@ async function trimiteSeara(env, toti, numere, now, vapid) {
 // ══════════════════════════════════════════════════════════════
 async function trimiteAnunturi(env, toti, numere, vapid) {
   let anunturi;
-  try { anunturi = await getJSON(`${env.FB_URL}/broadcast.json`); }
+  try { anunturi = await getJSON(urlBroadcast(env, 'broadcast.json')); }   // [15.05]
   catch (e) { return { trimise: 0, eroare: e.message }; }
   if (!anunturi) return { trimise: 0 };
 
@@ -1108,7 +1108,7 @@ async function _ruleaza(env, programatLa) {
   log(`Ora României: ${now.data} ${String(Math.floor(now.minute / 60)).padStart(2, '0')}:${String(now.minute % 60).padStart(2, '0')}`);
 
   let toti;
-  try { toti = await getJSON(`${env.FB_URL}/push.json`); }
+  try { toti = await getJSON(urlBroadcast(env, 'push.json')); }   // [15.05]
   catch (e) { log('❌ Nu am putut citi abonamentele: ' + e.message); await _fbPut(env, 'adminJetoane/_rulare', { la: pornit, crapat: 'Nu am putut citi abonamentele: ' + String(e.message).slice(0, 150), erori: [] }).catch(() => {}); return raport.join('\n'); }
 
   if (!toti) { log('Niciun abonament înregistrat.'); return raport.join('\n'); }
@@ -1219,7 +1219,7 @@ async function _ruleaza(env, programatLa) {
 
   // ── Raport de utilizare ─────────────────────────────────────
   if (poate(3, 'Statistici')) try {
-    const stats = await getJSON(`${env.FB_URL}/stats.json`);
+    const stats = await getJSON(urlBroadcast(env, 'stats.json'));   // [15.05]
     if (stats) {
       const v = Object.values(stats);
       const nrCu = (f) => v.filter(f).length;
@@ -1525,6 +1525,14 @@ export default {
       try { r = await mersLive(url, env); }
       catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
       return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
+    }
+    // [15.05] notificările, statistica, blocarea și „mesaj nou în chat” trec prin worker: Firebase se poate închide
+    if (url.pathname === '/push-telefon' || url.pathname === '/stat' || url.pathname === '/blocat-stare' || url.pathname === '/chat-recent') {
+      let r;
+      try { r = url.pathname === '/push-telefon' ? await pushTelefon(request, env) : url.pathname === '/stat' ? await statTelefon(request, env)
+              : url.pathname === '/blocat-stare' ? await blocatStare(request, env) : await chatRecent(request, env); }
+      catch (e) { r = { status: 500, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 120) } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
     }
     if (url.pathname === '/chatNume') {                   // [4.2] legătura nume din chat ↔ număr (o vede doar adminul)
       let r;
@@ -2523,7 +2531,7 @@ async function revendica(request, env) {
       }
     }
     let tel = '';
-    try { tel = (await getJSON(`${env.FB_URL}/config/contact.json`)) || ''; } catch (e) {}
+    try { tel = (await getJSON(urlBroadcast(env, 'config/contact.json'))) || ''; } catch (e) {}   // [15.05]
     return { status: 200, corp: { ok: false, stare: 'ocupat', tel: String(tel || ''), locuri, ocupate } };
   }
 
@@ -2566,6 +2574,151 @@ async function revendica(request, env) {
   if (!r.ok) return { status: 200, corp: { ok: true, stare: 'nesalvat' } };
   const curatat = await _curataNumarVechi(env, nrCurat(c.vechi), nr, dev);
   return { status: 200, corp: { ok: true, stare: 'revendicat', locuri, ocupate: Object.keys(disp).length, ...(curatat ? { curatat } : {}) } };
+}
+// ══════════════════════════════════════════════════════════════
+// [15.05] NOTIFICĂRILE ȘI STATISTICA PRIN WORKER
+// Până acum telefonul scria singur în /push și /stats, deci regulile Firebase le lăsau deschise
+// pentru oricine: turele, abonamentele și setările oricui se puteau citi, șterge sau înlocui.
+// Acum scrie doar worker-ul, după ce verifică telefonul (înregistrat pe număr; nu „în așteptare”).
+// ══════════════════════════════════════════════════════════════
+const _ORA_RE = /^\d{2}:\d{2}$/, _DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const _pt = (x, n) => String(x == null ? '' : x).replace(/[\u0000-\u001f<>]/g, ' ').slice(0, n);
+function _subCurat(x) {
+  if (!x || typeof x !== 'object' || typeof x.endpoint !== 'string' || !/^https:\/\/[^\s]{8,700}$/.test(x.endpoint)) return null;
+  const k = x.keys || {};
+  if (typeof k.p256dh !== 'string' || typeof k.auth !== 'string' || k.p256dh.length > 200 || k.auth.length > 60) return null;
+  return { endpoint: x.endpoint, keys: { p256dh: k.p256dh, auth: k.auth } };
+}
+function _tureCurate(a) {
+  if (!Array.isArray(a)) return [];
+  return a.slice(0, 60).filter(t => t && _DATA_RE.test(t.data) && _ORA_RE.test(t.start)).map(t => ({
+    data: t.data, start: t.start, end: _ORA_RE.test(t.end) ? t.end : '', text: _pt(t.text, 80),
+    minBefore: Math.max(0, Math.min(1440, Number(t.minBefore) || 0)),
+    mins: (Array.isArray(t.mins) ? t.mins : []).map(Number).filter(m => m > 0 && m <= 1440).slice(0, 6) }));
+}
+function _zileCurate(a) {
+  if (!Array.isArray(a)) return [];
+  return a.slice(0, 60).filter(z => z && _DATA_RE.test(z.data)).map(z => ({ data: z.data, txt: _pt(z.txt, 140), lucrata: !!z.lucrata }));
+}
+async function _citesteCerereTel(request) {
+  if (request.method !== 'POST') return { e: { status: 405, corp: { ok: false, eroare: 'Doar POST' } } };
+  let c; try { c = await request.json(); } catch (e) { return { e: { status: 400, corp: { ok: false, eroare: 'JSON invalid' } } }; }
+  const nr = nrCurat(c && c.nr), dev = String((c && c.dev) || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
+  if (!nr || !dev) return { e: { status: 400, corp: { ok: false, eroare: 'Lipsește numărul sau telefonul' } } };
+  return { c, nr, dev };
+}
+async function pushTelefon(request, env) {
+  const { e, c, nr, dev } = await _citesteCerereTel(request); if (e) return e;
+  const op = String(c.op || '');
+  const nu = { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  // oprirea: un telefon își poate scoate oricând propriul abonament (doar al lui)
+  if (op === 'off') {
+    await fetch(urlBroadcast(env, `push/${nr}/subs/${dev}.json`), { method: 'DELETE' }).catch(() => {});
+    if (await _dispInregistrat(env, nr, dev)) {
+      await fetch(urlBroadcast(env, `push/${nr}/sub.json`), { method: 'DELETE' }).catch(() => {});
+      const ram = await getJSON(_urlShallow(env, `push/${nr}/subs.json`)).catch(() => ({}));
+      if (!ram || !Object.keys(ram).length) await fetch(urlBroadcast(env, `push/${nr}.json`), { method: 'DELETE' }).catch(() => {});
+    }
+    return { status: 200, corp: { ok: true } };
+  }
+  if (!(await _dispInregistrat(env, nr, dev))) return nu;
+  if (op === 'sync') {
+    const d = (c.date && typeof c.date === 'object') ? c.date : {};
+    const sub = _subCurat(c.sub);
+    if (c.sub && !sub) return { status: 400, corp: { ok: false, eroare: 'Abonament greșit' } };
+    let pushDin = Number(await getJSON(urlBroadcast(env, `push/${nr}/pushDin.json`)).catch(() => 0)) || 0;
+    if (!pushDin) pushDin = Math.min(Date.now(), Number(d.pushDin) || Date.now());   // se scrie o singură dată, la prima activare
+    const p = { pushDin, ture: _tureCurate(d.ture), zile: _zileCurate(d.zile), depot: DEPOURI.includes(d.depot) ? d.depot : '',
+      notifSeara: !!d.notifSeara, alerteTura: d.alerteTura !== false, oraSeara: Math.max(0, Math.min(1439, Number(d.oraSeara) || 1200)),
+      chatMute: !!d.chatMute, chatSeen: Math.min(Date.now() + 60000, Number(d.chatSeen) || 0), tz: 'Europe/Bucharest', updat: new Date().toISOString() };
+    const r = await fetch(urlBroadcast(env, `push/${nr}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    if (!r.ok) return { status: 502, corp: { ok: false, eroare: 'cloud ' + r.status } };
+    if (sub) {
+      const r2 = await fetch(urlBroadcast(env, `push/${nr}/subs/${dev}.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub, nume: _pt(c.nume || 'telefon', 30), updat: Date.now() }) });
+      if (!r2.ok) return { status: 502, corp: { ok: false, eroare: 'abonament ' + r2.status } };
+      await fetch(urlBroadcast(env, `push/${nr}/sub.json`), { method: 'DELETE' }).catch(() => {});
+    }
+    return { status: 200, corp: { ok: true, pushDin } };
+  }
+  if (op === 'sub') {   // service worker-ul, când telefonul schimbă singur abonamentul (aplicația închisă)
+    const sub = _subCurat(c.sub); if (!sub) return { status: 400, corp: { ok: false, eroare: 'Abonament greșit' } };
+    await _fbPut(env, `push/${nr}/subs/${dev}`, { sub, nume: 'telefon', updat: Date.now() });
+    return { status: 200, corp: { ok: true } };
+  }
+  if (op === 'subExista') {
+    const v = await getJSON(urlBroadcast(env, `push/${nr}/subs/${dev}.json`)).catch(() => undefined);
+    return { status: 200, corp: { ok: v !== undefined, exista: !!v } };
+  }
+  if (op === 'chatSeen') { await _fbPut(env, `push/${nr}/chatSeen`, Math.min(Date.now() + 60000, Number(c.t) || 0)); return { status: 200, corp: { ok: true } }; }
+  if (op === 'chatMute') { await _fbPut(env, `push/${nr}/chatMute`, !!c.v); return { status: 200, corp: { ok: true } }; }
+  if (op === 'propunere') {
+    const pp = await getJSON(urlBroadcast(env, `push/${nr}/propunere.json`)).catch(() => null);
+    return { status: 200, corp: { ok: true, propunere: pp ? { nou: pp.nou, scor: pp.scor || '', raspuns: pp.raspuns || '', la: pp.la || 0 } : null } };
+  }
+  if (op === 'propunereRaspuns') {
+    const pp = await getJSON(urlBroadcast(env, `push/${nr}/propunere.json`)).catch(() => null);
+    if (!pp) return { status: 404, corp: { ok: false, eroare: 'Nu mai e nicio propunere.' } };
+    await fetch(urlBroadcast(env, `push/${nr}/propunere.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raspuns: c.da ? 'da' : 'nu', raspunsLa: Date.now() }) });
+    return { status: 200, corp: { ok: true } };
+  }
+  return { status: 400, corp: { ok: false, eroare: 'Operație necunoscută' } };
+}
+async function statTelefon(request, env) {
+  const { e, c, nr, dev } = await _citesteCerereTel(request); if (e) return e;
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false, eroare: 'Telefonul nu e înregistrat pe numărul ăsta.' } };
+  if (c.doarBaza) {
+    await _fbPut(env, `stats/${nr}/baza`, (typeof c.baza === 'string' && BAZA_RE.test(c.baza)) ? c.baza : null);
+    return { status: 200, corp: { ok: true } };
+  }
+  const r0 = (c.rand && typeof c.rand === 'object') ? c.rand : {};
+  const rand = { instalat: !!r0.instalat, platforma: _pt(r0.platforma, 12), depot: DEPOURI.includes(r0.depot) ? r0.depot : '', versiune: _pt(r0.versiune, 10),
+    push: !!r0.push, ultimaVizita: _DATA_RE.test(r0.ultimaVizita) ? r0.ultimaVizita : acumRo().data };
+  const corp = Object.assign({}, rand, { dev });
+  if ('baza' in c) corp.baza = (typeof c.baza === 'string' && BAZA_RE.test(c.baza)) ? c.baza : null;
+  corp.sch = (Number(c.sch) === 1 || Number(c.sch) === 2) ? Number(c.sch) : null;
+  corp['disp/' + dev] = Object.assign({}, rand, { ts: Date.now() });
+  const r = await fetch(urlBroadcast(env, `stats/${nr}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corp) });
+  return r.ok ? { status: 200, corp: { ok: true } } : { status: 502, corp: { ok: false, eroare: 'Firebase ' + r.status } };
+}
+async function blocatStare(request, env) {
+  if (request.method !== 'POST') return { status: 405, corp: { ok: false } };
+  let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false } }; }
+  const nr = nrCurat(c && c.nr); if (!nr) return { status: 400, corp: { ok: false } };
+  if (!(await _limitaZi(env, 'blocat-ip', _ipCheie(request), 300).catch(() => true))) return { status: 429, corp: { ok: false } };
+  const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => undefined);
+  if (b === undefined) return { status: 503, corp: { ok: false } };
+  return { status: 200, corp: { ok: true, b: b || null } };
+}
+async function chatRecent(request, env) {
+  const { e, c, nr, dev } = await _citesteCerereTel(request); if (e) return e;
+  if (!(await _dispInregistrat(env, nr, dev))) return { status: 403, corp: { ok: false } };
+  if (!(await _limitaZi(env, 'chatrecent', nr, 200))) return { status: 429, corp: { ok: false } };
+  const t = Math.min(Date.now(), Number(c.t) || Date.now());
+  await _fbPut(env, `push/${nr}/chatSeen`, t).catch(() => {});
+  await fetch(urlBroadcast(env, 'chat/recent.json'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ t, n: _pt(c.n || 'Coleg', 30), d: DEPOURI.includes(c.d) ? c.d : '', nr }) });
+  return { status: 200, corp: { ok: true } };
+}
+// [15.05] „🔒 Verifică securitatea”: ce poate citi / scrie cineva FĂRĂ cheie (cum ar face oricine de pe internet)
+async function verificaSecuritate(env) {
+  const noduri = ['push', 'stats', 'chat', 'config', 'blocati', 'broadcast', 'backup', 'backupIstoric', 'proprietar', 'repartizare', 'anunturi', 'indicatori', 'mesajeAdmin', 'adminJetoane', 'asteptare', 'agenda', 'erori'];
+  const rez = {};
+  await Promise.all(noduri.map(async n => {
+    try { const r = await fetch(`${env.FB_URL}/${n}.json?shallow=true`); rez[n] = { citire: r.status === 200 }; }
+    catch (e) { rez[n] = { citire: null }; }
+  }));
+  for (const n of ['push', 'stats', 'chat']) {   // scriere: o cheie de probă, ștearsă imediat cu cheia de serviciu
+    try {
+      const r = await fetch(`${env.FB_URL}/${n}/_probaSecuritate.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '1' });
+      rez[n].scriere = r.status === 200;
+      if (r.status === 200) await fetch(urlBroadcast(env, `${n}/_probaSecuritate.json`), { method: 'DELETE' }).catch(() => {});
+    } catch (e) { rez[n].scriere = null; }
+  }
+  let cheie = false;
+  try { const r = await fetch(_urlShallow(env, 'adminJetoane.json')); cheie = !!env.FB_SECRET && r.status === 200; } catch (e) {}
+  return { cheie, noduri: rez };
 }
 // Telefonul e în așteptare pe numărul ăsta (nerespins)?
 async function _dispAsteapta(env, nr, dev) {
@@ -4635,7 +4788,7 @@ async function _rezLista(env) {
 // Acțiuni care doar citesc: nu intră în jurnal.
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste', 'convFisier',
-  'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
+  'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'statsToate', 'securitate', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine', 'rulareStare']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
@@ -5220,6 +5373,12 @@ async function admin(request, env) {
       } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
       return { status: 200, corp: { ok: true, nr } };
     }
+    case 'statsToate': {   // [15.05] panoul nu mai citește /stats direct
+      const d = await getJSON(urlBroadcast(env, 'stats.json')).catch(() => undefined);
+      if (d === undefined) return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi statisticile.' } };
+      return { status: 200, corp: { ok: true, stats: d || {} } };
+    }
+    case 'securitate': return { status: 200, corp: Object.assign({ ok: true }, await verificaSecuritate(env)) };
     // „✓ E corect”: numărul e bun chiar dacă nu apare pe foaie (angajat nou, caz știut)
     case 'nrCorect': {
       const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
