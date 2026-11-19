@@ -2450,6 +2450,17 @@ async function _foaieVerifica(env, nr, dep, baza, sch) {
   else motiv = 'farafoaie';
   return { stare, motiv, peFoaie, areFoaie, schFoaie };
 }
+// [15.08] Telefonul care își șterge singur datele (browser cu „șterge la ieșire”, mod incognito,
+// aplicație de curățare): la fiecare deschidere are alt cod, deci numărul pare „pe alt telefon”
+// și adminul îl tot mută. Semnul: numărul a fost mutat de admin de cel puțin 2 ori în ultimele
+// 14 zile, sau o dată, dar cere tot același tip de telefon. Întoarce câte mutări (0 = nimic).
+async function _seStergeDate(env, nr, T, disp) {
+  const sc = await getJSON(urlBroadcast(env, `scosi/${nr}.json`)).catch(() => null);
+  const acum = Date.now();
+  const mutari = new Set(Object.values(sc || {}).map(Number).filter(t => t && acum - t < 14 * 864e5).map(t => Math.round(t / 60000))).size;
+  const acelasi = !!(T && T.amp && Object.values(disp || {}).some(d => d && d.amp === T.amp && (!T.plat || !d.plat || d.plat === T.plat)));
+  return (mutari >= 2 || (mutari >= 1 && acelasi)) ? mutari : 0;
+}
 // Ce trimite telefonul despre el la înregistrare
 function _astCeTrimite(c, request) {
   const dep = String(c.dep || '').toLowerCase().replace(/[^a-z_]/g, '').slice(0, 20);
@@ -2514,7 +2525,13 @@ async function _revendica(request, env, ctx) {
       }).catch(() => {});
     }
     const curatat = await _curataNumarVechi(env, nrCurat(c.vechi), nr, dev);
-    return { status: 200, corp: { ok: true, stare: 'al tau', ...(curatat ? { curatat } : {}) } };
+    // [15.08] adminul l-a aprobat cu „Mută-l la …”: telefonul trece singur pe depoul de pe foaie
+    let muta = null;
+    if (c.ast) {
+      muta = await getJSON(urlBroadcast(env, `mutaDep/${nr}/${dev}.json`)).catch(() => null);
+      if (muta) await _fbPut(env, `mutaDep/${nr}/${dev}`, null).catch(() => {});
+    }
+    return { status: 200, corp: { ok: true, stare: 'al tau', ...(curatat ? { curatat } : {}), ...(muta && muta.dep ? { muta: { dep: muta.dep, baza: muta.baza || '' } } : {}) } };
   }
 
   // ── adminul l-a respins pe telefonul ăsta ──
@@ -2560,7 +2577,8 @@ async function _revendica(request, env, ctx) {
     }
     let tel = '';
     try { tel = (await getJSON(urlBroadcast(env, 'config/contact.json'))) || ''; } catch (e) {}   // [15.05]
-    return { status: 200, corp: { ok: false, stare: 'ocupat', tel: String(tel || ''), locuri, ocupate } };
+    const seSterge = nou1504 ? await _seStergeDate(env, nr, T, disp).catch(() => 0) : 0;   // [15.08]
+    return { status: 200, corp: { ok: false, stare: 'ocupat', tel: String(tel || ''), locuri, ocupate, ...(seSterge ? { seSterge } : {}) } };
   }
 
   // ── număr liber: îl verificăm cu foaia ──
@@ -4328,6 +4346,7 @@ async function cerereAdmin(request, env) {
       info.nou = { inst: T.inst, sch: T.sch, baza: T.baza };
       if (T.dep) { const V = await _foaieVerifica(env, nr, T.dep, T.baza, T.sch); if (!V.necitit) { info.nou.peFoaie = !!V.peFoaie; info.nou.areFoaie = !!V.areFoaie; info.nou.schFoaie = (V.schFoaie || []).join('/'); } }
       info.depVechi = (st && st.depot) || '';
+      const ss = await _seStergeDate(env, nr, T, disp).catch(() => 0); if (ss) info.seSterge = ss;   // [15.08]
     } catch (e) {}
   } else {
     let b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => null);
@@ -4871,6 +4890,7 @@ async function _rezContext(env, c) {
     const nr = nrCurat(c.nr), dev = String(c.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
     const x = nr && dev ? await g(`${AST}/${nr}/${dev}.json`) : null; if (!x) return null;
     const de = { foaie: 'nu era pe foaie', schimb: 'alt schimb decât pe foaie', schimbari: 'prea multe numere schimbate' }[x.motiv] || '';
+    if (c.fa === 'muta') return { fel: 'ok', nr, ce: `mutat la ${IND_NUME[c.dep] || c.dep}${c.baza ? ' · ' + c.baza : ''} și aprobat`, citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
     return { fel: c.fa === 'aproba' ? 'ok' : 'nu', nr, ce: c.fa === 'aproba' ? 'număr în așteptare — aprobat' : 'număr în așteptare — respins', citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
   }
   if (a === 'nrCorect') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: c.fa === false ? 'scos din „numere corecte”' : 'marcat „număr corect” (nu e pe foaie)' };
@@ -5498,9 +5518,17 @@ async function admin(request, env) {
       const a = nr && dev ? await getJSON(urlBroadcast(env, `${AST}/${nr}/${dev}.json`)).catch(() => null) : null;
       if (!a) return { status: 404, corp: { ok: false, eroare: 'Nu mai e în așteptare.' } };
       const acum = Date.now();
-      if (cerere.fa === 'aproba') {
+      if (cerere.fa === 'aproba' || cerere.fa === 'muta') {
+        // [15.08] „Mută-l la …”: aprobat + telefonul trece singur pe depoul / autobaza de pe foaie
+        let mDep = '', mBaza = '';
+        if (cerere.fa === 'muta') {
+          mDep = String(cerere.dep || '').toLowerCase();
+          mBaza = BAZA_RE.test(String(cerere.baza || '')) ? String(cerere.baza) : '';
+          if (!DEPOURI.includes(mDep)) return { status: 400, corp: { ok: false, eroare: 'Depou necunoscut.' } };
+        }
         let _pr; try { _pr = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi telefoanele numărului. Încearcă din nou.' } }; }
         const { locuri, disp } = _normalizeaza(_pr);
+        if (mDep) await _fbPut(env, `mutaDep/${nr}/${dev}`, { dep: mDep, ...(mBaza ? { baza: mBaza } : {}), la: acum });
         disp[dev] = { la: acum, ultima: acum, ...(a.plat ? { plat: a.plat } : {}), inst: !!a.inst };
         await _fbPut(env, `proprietar/${nr}`, { locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length)), disp });
         await _fbPut(env, `${NRA}/${nr}`, { la: acum, de: adm2 ? String(adm2.nr) : 'admin' });
