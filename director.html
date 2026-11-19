@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Program STB 2026 — propunere pentru conducerea STB</title>
+<meta name="description" content="Program STB 2026: aplicație pentru personalul de conducere vehicule, realizată de un angajat STB. Prezentare și propunere pentru conducerea societății.">
+<meta name="robots" content="noindex">
+<meta property="og:title" content="Program STB 2026 — propunere pentru conducerea STB">
+<meta property="og:description" content="Aplicație pentru vatmani și șoferi, realizată de un angajat STB: ture, ore, pontaj, repartizare și notificări, în telefon.">
+<meta property="og:image" content="https://programstb.com/Icons/banner-sus.jpg">
+<meta name="theme-color" content="#07101d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --noapte:#07101d; --noapte2:#0d1929; --noapte3:#132338;
+  --teal:#27e0bd; --chihlimbar:#f5a524; --albastru:#6cb4ff; --mov:#b99cff; --rosu:#f2657a;
+  --text:#e7edf6; --slab:#8998b0; --corp:#c3cfe0; --chenar:#1f3149;
+  --linie:rgba(255,255,255,.09); --max:820px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--noapte);color:var(--text);font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 20px}
+h1,h2,h3,.disp{font-family:"Barlow Condensed",sans-serif;font-weight:700;line-height:1.05;letter-spacing:.005em}
+h2{font-size:clamp(1.9rem,6.5vw,2.7rem);margin-bottom:.6rem}
+h3{font-size:1.25rem;margin-bottom:.3rem;color:#fff}
+p{margin-bottom:.9rem;color:var(--corp)}
+p.intro{font-size:1.06rem;color:#d3dcea;max-width:64ch}
+strong{color:var(--text);font-weight:600}
+section{padding:60px 0;border-top:1px solid var(--linie)}
+a{color:var(--teal)}
+.eticheta{font-family:"IBM Plex Mono",monospace;font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin-bottom:10px;display:block}
+
+/* completat de autor înainte de trimitere */
+.de-completat{background:rgba(245,165,36,.18);color:var(--chihlimbar);border-bottom:1px dashed var(--chihlimbar);padding:0 3px;border-radius:3px}
+
+/* HERO */
+.hero{position:relative;border-top:0;padding:0;overflow:hidden}
+.hero-foto{width:100%;aspect-ratio:1000/337;background:url('Icons/banner-sus.jpg') center/cover no-repeat;position:relative}
+.hero-foto::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,16,29,0) 45%,var(--noapte) 100%)}
+.hero .wrap{padding-top:18px;padding-bottom:48px}
+.hero h1{font-size:clamp(3rem,13vw,5.6rem);text-transform:uppercase;line-height:.9}
+.hero h1 span{display:block;color:var(--teal)}
+.hero .sub{font-size:1.2rem;color:#e3eaf4;margin:16px 0 10px;max-width:40ch}
+.autor{display:flex;gap:14px;align-items:center;margin-top:22px;padding:14px 16px;background:var(--noapte2);border:1px solid var(--chenar);border-radius:14px;max-width:560px}
+.autor .ini{width:46px;height:46px;border-radius:50%;background:var(--teal);color:#04241d;display:grid;place-items:center;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.4rem;flex-shrink:0}
+.autor p{margin:0;font-size:.95rem;line-height:1.45}
+.autor b{color:#fff}
+
+/* REZUMAT */
+.rezumat{display:grid;gap:12px;margin-top:24px}
+.rezumat div{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start}
+.rezumat p{margin:0}
+.cifre{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:30px}
+@media(min-width:640px){.cifre{grid-template-columns:repeat(4,1fr)}}
+.cifra{border-top:2px solid;padding-top:10px}
+.cifra .v{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:2rem;line-height:1}
+.cifra .n{font-size:.84rem;color:var(--corp);margin-top:5px;line-height:1.35}
+
+/* PROBLEMĂ / SOLUȚIE */
+.comparatie{display:grid;gap:14px;margin-top:24px}
+@media(min-width:700px){.comparatie{grid-template-columns:1fr 1fr}}
+.coloana{background:var(--noapte2);border:1px solid var(--chenar);border-radius:16px;padding:18px}
+.coloana h3{font-size:1.15rem;margin-bottom:10px}
+.coloana ul{list-style:none;display:grid;gap:9px}
+.coloana li{font-size:.94rem;color:var(--corp);padding-left:20px;position:relative;line-height:1.45}
+.coloana li::before{position:absolute;left:0;top:0}
+.coloana.azi li::before{content:"–";color:var(--rosu)}
+.coloana.cu li::before{content:"✓";color:var(--teal);font-weight:700}
+.coloana.cu{border-color:rgba(39,224,189,.4)}
+
+/* FUNCȚII */
+.functii{display:grid;gap:14px;margin-top:26px}
+@media(min-width:700px){.functii{grid-template-columns:1fr 1fr}}
+.functie{border-left:2px solid var(--linie);padding:2px 0 2px 16px}
+.functie .ic{font-size:1.35rem;margin-bottom:4px}
+.functie p{font-size:.94rem;margin:0}
+
+/* BENEFICII STB */
+.beneficii{background:radial-gradient(900px 420px at 10% 0%,rgba(39,224,189,.08),transparent 60%),var(--noapte)}
+.lista-b{list-style:none;margin-top:24px;display:grid;gap:16px}
+.lista-b li{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start}
+.lista-b .nr{width:44px;height:44px;border-radius:12px;background:var(--noapte3);border:1px solid var(--chenar);display:grid;place-items:center;font-size:1.3rem}
+.lista-b h3{font-size:1.15rem}
+.lista-b p{margin:0;font-size:.95rem}
+
+/* ACOPERIRE */
+.depouri{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 18px}
+.dep{font-size:.86rem;font-weight:600;border-radius:999px;padding:5px 12px;background:var(--noapte2);border:1px solid var(--chenar);color:#d6e1ee}
+.dep.tr{border-color:rgba(39,224,189,.4)}
+.dep.ab{border-color:rgba(245,165,36,.4)}
+.dep.tb{border-color:rgba(108,180,255,.4)}
+
+/* DATE / SIGURANȚĂ */
+.tabel{width:100%;border-collapse:collapse;margin-top:20px;font-size:.93rem}
+.tabel th,.tabel td{text-align:left;padding:11px 10px;border-bottom:1px solid var(--linie);vertical-align:top}
+.tabel th{color:var(--slab);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.tabel td:first-child{color:#fff;font-weight:600;width:38%}
+.tabel td{color:var(--corp)}
+
+/* PROPUNERE */
+.propunere{background:linear-gradient(180deg,var(--noapte) 0%,#0b1626 100%)}
+.optiuni{display:grid;gap:16px;margin-top:26px}
+@media(min-width:720px){.optiuni{grid-template-columns:1fr 1fr}}
+.optiune{background:var(--noapte2);border:1px solid var(--chenar);border-radius:18px;padding:20px;display:flex;flex-direction:column}
+.optiune .eticheta{margin-bottom:6px}
+.optiune h3{font-size:1.45rem;margin-bottom:10px}
+.optiune ul{list-style:none;display:grid;gap:8px;margin-bottom:12px}
+.optiune li{font-size:.93rem;color:var(--corp);padding-left:20px;position:relative;line-height:1.45}
+.optiune li::before{content:"→";position:absolute;left:0;color:var(--teal)}
+.optiune .cere{margin-top:auto;font-size:.88rem;color:var(--slab);border-top:1px solid var(--linie);padding-top:10px}
+.optiune.b{border-color:rgba(39,224,189,.45)}
+.optiune.b .eticheta{color:var(--chihlimbar)}
+
+.pasi{list-style:none;counter-reset:pas;margin-top:24px}
+.pasi li{counter-increment:pas;position:relative;padding:0 0 22px 56px}
+.pasi li::before{content:counter(pas);position:absolute;left:0;top:-2px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.3rem;color:var(--noapte);background:var(--teal)}
+.pasi li:not(:last-child)::after{content:"";position:absolute;left:18px;top:42px;bottom:4px;width:2px;background:rgba(39,224,189,.25)}
+.pasi p{margin:0;font-size:.95rem}
+
+/* FINAL */
+footer{padding:60px 0 76px;background:linear-gradient(180deg,var(--noapte),#050b15)}
+.qr-card{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:24px 0;background:var(--noapte2);border:1px solid var(--chenar);border-radius:18px;padding:18px;max-width:600px}
+.qr-box{background:#fff;border-radius:12px;padding:10px;width:170px;height:170px;display:grid;place-items:center;flex-shrink:0}
+.qr-box img,.qr-box canvas{width:150px!important;height:150px!important}
+.qr-txt p{margin:.3rem 0 .6rem}
+.contact{display:grid;gap:4px;margin-top:6px;font-size:.98rem}
+.contact b{color:#fff}
+.nota{margin-top:30px;font-size:.82rem;color:#6b7c98;line-height:1.7;max-width:64ch}
+.buton{display:inline-block;background:var(--teal);color:#04241d;text-decoration:none;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.25rem;padding:11px 24px;border-radius:12px}
+.butoane{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.buton.contur{background:transparent;color:var(--teal);border:1.5px solid var(--teal)}
+a:focus-visible,.buton:focus-visible,button:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+/* TIPĂRIRE / SALVARE CA PDF — fundal alb, ca să se poată atașa la mail */
+@media print{
+  :root{--noapte:#fff;--noapte2:#f6f8fb;--noapte3:#eef2f7;--text:#0f172a;--corp:#334155;--slab:#64748b;--chenar:#d6dde8;--linie:#e2e8f0;--teal:#0e9f82}
+  body{background:#fff;color:#0f172a;font-size:12.5px}
+  h3,.autor b,.tabel td:first-child,.contact b,strong{color:#0f172a!important}
+  p.intro,.hero .sub{color:#1e293b}
+  section{padding:26px 0;break-inside:auto}
+  .coloana,.optiune,.functie,.lista-b li,.cifra,.autor,.qr-card{break-inside:avoid}
+  h2{break-after:avoid}
+  .hero-foto::after{display:none}
+  .fara-tipar{display:none!important}
+  .de-completat{background:none;color:inherit;border:0}
+  .beneficii,.propunere,footer{background:#fff}
+  .dep{color:#0f172a;background:#f6f8fb}
+  footer{padding:20px 0 0}
+  .nota{margin-top:14px}
+  a{color:#0e9f82;text-decoration:none}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-foto" role="img" aria-label="Tramvai STB în București"></div>
+  <div class="wrap">
+    <span class="eticheta">Propunere pentru conducerea STB S.A.</span>
+    <h1>Program<span>STB 2026</span></h1>
+    <p class="sub">Aplicația care pune în telefonul fiecărui vatman și șofer programul de lucru, orele calculate și repartizarea depoului.</p>
+    <div class="autor">
+      <div class="ini" aria-hidden="true">NA</div>
+      <p>Realizată din inițiativă proprie, în timpul liber, de <b>Andrei Neagoe</b>, vatman la Depoul Dudești. Fără niciun cost pentru societate.</p>
+    </div>
+  </div>
+</header>
+
+<!-- PE SCURT -->
+<section id="pe-scurt">
+  <div class="wrap">
+    <span class="eticheta">Pe scurt</span>
+    <h2>Ce este și de ce contează</h2>
+    <p class="intro">Program STB 2026 este o aplicație web, gratuită, care funcționează pe orice telefon (Android și iPhone), fără instalare din magazin și chiar fără internet. Este deja folosită de aproximativ 500 de colegi din depourile de tramvai, autobaze și troleibuze.</p>
+    <div class="rezumat">
+      <div><span>⏱️</span><p><strong>Angajatul își știe exact tura și orele,</strong> direct din indicatorii de ore ai depoului, fără calcule de mână.</p></div>
+      <div><span>🧮</span><p><strong>Orele se socotesc după aceleași reguli ca pe fluturaș:</strong> ore de tură, pontaj, rezervă, concediu, weekend, zile consecutive, ore de noapte.</p></div>
+      <div><span>🔔</span><p><strong>Notificări înainte de fiecare tură,</strong> chiar și cu aplicația închisă: mai puține întârzieri și intrări ratate.</p></div>
+      <div><span>📋</span><p><strong>Repartizarea lunară a depoului ajunge singură în telefonul fiecăruia,</strong> după numărul de serviciu.</p></div>
+    </div>
+    <div class="cifre">
+      <div class="cifra" style="border-color:var(--teal)"><div class="v" style="color:var(--teal)">~500</div><div class="n">colegi care o folosesc</div></div>
+      <div class="cifra" style="border-color:var(--chihlimbar)"><div class="v" style="color:var(--chihlimbar)">8 + 9</div><div class="n">depouri de tramvai și autobaze acoperite</div></div>
+      <div class="cifra" style="border-color:var(--albastru)"><div class="v" style="color:var(--albastru)">0 lei</div><div class="n">cost pentru STB</div></div>
+      <div class="cifra" style="border-color:var(--mov)"><div class="v" style="color:var(--mov)">100%</div><div class="n">date stocate în Uniunea Europeană</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEMA -->
+<section id="problema">
+  <div class="wrap">
+    <span class="eticheta">Problema rezolvată</span>
+    <h2>De la hârtie și calcule de mână, la telefon</h2>
+    <p class="intro">Aplicația a pornit de la nevoile reale ale colegilor de la depou. Aproape fiecare funcție a fost cerută de ei.</p>
+    <div class="comparatie">
+      <div class="coloana azi">
+        <h3>Până acum</h3>
+        <ul>
+          <li>Programul se ține pe hârtie sau în poze cu avizierul.</li>
+          <li>Orele din indicator se caută și se adună de mână.</li>
+          <li>Angajatul nu poate verifica ușor dacă pontajul și salariul sunt corecte.</li>
+          <li>Repartizarea lunară se citește doar la depou.</li>
+          <li>Ora de intrare în tură depinde de memorie.</li>
+          <li>Anunțurile ajung greu la toți colegii, mai ales la cei de pe traseu.</li>
+        </ul>
+      </div>
+      <div class="coloana cu">
+        <h3>Cu Program STB</h3>
+        <ul>
+          <li>Programul pe toată luna, în telefon, salvat automat.</li>
+          <li>Orele vin singure din indicatorii depoului.</li>
+          <li>Totalul lunii se vede oricând, calculat ca pe fluturaș, plus raport PDF.</li>
+          <li>Repartizarea se încarcă o dată și se completează la fiecare.</li>
+          <li>Alertă pe telefon înainte de tură și seara pentru ziua următoare.</li>
+          <li>Anunțuri trimise instant pe telefon tuturor colegilor, sau afișate în aplicație doar celor dintr-un depou.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FUNCȚII -->
+<section id="functii">
+  <div class="wrap">
+    <span class="eticheta">Ce face aplicația</span>
+    <h2>Funcțiile principale</h2>
+    <div class="functii">
+      <div class="functie"><div class="ic">📅</div><h3>Program de lucru</h3><p>Ture cu linia, turul și orele din indicator; locul schimbului și ieșirea din depou. Liber, CO, CM, rezervă, PM, VMA, detașare, fracții, zile speciale.</p></div>
+      <div class="functie"><div class="ic">🧮</div><h3>Calculul orelor</h3><p>Ore de tură, pontaj, rezervă și concediu, comparate cu norma lunii. Weekenduri, sărbători legale, zile consecutive, ore de noapte, zile de CO rămase.</p></div>
+      <div class="functie"><div class="ic">📋</div><h3>Repartizarea depoului</h3><p>Foaia lunară, inclusiv în PDF, se încarcă o singură dată; fiecare angajat își găsește rândul după numărul de serviciu.</p></div>
+      <div class="functie"><div class="ic">📄</div><h3>Raport PDF</h3><p>Pontajul pe una sau mai multe luni, zi cu zi, cu totaluri. Se poate salva, trimite pe mail sau tipări.</p></div>
+      <div class="functie"><div class="ic">🔔</div><h3>Notificări</h3><p>Până la 4 alerte înainte de fiecare tură și un mesaj seara cu tura de mâine. Funcționează cu aplicația închisă.</p></div>
+      <div class="functie"><div class="ic">🚃</div><h3>Mers live</h3><p>Poziția tramvaielor pe linie, în timp real, pentru a vedea unde e vagonul de preluat la schimb.</p></div>
+      <div class="functie"><div class="ic">☁️</div><h3>Salvare în cloud</h3><p>Programul nu se pierde la schimbarea telefonului; copie de siguranță zilnică, păstrată 7 zile.</p></div>
+      <div class="functie"><div class="ic">🛠️</div><h3>Administrare</h3><p>Panou de administrare: indicatori de ore, repartizări, anunțuri, responsabili pe depou, verificarea numerelor de serviciu, statistici de folosire.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- BENEFICII STB -->
+<section id="beneficii" class="beneficii">
+  <div class="wrap">
+    <span class="eticheta">Ce câștigă STB</span>
+    <h2>Beneficii pentru societate</h2>
+    <ul class="lista-b">
+      <li><div class="nr">⏰</div><div><h3>Disciplină la intrarea în tură</h3><p>Alertele automate înainte de tură reduc întârzierile și turele ratate, deci și vehiculele care nu ies la timp pe traseu.</p></div></li>
+      <li><div class="nr">⚖️</div><div><h3>Mai puține nemulțumiri legate de ore și salariu</h3><p>Angajatul își vede singur orele, calculate după aceleași reguli ca la salarizare. Diferențele reale se descoperă repede, iar suspiciunile nefondate dispar.</p></div></li>
+      <li><div class="nr">📣</div><div><h3>Comunicare rapidă cu personalul de pe teren</h3><p>Un anunț ajunge în câteva secunde ca notificare pe telefonul tuturor, sau apare în aplicație numai celor dintr-un depou: schimbări de indicatori, devieri, ședințe, instructaje.</p></div></li>
+      <li><div class="nr">🗂️</div><div><h3>Mai puțină muncă la dispecerat și la depou</h3><p>Repartizarea se distribuie digital. Mai puține telefoane și întrebări de tipul „ce tură am mâine?”.</p></div></li>
+      <li><div class="nr">💶</div><div><h3>Digitalizare fără cheltuieli</h3><p>Aplicația există deja, funcționează și este testată zilnic de angajați. Nu necesită achiziție, licențe sau echipamente.</p></div></li>
+      <li><div class="nr">🤝</div><div><h3>Imagine și motivare</h3><p>Un proiect pornit din interior, de la un angajat, arată că STB își susține oamenii care vin cu soluții.</p></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ACOPERIRE -->
+<section id="acoperire">
+  <div class="wrap">
+    <span class="eticheta">Acoperire</span>
+    <h2>Unde se folosește deja</h2>
+    <p class="intro">Indicatorii de ore sunt încărcați pentru toate depourile de tramvai. La autobuze și troleibuze, orele vin din repartizarea autobazei.</p>
+    <h3 style="margin-top:20px">🚃 Depouri de tramvai</h3>
+    <div class="depouri">
+      <span class="dep tr">Dudești</span><span class="dep tr">Giurgiu</span><span class="dep tr">Victoria</span><span class="dep tr">Titan</span>
+      <span class="dep tr">Alexandria</span><span class="dep tr">Colentina</span><span class="dep tr">Militari</span><span class="dep tr">București Noi</span>
+    </div>
+    <h3>🚌 Autobaze</h3>
+    <div class="depouri">
+      <span class="dep ab">Nordului</span><span class="dep ab">Titan</span><span class="dep ab">Obregia</span><span class="dep ab">Militari</span>
+      <span class="dep ab">Giurgiului</span><span class="dep ab">Floreasca</span><span class="dep ab">Ferentari</span><span class="dep ab">Alexandria</span><span class="dep ab">Berceni</span>
+    </div>
+    <h3>🚎 Troleibuze</h3>
+    <div class="depouri">
+      <span class="dep tb">Bujoreni</span><span class="dep tb">Vatra Luminoasă</span>
+    </div>
+  </div>
+</section>
+
+<!-- DATE ȘI SIGURANȚĂ -->
+<section id="date">
+  <div class="wrap">
+    <span class="eticheta">Date personale și siguranță</span>
+    <h2>Gândită de la început conform GDPR</h2>
+    <p class="intro">Aplicația păstrează doar strictul necesar și explică totul pe înțeles într-o pagină de confidențialitate publică.</p>
+    <table class="tabel">
+      <thead><tr><th>Subiect</th><th>Cum este rezolvat</th></tr></thead>
+      <tbody>
+        <tr><td>Ce date se păstrează</td><td>Numărul de serviciu, depoul și programul de lucru. <strong>Nu</strong> se cer nume, CNP, adresă sau număr de telefon.</td></tr>
+        <tr><td>Unde stau datele</td><td>Google Firebase, pe servere din Belgia (Uniunea Europeană), cu legătură securizată prin Cloudflare.</td></tr>
+        <tr><td>Cine are acces</td><td>Doar administratorul. Programul unui coleg se vede numai cu acordul lui, fără posibilitate de modificare.</td></tr>
+        <tr><td>Protecție la abuz</td><td>Numărul de serviciu e legat de telefon și verificat cu repartizarea; un număr folosit de altcineva se blochează.</td></tr>
+        <tr><td>Drepturile angajatului</td><td>Își poate descărca sau șterge oricând datele, direct din aplicație. Datele nefolosite 6 luni se șterg automat.</td></tr>
+        <tr><td>Reclame / vânzare de date</td><td>Niciuna. Aplicația nu are reclame și nu transmite date către terți.</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:16px;font-size:.92rem">Pagina de confidențialitate: <a href="https://programstb.com/confidentialitate.html">programstb.com/confidentialitate.html</a></p>
+  </div>
+</section>
+
+<!-- PROPUNERE -->
+<section id="propunere" class="propunere">
+  <div class="wrap">
+    <span class="eticheta">Propunerea mea</span>
+    <h2>Ce vă propun</h2>
+    <p class="intro">Aplicația funcționează astăzi ca proiect personal și poartă mențiunea „aplicație neoficială”. Vă propun următoarele:</p>
+    <div class="optiuni" style="grid-template-columns:1fr">
+      <div class="optiune">
+        <h3>Acord și recunoaștere</h3>
+        <ul>
+          <li>Acordul conducerii ca aplicația să fie folosită și recomandată în depouri și autobaze.</li>
+          <li>Posibilitatea de a o prezenta colegilor (avizier, instructaje).</li>
+          <li>Primirea indicatorilor de ore și a repartizărilor în format digital, direct de la sursă.</li>
+          <li>Aplicația rămâne gratuită și o întrețin în continuare eu.</li>
+        </ul>
+        <p class="cere">Necesită: un acord scris și o persoană de contact în conducere.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL -->
+<footer id="contact">
+  <div class="wrap">
+    <span class="eticheta">Contact</span>
+    <h2>Vă invit să o încercați</h2>
+    <p>Scanați codul cu camera telefonului sau deschideți adresa de mai jos. Aplicația poate fi încercată imediat, fără cont.</p>
+    <div class="qr-card">
+      <div class="qr-box" id="qr"></div>
+      <div class="qr-txt">
+        <div class="disp" style="font-size:1.5rem">programstb.com</div>
+        <div class="contact">
+          <span><b>Andrei Neagoe</b></span>
+          <span>Vatman · Depoul Dudești</span>
+        </div>
+      </div>
+    </div>
+    <div class="butoane fara-tipar">
+      <a class="buton" href="https://programstb.com/">Deschide aplicația</a>
+      <button class="buton contur" type="button" onclick="window.print()" style="cursor:pointer">🖨️ Salvează ca PDF</button>
+    </div>
+    <p class="nota">Program STB 2026 este în prezent un proiect personal și nu este o aplicație oficială a STB S.A. Denumirea STB este folosită doar pentru a descrie scopul aplicației. Toate informațiile despre ture și ore provin din indicatorii de ore și din repartizările depourilor.</p>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+  var el = document.getElementById('qr');
+  if(!el) return;
+  if(typeof QRCode === 'undefined'){
+    el.innerHTML = '<div style="font:600 .8rem/1.4 \'IBM Plex Sans\',sans-serif;color:#55606f;text-align:center">Deschideți<br>programstb.com</div>';
+    return;
+  }
+  new QRCode(el, { text:'https://programstb.com/', width:300, height:300, colorDark:'#07101d', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.M });
+})();
+</script>
+</body>
+</html>
