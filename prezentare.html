@@ -6,7 +6,7 @@
 <title>Program STB 2026 — programul de lucru în telefon</title>
 <meta name="description" content="Aplicația gratuită pentru vatmani și șoferi STB: ture cu orele din indicator, calculul orelor ca pe fluturaș, raport PDF, notificări înainte de tură, repartizarea de la depou și programul colegilor.">
 <meta property="og:title" content="Program STB 2026">
-<meta property="og:description" content="Ture, ore calculate singure, raport PDF, notificări, repartizare. Gratuit, făcută de un coleg.">
+<meta property="og:description" content="Folosită deja de aproximativ 500 de colegi. Ture, ore calculate singure, raport PDF, notificări, repartizare, Mers live. Gratuit, făcută de un coleg.">
 <meta property="og:image" content="https://programstb.com/Icons/banner-sus.jpg">
 <meta name="theme-color" content="#07101d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -206,6 +206,22 @@ a{color:var(--teal)}
 .lista li{display:grid;grid-template-columns:30px 1fr;gap:10px}
 .lista li p{margin:0}
 
+/* ── câți o folosesc ── */
+.folosita{display:inline-flex;align-items:center;gap:10px;margin:0 0 18px;padding:8px 14px 8px 10px;border-radius:999px;
+  background:rgba(39,224,189,.1);border:1px solid rgba(39,224,189,.4);color:#d9fff5;font-size:.95rem}
+.folosita b{font-family:"Barlow Condensed",sans-serif;font-size:1.35rem;color:var(--teal);line-height:1}
+
+/* ── mers live ── */
+.linie-live{background:var(--noapte2);border:1px solid #1f3149;border-radius:18px;padding:16px 14px;margin:24px 0 8px}
+.linie-live .cap-l{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:.85rem;color:var(--slab)}
+.linie-live .cap-l b{font-family:"Barlow Condensed",sans-serif;font-size:1.4rem;color:#fff}
+.linie-live .punct{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--teal);margin-right:6px;box-shadow:0 0 0 4px rgba(39,224,189,.18)}
+.statii{position:relative;padding-left:22px}
+.statii::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:3px;border-radius:2px;background:#24405f}
+.statie{position:relative;padding:6px 0;font-size:.9rem;color:#c9d4e3;display:flex;justify-content:space-between;gap:10px}
+.statie::before{content:"";position:absolute;left:-20px;top:12px;width:9px;height:9px;border-radius:50%;background:var(--noapte2);border:2px solid #3a5a80}
+.statie .vag{font-family:"IBM Plex Mono",monospace;font-size:.78rem;font-weight:600;color:#04241d;background:var(--teal);border-radius:7px;padding:2px 8px;white-space:nowrap}
+
 /* ── final ── */
 footer{padding:64px 0 80px;text-align:center;background:linear-gradient(180deg,var(--noapte),#050b15)}
 .qr-card{display:flex;gap:20px;align-items:center;justify-content:center;flex-wrap:wrap;margin:26px auto 22px;
@@ -228,6 +244,7 @@ a:focus-visible,.buton:focus-visible{outline:2px solid var(--teal);outline-offse
     <h1>Program<span>STB 2026</span></h1>
     <p class="sub">Programul tău de lucru în telefon. Orele se pun singure, pontajul se face singur.</p>
     <p class="gratis"><b>Gratuit</b>, fără reclame, fără cont din magazin. Merge și fără internet.</p>
+    <p class="folosita"><b>~500</b> de colegi o folosesc deja</p>
     <div class="actiuni">
       <a class="buton" href="https://programstb.com/">Deschide aplicația</a>
       <a class="link-mic" href="#incepe">sau scanează codul de la final</a>
@@ -242,8 +259,10 @@ a:focus-visible,.buton:focus-visible{outline:2px solid var(--teal);outline-offse
   <a href="#ore">Calculul orelor</a>
   <a href="#pdf">Raportul PDF</a>
   <a href="#notificari">Notificări</a>
+  <a href="#live">Mers live</a>
   <a href="#colegi">Programul colegilor</a>
   <a href="#cloud">Cloud</a>
+  <a href="#altele">Mai are</a>
 </nav>
 
 <!-- PRIMII PAȘI -->
@@ -259,7 +278,7 @@ a:focus-visible,.buton:focus-visible{outline:2px solid var(--teal);outline-offse
       </li>
       <li>
         <h3>Alegi tramvai sau autobuz, apoi depoul</h3>
-        <p>Dudești, Giurgiu, Victoria, Titan, Alexandria, Colentina, Militari, București Noi, plus autobuze și troleibuze. Depoul se poate schimba oricând din antet.</p>
+        <p><strong>Tramvai:</strong> Dudești, Giurgiu, Victoria, Titan, Alexandria, Colentina, Militari, București Noi. <strong>Autobuz:</strong> Nordului, Titan, Obregia, Militari, Giurgiului, Floreasca, Ferentari, Alexandria, Berceni. <strong>Troleibuz:</strong> Bujoreni, Vatra Luminoasă. Depoul se poate schimba oricând din antet.</p>
       </li>
       <li>
         <h3>Alegi schimbul: Sch1 sau Sch2</h3>
@@ -492,6 +511,37 @@ a:focus-visible,.buton:focus-visible{outline:2px solid var(--teal);outline-offse
   </div>
 </section>
 
+<!-- MERS LIVE -->
+<section id="live">
+  <div class="wrap">
+    <h2>Mers live: vezi unde e tramvaiul</h2>
+    <p class="intro">Alegi linia și vezi tramvaiele pe traseu, după poziția lor reală, actualizată la câteva secunde. Știi unde e vagonul pe care îl preiei la schimb, fără să suni pe nimeni.</p>
+
+    <div class="linie-live" aria-label="Exemplu Mers live">
+      <div class="cap-l"><b>Linia 1</b><span><span class="punct"></span>în timp real</span></div>
+      <div class="statii">
+        <div class="statie"><span>Vatra Luminoasă</span></div>
+        <div class="statie"><span>Piața Iancului</span><span class="vag">🚃 408</span></div>
+        <div class="statie"><span>Bd. Ferdinand</span></div>
+        <div class="statie"><span>Bucur Obor</span><span class="vag">🚃 386</span></div>
+        <div class="statie"><span>Lizeanu</span></div>
+      </div>
+    </div>
+    <p class="legenda-foto">Exemplu. Tramvaiele se mută singure pe linie, pe ambele sensuri.</p>
+
+    <div class="doua">
+      <div class="bloc">
+        <h3>Alerte de trafic</h3>
+        <p>Devierile și blocajele din fluxul public de trafic, actualizate singure. Atingi un tramvai din alertă și îl vezi direct în Mers live.</p>
+      </div>
+      <div class="bloc">
+        <h3>Info STB</h3>
+        <p>Din meniu ajungi direct la info.stb.ro, cu traficul și sosirile în timp real, fără să ieși din aplicație.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- PROGRAMUL COLEGILOR -->
 <section id="colegi">
   <div class="wrap">
@@ -543,11 +593,36 @@ a:focus-visible,.buton:focus-visible{outline:2px solid var(--teal);outline-offse
   </div>
 </section>
 
+<!-- MAI ARE -->
+<section id="altele">
+  <div class="wrap">
+    <h2>Și încă ceva</h2>
+    <div class="doua">
+      <div class="bloc">
+        <h3>📻 Radio în aplicație</h3>
+        <p>Posturile românești de radio, fără reclame în aplicație. Pornești cu un buton, la pauză sau la capăt de linie.</p>
+      </div>
+      <div class="bloc">
+        <h3>✉️ Scrie-i adminului</h3>
+        <p>O problemă, o oră greșită în indicator, o idee? Din meniu scrii direct și primești răspuns în aplicație.</p>
+      </div>
+      <div class="bloc">
+        <h3>📤 Trimite aplicația</h3>
+        <p>Din meniu o trimiți unui coleg pe WhatsApp sau oriunde, dintr-o apăsare.</p>
+      </div>
+      <div class="bloc">
+        <h3>🔒 Datele tale</h3>
+        <p>Nu se cer nume, CNP sau număr de telefon. Datele stau în Uniunea Europeană și le poți descărca sau șterge oricând, din aplicație.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- FINAL -->
 <footer id="incepe">
   <div class="wrap">
     <h2>Pune-o pe telefon</h2>
-    <p>Gratuit, fără reclame. Dacă îți e de folos, dă mai departe colegilor de la depou.</p>
+    <p>Gratuit, fără reclame. Deja aproximativ <strong>500 de colegi</strong> o au pe telefon. Dacă îți e de folos, dă mai departe colegilor de la depou.</p>
     <div class="qr-card">
       <div class="qr-box" id="qr"></div>
       <div class="qr-txt">
