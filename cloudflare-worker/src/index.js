@@ -5499,6 +5499,9 @@ async function admin(request, env) {
       const d = await getJSON(urlBroadcast(env, `${AST}.json`)).catch(() => undefined);
       if (d === undefined) return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi lista.' } };
       const lista = [], luna = acumRo().data.slice(0, 7);
+      // [15.09] ca la verificarea numărului: întâi luna asta, apoi luna trecută și cea viitoare
+      // (autobaza lui poate să nu fi urcat încă foaia lunii noi)
+      const luniCaut = [luna, ..._luniVerif().filter(l => l !== luna)];
       for (const [nr, dv] of Object.entries(d || {})) for (const [dev, a] of Object.entries(dv || {})) {
         if (!a || a.respins) continue;
         lista.push({ nr, dev: dev.slice(0, 64), la: a.la || 0, vazut: a.vazut || 0, motiv: a.motiv || '', dep: a.dep || '', baza: a.baza || '', sch: a.sch || 0, plat: a.plat || '', inst: !!a.inst, v: a.v || '', schFoaie: a.schFoaie || '' });
@@ -5506,8 +5509,12 @@ async function admin(request, env) {
       lista.sort((x, y) => y.la - x.la);
       // pe ce alt depou e numărul (luna asta), pentru primele 15
       await Promise.all(lista.slice(0, 15).map(async x => {
-        const g = await Promise.all(DEPOURI.map(dp => getJSON(urlBroadcast(env, `repartizare/${dp}/${luna}/lunara/${x.nr}.json`)).then(v => v ? dp : null).catch(() => null)));
-        x.peFoi = g.filter(Boolean);
+        x.peFoi = [];
+        for (const l of luniCaut) {
+          const g = await Promise.all(DEPOURI.map(dp => getJSON(urlBroadcast(env, `repartizare/${dp}/${l}/lunara/${x.nr}.json`)).then(v => v ? dp : null).catch(() => null)));
+          x.peFoi = g.filter(Boolean);
+          if (x.peFoi.length) { if (l !== luna) x.peFoiLuna = l; break; }
+        }
         const pr = await getJSON(urlBroadcast(env, `proprietar/${x.nr}.json`)).catch(() => null);
         x.tinut = Object.keys(_normalizeaza(pr).disp).length;
       }));
