@@ -2828,6 +2828,24 @@ async function _blocatLegat(env, nr, dev, IST) {
   }
   return null;
 }
+// [15.10] Ce știm despre un număr de pe un avertisment, ca adminul să nu blocheze un coleg nevinovat:
+//   alte = câte telefoane are numărul în afara celor din hEu (telefonul / telefoanele cercetate)
+//   eu   = numărul e înregistrat și pe telefonul cercetat
+//   peFoaie = e pe repartizarea depoului lui (luna asta sau trecută); null = nu știm depoul
+async function _nrProfil(env, n, hEu) {
+  const [pr, st] = await Promise.all([getJSON(urlBroadcast(env, `proprietar/${n}.json`)).catch(() => null), getJSON(urlBroadcast(env, `stats/${n}.json`)).catch(() => null)]);
+  const hs = await Promise.all(Object.keys(_normalizeaza(pr).disp).map(d => _dispAmprenta(d)));
+  const alte = hs.filter(h => !hEu.has(h)).length, eu = hs.some(h => hEu.has(h));
+  const dep = st && DEPOURI.includes(st.depot) ? st.depot : '';
+  let peFoaie = null;
+  if (dep) {
+    const deps = (dep === 'autobuze' || dep === 'troleibuze') ? ['autobuze', 'troleibuze'] : [dep];
+    const luni = _luniVerif().slice(0, 2);
+    const g = await Promise.all(deps.flatMap(d => luni.map(l => getJSON(urlBroadcast(env, `repartizare/${d}/${l}/lunara/${n}.json`)).catch(() => undefined))));
+    peFoaie = g.some(v => v) ? true : (g.some(v => v === undefined) ? null : false);
+  }
+  return { alte, eu, peFoaie };
+}
 async function alerteNrLista(env) {
   const [d, bl] = await Promise.all([getJSON(urlBroadcast(env, 'alerteNr.json')).catch(() => undefined), citesteBlocati(env)]);
   if (d === undefined) return null;
@@ -2843,21 +2861,31 @@ async function alerteNrLista(env) {
     lista.push({ id, la: a.la || 0, plat: a.plat || '', inst: !!a.inst, numere, blocat: blocatNou });
   }
   lista.sort((x, y) => y.la - x.la);
+  // [15.10] la primele 10: fiecare număr e al altui telefon? e pe foaie?
+  await Promise.all(lista.slice(0, 10).map(a => Promise.all(a.numere.slice(0, 6).map(async x => {
+    try { Object.assign(x, await _nrProfil(env, x.nr, new Set([String(a.id).slice(1)]))); } catch (e) {}
+  }))));
   return lista.slice(0, 30);
 }
 async function nrLegate(env, nr) {
   const chei = await getJSON(urlBroadcast(env, `istNr/${nr}.json`)).catch(() => null) || {};
   const bl = await citesteBlocati(env) || {};
+  // [15.10] telefoanele numărului: un telefon străin care doar a ÎNCERCAT numărul nu e „al lui”
+  const hEu = new Set(await Promise.all(Object.keys(_normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null)).disp).map(d => _dispAmprenta(d))));
   const rez = {};
   for (const k of Object.keys(chei).slice(0, 10)) {
     const g = await getJSON(urlBroadcast(env, (k[0] === 'd' ? `istDev/${k.slice(1)}` : `istAmp/${k}`) + '.json')).catch(() => null) || {};
+    const strain = k[0] === 'd' && !hEu.has(k.slice(1));
     for (const [n, x] of Object.entries(g)) {
       if (n === nr || !x) continue;
       const prin = k[0] === 'd' ? 'tel' : 'amp';
-      if (!rez[n] || (rez[n].prin === 'amp' && prin === 'tel')) rez[n] = { nr: n, p: x.p || 0, u: x.u || 0, s: x.s || '', prin, blocat: bl[n] ? (bl[n].fel || 'numar') : '' };
+      if (!rez[n] || (rez[n].prin === 'amp' && prin === 'tel')) rez[n] = { nr: n, p: x.p || 0, u: x.u || 0, s: x.s || '', prin, strain, blocat: bl[n] ? (bl[n].fel || 'numar') : '' };
+      else if (rez[n].strain && !strain) rez[n].strain = false;
     }
   }
-  return Object.values(rez).sort((x, y) => x.p - y.p);
+  const L = Object.values(rez).sort((x, y) => x.p - y.p).slice(0, 12);
+  await Promise.all(L.map(async x => { try { Object.assign(x, await _nrProfil(env, x.nr, hEu)); } catch (e) {} }));
+  return L;
 }
 // Telefonul e în așteptare pe numărul ăsta (nerespins)?
 async function _dispAsteapta(env, nr, dev) {
