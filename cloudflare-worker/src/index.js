@@ -6299,15 +6299,34 @@ async function admin(request, env) {
       const nr = nrSauCheie(cerere.nr);   // [14.1]
       if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
 
-      const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati'];
+      // [15.10] „Șterge complet” șterge și urmele: numele din chat, istoricul telefoanelor care au
+      // încercat numărul („Telefoanele lui au mai folosit”), așteptarea, aprobarea, avertismentele
+      const istChei = await getJSON(urlBroadcast(env, `istNr/${nr}.json`)).catch(() => null) || {};
+      // ca la „Șterge-mi datele” din aplicație: conversația cu adminul, accesele, numele din chat, agenda, foile trimise
+      try { await _stergeNr(env, nr, true); } catch (e) {}
+      const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati',
+        'istNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', `limite/autoadd`];
       const sterse = [];
       const esuate = [];
       await Promise.all(cai.map(async (cale) => {
         try {
           const r = await fetch(urlBroadcast(env, `${cale}/${nr}.json`), { method: 'DELETE' });
-          if (r.ok) sterse.push(cale); else esuate.push(`${cale}:${r.status}`);
+          if (r.ok) sterse.push(cale.replace('adminJetoane/_chatNume', 'numele din chat')); else esuate.push(`${cale}:${r.status}`);
         } catch (e) { esuate.push(`${cale}:${e.message}`); }
       }));
+      // numărul scos din istoricul fiecărui telefon care l-a încercat și din avertismentele lor
+      await Promise.all(Object.keys(istChei).slice(0, 20).map(async k => {
+        if (!/^[a-zA-Z0-9_-]{4,40}$/.test(k)) return;
+        if (k[0] === 'd') {
+          const h = k.slice(1);
+          await _fbPut(env, `istDev/${h}/${nr}`, null).catch(() => {});
+          await _fbPut(env, `alerteNr/d${h}/numere/${nr}`, null).catch(() => {});
+          // avertismentul rămas cu un singur număr nu mai are rost
+          const a = await getJSON(urlBroadcast(env, `alerteNr/d${h}.json`)).catch(() => null);
+          if (a && Object.keys(a.numere || {}).length < 2 && !a.blocat) await _fbPut(env, `alerteNr/d${h}`, null).catch(() => {});
+        } else await _fbPut(env, `istAmp/${k}/${nr}`, null).catch(() => {});
+      }));
+      if (Object.keys(istChei).length) sterse.push('istoricul telefoanelor');
       return { status: 200, corp: { ok: true, nr, sterse, esuate } };
     }
 
