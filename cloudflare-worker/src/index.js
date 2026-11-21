@@ -2569,6 +2569,7 @@ async function _revendica(request, env, ctx) {
           body: JSON.stringify({ locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length)), disp }) });
         if (r.ok) {
           if (ast) await _fbPut(env, `${AST}/${nr}/${dev}`, null).catch(() => {});
+          await _istTelNoteaza(env, nr, { fa: 'auto', plat: T.plat || '' });   // [15.11]
           await _rezScrie(env, { fel: 'ok', nr, cine: 'automat', ce: 'adăugat singur și pe telefonul nou',
             citat: `același telefon (${T.plat || '?'}${T.inst ? ', instalată' : ', din browser'}), aceeași conexiune de internet` }).catch(() => {});
           return { status: 200, corp: { ok: true, stare: 'revendicat', automat: true } };
@@ -2827,6 +2828,32 @@ async function _blocatLegat(env, nr, dev, IST) {
     if (b && b.fel === 'definitiv') return { nr: n, prin };
   }
   return null;
+}
+// [15.11] ISTORICUL TELEFOANELOR UNUI NUMĂR: fiecare cerere de telefon nou / încă un telefon și
+// fiecare mutare / adăugare (de admin sau singură). Se păstrează un an, ca adminul să vadă dacă
+// numărul a mai cerut de câteva ori. Pentru ce s-a întâmplat înainte de 15.11 se adaugă și ce e
+// în „Rezolvate recent” (30 de zile).
+async function _istTelNoteaza(env, nr, e) {
+  nr = nrCurat(nr); if (!nr) return;
+  const la = Date.now(), id = la.toString(36) + Math.random().toString(36).slice(2, 5);
+  await _fbPut(env, `istTel/${nr}/${id}`, Object.assign({ la }, e)).catch(() => {});
+}
+async function istTelLista(env, nr) {
+  const d = await getJSON(urlBroadcast(env, `istTel/${nr}.json`)).catch(() => null) || {};
+  const an = Date.now() - 365 * 864e5, L = [];
+  for (const [id, x] of Object.entries(d)) {
+    if (!x || !(Number(x.la) > an)) { await _fbPut(env, `istTel/${nr}/${id}`, null).catch(() => {}); continue; }
+    L.push({ la: Number(x.la), fa: String(x.fa || ''), fel: String(x.fel || ''), plat: String(x.plat || ''), cine: String(x.cine || '') });
+  }
+  const rz = await getJSON(urlBroadcast(env, `${REZ_CALE}.json`)).catch(() => null) || {};
+  for (const x of Object.values(rz)) {
+    if (!x || x.nr !== nr || !/telefonul nou/.test(String(x.ce || ''))) continue;
+    if (L.some(y => Math.abs(y.la - Number(x.la)) < 5 * 60000 && y.fa !== 'cerere')) continue;
+    const fa = /adăugat singur/.test(x.ce) ? 'auto' : /adăugat/.test(x.ce) ? 'adauga' : 'muta';
+    L.push({ la: Number(x.la) || 0, fa, fel: '', plat: '', cine: String(x.cine || '') });
+  }
+  L.sort((a, b) => b.la - a.la);
+  return L.slice(0, 40);
 }
 // [15.10] Ce știm despre un număr de pe un avertisment, ca adminul să nu blocheze un coleg nevinovat:
 //   alte = câte telefoane are numărul în afara celor din hEu (telefonul / telefoanele cercetate)
@@ -4390,6 +4417,7 @@ async function cerereAdmin(request, env) {
   const vechi = Object.entries(toate).find(([id, x]) => x && x.cerere && x.nr === nr && x.dev === dev);
   const id = vechi ? vechi[0] : _id12();
   await _fbPut(env, `mesajeAdmin/${id}`, { cerere: motiv, nr, dev, fel, text, la: Date.now(), plat: _txt(c.plat, 20), dep: _txt(c.dep, 20), v: _txt(c.v, 10), ...info });
+  if (motiv === 'ocupat' && !vechi) await _istTelNoteaza(env, nr, { fa: 'cerere', fel, plat: _txt(c.plat, 20) });   // [15.11]
   const ce = motiv === 'ocupat' ? ({ telefon_nou: 'și-a schimbat telefonul', al_doilea: 'vrea încă un telefon', altceva: 'număr ocupat' }[fel]) : 'e blocat';
   await _anuntaAdminii(env, (motiv === 'ocupat' ? '📵 ' : '🔒 ') + nr + ' — ' + ce, text ? text.slice(0, 120) : 'Rezolvi din panou, De rezolvat.', 'cerere-admin').catch(() => 0);
   return { status: 200, corp: { ok: true } };
@@ -4973,7 +5001,7 @@ async function _rezLista(env) {
 // Acțiuni care doar citesc: nu intră în jurnal.
 const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste', 'convFisier',
-  'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'statsToate', 'securitate', 'alerteNrLista', 'nrLegate', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
+  'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'statsToate', 'securitate', 'alerteNrLista', 'nrLegate', 'istTel', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine', 'rulareStare']);
 // Doar adminul principal.
 const ADM2_INTERZIS = new Set(['adminiLista', 'adminNou', 'adminCodNou', 'adminTaie', 'adminOpriri', 'adminJurnal', 'stergeToateDispozitivele']);
@@ -5515,6 +5543,7 @@ async function admin(request, env) {
           ? { locuri: 1, disp: { [dev]: { la: acum, ultima: acum } } }
           : { locuri: Math.min(5, Math.max(locuri, Object.keys(disp).length + 1)), disp: Object.assign({}, disp, { [dev]: { la: acum, ultima: acum } }) };
         await _fbPut(env, `proprietar/${nr}`, nou);
+        await _istTelNoteaza(env, nr, { fa: cerere.fa, plat: _txt(m.plat, 20), cine: adm2 ? String(adm2.nr) : 'admin' });   // [15.11]
       } else if (cerere.fa === 'deblocheaza') {
         await _fbPut(env, `blocati/${nr}`, null);
         try { const bt = await _dispBlocat(env, dev); if (bt && bt.nr) await _fbPut(env, `blocati/${nrCurat(bt.nr)}`, null); } catch (e) {}   // [2.9]
@@ -5578,6 +5607,10 @@ async function admin(request, env) {
       const lista = await alerteNrLista(env);
       if (!lista) return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi avertismentele.' } };
       return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'istTel': {   // [15.11]
+      const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
+      return { status: 200, corp: { ok: true, nr, lista: await istTelLista(env, nr) } };
     }
     case 'nrLegate': {
       const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
@@ -6305,7 +6338,7 @@ async function admin(request, env) {
       // ca la „Șterge-mi datele” din aplicație: conversația cu adminul, accesele, numele din chat, agenda, foile trimise
       try { await _stergeNr(env, nr, true); } catch (e) {}
       const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati',
-        'istNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', `limite/autoadd`];
+        'istNr', 'istTel', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', `limite/autoadd`];
       const sterse = [];
       const esuate = [];
       await Promise.all(cai.map(async (cale) => {
