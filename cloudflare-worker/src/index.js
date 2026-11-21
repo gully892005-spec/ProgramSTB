@@ -2742,9 +2742,15 @@ async function blocatStare(request, env) {
   const nr = nrCurat(c && c.nr); if (!nr) return { status: 400, corp: { ok: false } };
   // [15.06] limita stă în memoria worker-ului, nu în Firebase: o cerere = o singură citire în baza de date
   if (_blocLim(_ipCheie(request))) return { status: 429, corp: { ok: false } };
-  const b = await getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => undefined);
+  // [15.15] și mutarea făcută de admin (depoul / autobaza de pe foaie), dacă există
+  const [b, m] = await Promise.all([getJSON(urlBroadcast(env, `blocati/${nr}.json`)).catch(() => undefined), getJSON(urlBroadcast(env, `mutaNr/${nr}.json`)).catch(() => null)]);
   if (b === undefined) return { status: 503, corp: { ok: false } };
-  return { status: 200, corp: { ok: true, b: b || null } };
+  let muta = null;
+  if (m && m.dep && m.id) {
+    if (Date.now() - (Number(m.la) || 0) > 30 * 864e5) await _fbPut(env, `mutaNr/${nr}`, null).catch(() => {});
+    else muta = { dep: m.dep, baza: m.baza || '', id: m.id };
+  }
+  return { status: 200, corp: { ok: true, b: b || null, ...(muta ? { muta } : {}) } };
 }
 async function chatRecent(request, env) {
   const { e, c, nr, dev } = await _citesteCerereTel(request); if (e) return e;
@@ -4922,7 +4928,7 @@ function _adm2Detaliu(c) {
 // acțiunea îl șterge. Se scrie doar dacă acțiunea a reușit. 30 de zile.
 // ══════════════════════════════════════════════════════════════
 const REZ_CALE = 'adminJetoane/_rezolvate', REZ_ZILE = 30;
-const REZ_ACTIUNI = new Set(['aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'blocheazaGrup', 'alerteNrRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
+const REZ_ACTIUNI = new Set(['mutaColeg', 'aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'blocheazaGrup', 'alerteNrRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
   'indicatoriAproba', 'indicatoriRespinge', 'raportOreInchide', 'trimiteGata']);
 const _rzT = (t, n) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, n || 140);
 async function _rezContext(env, c) {
@@ -4949,6 +4955,7 @@ async function _rezContext(env, c) {
     if (c.fa === 'muta') return { fel: 'ok', nr, ce: `mutat la ${IND_NUME[c.dep] || c.dep}${c.baza ? ' · ' + c.baza : ''} și aprobat`, citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
     return { fel: c.fa === 'aproba' ? 'ok' : 'nu', nr, ce: c.fa === 'aproba' ? 'număr în așteptare — aprobat' : 'număr în așteptare — respins', citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
   }
+  if (a === 'mutaColeg') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: `mutat de admin la ${IND_NUME[c.dep] || c.dep}${c.baza ? ' · ' + c.baza : ''} (după foaie)` };   // [15.15]
   if (a === 'nrCorect') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: c.fa === false ? 'scos din „numere corecte”' : 'marcat „număr corect” (nu e pe foaie)' };
   if (a === 'blocheazaGrup') { const L = (Array.isArray(c.numere) ? c.numere : []).map(nrCurat).filter(Boolean); return { fel: 'nu', nr: L[0] || '', ce: `blocate împreună (același telefon): ${L.join(', ')}` }; }
   if (a === 'alerteNrRezolva') {
@@ -5607,6 +5614,14 @@ async function admin(request, env) {
       const lista = await alerteNrLista(env);
       if (!lista) return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi avertismentele.' } };
       return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'mutaColeg': {   // [15.15] adminul mută un coleg (deja aprobat) pe depoul / autobaza de pe foaie
+      const nr = nrCurat(cerere.nr), dep = String(cerere.dep || '').toLowerCase();
+      const baza = BAZA_RE.test(String(cerere.baza || '')) ? String(cerere.baza) : '';
+      if (!nr || !DEPOURI.includes(dep)) return { status: 400, corp: { ok: false, eroare: 'Număr sau depou greșit.' } };
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await _fbPut(env, `mutaNr/${nr}`, { dep, ...(baza ? { baza } : {}), la: Date.now(), id, de: adm2 ? String(adm2.nr) : 'admin' });
+      return { status: 200, corp: { ok: true, nr, id } };
     }
     case 'istTel': {   // [15.11]
       const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
@@ -6338,7 +6353,7 @@ async function admin(request, env) {
       // ca la „Șterge-mi datele” din aplicație: conversația cu adminul, accesele, numele din chat, agenda, foile trimise
       try { await _stergeNr(env, nr, true); } catch (e) {}
       const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati',
-        'istNr', 'istTel', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', `limite/autoadd`];
+        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', `limite/autoadd`];
       const sterse = [];
       const esuate = [];
       await Promise.all(cai.map(async (cale) => {
