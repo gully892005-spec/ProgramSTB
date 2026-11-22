@@ -1275,6 +1275,7 @@ export default {
   // Rulare automată, la fiecare 5 minute (vezi wrangler.toml)
   async scheduled(event, env, ctx) {
     // [4.3] dacă rularea crapă la jumătate, rămâne scris de ce (îl vezi în „De rezolvat”)
+    ctx.waitUntil(_tbPoate(env).catch(() => {}));   // [15.23] traseele troleibuzelor, o dată la 7 zile
     ctx.waitUntil(ruleaza(env, event && event.scheduledTime).catch(e => _fbPut(env, 'adminJetoane/_rulare', { la: Date.now(), crapat: String(e && e.message || e).slice(0, 200), erori: [] }).catch(() => {})));
   },
 
@@ -1432,6 +1433,10 @@ export default {
       try { const a = await alerteTpbi(env); r = { status: 200, corp: { ok: true, la: a.la, alerte: a.lista, ...(url.searchParams.get('brut') ? { brut: a.brut } : {}) } }; }
       catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
       return new Response(JSON.stringify(r.corp), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
+    }
+    if (url.pathname === '/live/rute-tb') {             // [15.23] traseele troleibuzelor (din GTFS TPBI)
+      let r; try { r = await liveRuteTb(url, env); } catch (e) { r = { status: 502, corp: { ok: false, eroare: String(e && e.message || e).slice(0, 200) } }; }
+      return new Response(JSON.stringify(r.corp), { status: r.status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=600', ...cors } });
     }
     if (url.pathname === '/live/diag') {                // [5.2] diagnostic: coduri de linie necunoscute
       let t; try { t = await mersLiveDiag(); } catch (e) { t = 'Eroare: ' + (e && e.message || e); }
@@ -4085,6 +4090,159 @@ async function _orarConstruieste(env) {
   _orarMem.clear();
   return meta;
 }
+
+// ══════════════════════════════════════════════════════════════
+// [15.23] TROLEIBUZELE ÎN MERS LIVE — traseele lor, făcute din GTFS-ul oficial TPBI.
+// Pentru tramvaie traseele stau în live.json (făcut o dată, de mână). Pentru troleibuze le
+// construim aici, în aceeași formă: { r: { <route_id>: { n, t:11, c, d: { <sens>: { h, s:[[stație, metri]],
+// p:[[lat, lon]], L } } } }, s: { <stație>: [nume, lat, lon] } }. Pe fiecare sens luăm traseul (shape)
+// folosit de cele mai multe curse, iar stațiile din stop_times.txt ale unei curse pe traseul acela.
+// Se reface din cron cel mult o dată la 7 zile și se ține în Firebase (liveTb). Aplicația îl ia
+// de la /live/rute-tb și îl adaugă la live.json.
+// ══════════════════════════════════════════════════════════════
+const TB_NUME_REZERVA = new Set(['61','62','63','65','66','69','70','72','73','74','76','79','85','86','90','91','92','93','95','96','97']);
+function _zipIntrari(z) {
+  const dv = new DataView(z.buffer, z.byteOffset, z.byteLength);
+  let e = z.length - 22; while (e > 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  const n = dv.getUint16(e + 10, true); let c = dv.getUint32(e + 16, true); const out = {};
+  for (let k = 0; k < n; k++) {
+    const met = dv.getUint16(c + 10, true), csz = dv.getUint32(c + 20, true);
+    const nl = dv.getUint16(c + 28, true), xl = dv.getUint16(c + 30, true), cl = dv.getUint16(c + 32, true), off = dv.getUint32(c + 42, true);
+    const nume = new TextDecoder().decode(z.subarray(c + 46, c + 46 + nl)).split('/').pop();
+    out[nume] = { met, csz, off };
+    c += 46 + nl + xl + cl;
+  }
+  return { out, dv };
+}
+// citește un fișier din zip rând cu rând: cb(câmpuri, antet) — antetul e { coloană: index }
+async function _zipCsv(z, dv, f, cb) {
+  const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true);
+  const raw = new Blob([z.subarray(start, start + f.csz)]).stream();
+  const rd = (f.met === 8 ? raw.pipeThrough(new DecompressionStream('deflate-raw')) : raw).pipeThrough(new TextDecoderStream()).getReader();
+  const split = l => {
+    if (l.indexOf('"') < 0) return l.split(',');
+    const o = []; let cur = '', q = false;
+    for (let i = 0; i < l.length; i++) { const ch = l[i];
+      if (q) { if (ch === '"') { if (l[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"') q = true; else if (ch === ',') { o.push(cur); cur = ''; } else cur += ch; }
+    o.push(cur); return o;
+  };
+  let H = null, rest = '';
+  const linie = l => { if (!l) return; if (!H) { H = {}; split(l.replace(/^﻿/, '').trim()).forEach((x, i) => H[x.trim()] = i); return; } return cb(l, split, H); };
+  while (true) {
+    const { value, done } = await rd.read(); if (done) break;
+    const buf = rest + value; let i = 0, j;
+    while ((j = buf.indexOf('\n', i)) >= 0) { linie(buf.slice(i, j).replace(/\r$/, '')); i = j + 1; }
+    rest = buf.slice(i);
+  }
+  if (rest) linie(rest.replace(/\r$/, ''));
+}
+const _tbDist = (a, b) => { const R = 6371000, r = Math.PI / 180, dla = (b[0] - a[0]) * r, dlo = (b[1] - a[1]) * r * Math.cos((a[0] + b[0]) / 2 * r); return R * Math.hypot(dla, dlo); };
+async function _tbConstruieste(env) {
+  const t0 = Date.now();
+  const resp = await fetch(ORAR_ZIP);
+  if (!resp.ok) throw new Error('zip ' + resp.status);
+  const z = new Uint8Array(await resp.arrayBuffer());
+  const { out: F, dv } = _zipIntrari(z);
+  for (const n of ['routes.txt', 'trips.txt', 'stop_times.txt', 'stops.txt', 'shapes.txt']) if (!F[n]) throw new Error('lipsește ' + n);
+  // 1. rutele de troleibuz
+  const rute = {};
+  await _zipCsv(z, dv, F['routes.txt'], (l, sp, H) => {
+    const f = sp(l), tip = Number(f[H.route_type]), n = String(f[H.route_short_name] || '').trim();
+    if (tip === 11 || (tip >= 800 && tip < 900) || (TB_NUME_REZERVA.has(n) && tip !== 0 && tip !== 900)) {
+      rute[String(f[H.route_id]).trim()] = { n, c: String(f[H.route_color] || '').trim() || '1E88E5' };
+    }
+  });
+  if (!Object.keys(rute).length) throw new Error('nicio rută de troleibuz în routes.txt');
+  // 2. pe fiecare sens: traseul (shape) cu cele mai multe curse + o cursă pe el
+  const num = {};   // rid|sens → shape → { n, trip, h }
+  await _zipCsv(z, dv, F['trips.txt'], (l, sp, H) => {
+    const f = sp(l), rid = String(f[H.route_id]).trim(); if (!rute[rid]) return;
+    const k = rid + '|' + (String(f[H.direction_id] || '0').trim() || '0'), sh = String(f[H.shape_id] || '').trim(); if (!sh) return;
+    const o = ((num[k] = num[k] || {})[sh] = num[k][sh] || { n: 0, trip: String(f[H.trip_id]).trim(), h: String(f[H.trip_headsign] || '').trim() });
+    o.n++;
+  });
+  const ales = {}, tripAles = {}, shapeAles = new Set();
+  for (const [k, M] of Object.entries(num)) {
+    const [sh, o] = Object.entries(M).sort((a, b) => b[1].n - a[1].n)[0];
+    ales[k] = { sh, trip: o.trip, h: o.h, curse: o.n }; tripAles[o.trip] = k; shapeAles.add(sh);
+  }
+  // 3. stațiile cursei alese
+  const statiiCursa = {};
+  await _zipCsv(z, dv, F['stop_times.txt'], (l, sp, H) => {
+    let trip; if (H.trip_id === 0) { const i = l.indexOf(','); trip = l.slice(0, i).replace(/"/g, ''); } else trip = sp(l)[H.trip_id];
+    const k = tripAles[trip]; if (!k) return;
+    const f = sp(l); (statiiCursa[k] = statiiCursa[k] || []).push([Number(f[H.stop_sequence]), String(f[H.stop_id]).trim()]);
+  });
+  const statiiTrebuie = new Set(); Object.values(statiiCursa).forEach(L => L.forEach(x => statiiTrebuie.add(x[1])));
+  const S = {};
+  await _zipCsv(z, dv, F['stops.txt'], (l, sp, H) => {
+    const f = sp(l), id = String(f[H.stop_id]).trim(); if (!statiiTrebuie.has(id)) return;
+    S[id] = [String(f[H.stop_name] || '').trim(), Math.round(Number(f[H.stop_lat]) * 1e5) / 1e5, Math.round(Number(f[H.stop_lon]) * 1e5) / 1e5];
+  });
+  const forme = {};
+  await _zipCsv(z, dv, F['shapes.txt'], (l, sp, H) => {
+    const f = sp(l), sh = String(f[H.shape_id]).trim(); if (!shapeAles.has(sh)) return;
+    (forme[sh] = forme[sh] || []).push([Number(f[H.shape_pt_sequence]), Number(f[H.shape_pt_lat]), Number(f[H.shape_pt_lon])]);
+  });
+  // 4. traseul rărit (un punct la ~40 m) + distanța fiecărei stații pe traseu
+  const R = {};
+  for (const [k, a] of Object.entries(ales)) {
+    const [rid, sens] = k.split('|');
+    const pts = (forme[a.sh] || []).sort((x, y) => x[0] - y[0]).map(x => [x[1], x[2]]).filter(x => isFinite(x[0]) && isFinite(x[1]));
+    const st = (statiiCursa[k] || []).sort((x, y) => x[0] - y[0]).map(x => x[1]).filter(id => S[id]);
+    if (pts.length < 2 || st.length < 2) continue;
+    const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + _tbDist(pts[i - 1], pts[i]));
+    const p = [pts[0]]; let ult = 0;
+    for (let i = 1; i < pts.length - 1; i++) if (cum[i] - cum[ult] >= 40) { p.push(pts[i]); ult = i; }
+    p.push(pts[pts.length - 1]);
+    // stația pe traseu: cel mai apropiat segment, mereu înaintea celei de dinainte
+    let iMin = 0; const s = [];
+    for (const id of st) {
+      const q = [S[id][1], S[id][2]]; let best = null;
+      for (let i = iMin; i < pts.length - 1; i++) {
+        const A = pts[i], B = pts[i + 1], la = (A[0] + B[0]) / 2 * Math.PI / 180, kx = Math.cos(la);
+        const ax = A[1] * kx, ay = A[0], bx = B[1] * kx, by = B[0], qx = q[1] * kx, qy = q[0];
+        const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, ((qx - ax) * dx + (qy - ay) * dy) / L2)) : 0;
+        const pr = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t], d = _tbDist(q, pr);
+        if (!best || d < best.d) best = { d, i, m: cum[i] + _tbDist(A, pr) };
+        if (best && d > best.d + 800 && i > best.i + 30) break;
+      }
+      if (!best) continue;
+      iMin = best.i; s.push([id, Math.round(best.m)]);
+    }
+    if (s.length < 2) continue;
+    const ru = (R[rid] = R[rid] || { n: rute[rid].n, t: 11, c: rute[rid].c, d: {} });
+    ru.d[sens] = { h: a.h || (S[st[st.length - 1]] || [''])[0], s, p: p.map(x => [Math.round(x[0] * 1e5) / 1e5, Math.round(x[1] * 1e5) / 1e5]), L: Math.round(cum[cum.length - 1]) };
+  }
+  const folosite = new Set(); Object.values(R).forEach(ru => Object.values(ru.d).forEach(d => d.s.forEach(x => folosite.add(x[0]))));
+  const s2 = {}; for (const id of folosite) s2[id] = S[id];
+  const date = { v: 1, la: Date.now(), r: R, s: s2 };
+  await _fbPut(env, 'liveTb', date);
+  await _fbPut(env, 'liveTbMeta', { la: date.la, rute: Object.keys(R).length, linii: Object.values(R).map(x => x.n).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(','), statii: Object.keys(s2).length, ms: Date.now() - t0 });
+  _tbMem.v = date; _tbMem.t = Date.now();
+  return date;
+}
+const _tbMem = { v: null, t: 0 };
+// din cron: o dată la 7 zile (sau dacă n-a fost făcut niciodată); după o eroare, reîncearcă după o oră
+async function _tbPoate(env, fortat) {
+  const m = await getJSON(urlBroadcast(env, 'liveTbMeta.json')).catch(() => null);
+  if (!fortat && m && m.la && Date.now() - m.la < 7 * 864e5) return m;
+  if (m && m.incerc && Date.now() - m.incerc < (fortat ? 5 * 60e3 : 60 * 60e3)) return m;
+  await _fbPatch(env, 'liveTbMeta', { incerc: Date.now() }).catch(() => {});
+  try { await _tbConstruieste(env); return await getJSON(urlBroadcast(env, 'liveTbMeta.json')).catch(() => null); }
+  catch (e) { await _fbPatch(env, 'liveTbMeta', { eroare: String(e.message || e).slice(0, 200), erLa: Date.now() }).catch(() => {}); throw e; }
+}
+async function liveRuteTb(url, env) {
+  if (url.searchParams.get('info')) return { status: 200, corp: { ok: true, meta: await getJSON(urlBroadcast(env, 'liveTbMeta.json')).catch(() => null) } };
+  if (url.searchParams.get('refa')) { try { return { status: 200, corp: { ok: true, meta: await _tbPoate(env, true) } }; } catch (e) { return { status: 200, corp: { ok: false, eroare: String(e.message || e).slice(0, 200) } }; } }
+  if (_tbMem.v && Date.now() - _tbMem.t < 3600e3) return { status: 200, corp: { ok: true, ..._tbMem.v } };
+  const d = await getJSON(urlBroadcast(env, 'liveTb.json')).catch(() => null);
+  if (!d || !d.r) return { status: 200, corp: { ok: false, eroare: 'Traseele troleibuzelor nu sunt încă făcute.' } };
+  _tbMem.v = d; _tbMem.t = Date.now();
+  return { status: 200, corp: { ok: true, ...d } };
+}
+
 // din cron: refacem orarul o dată la ~20 de ore (sau dacă n-a fost făcut niciodată)
 async function _orarPoate(env) {
   try {
