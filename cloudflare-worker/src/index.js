@@ -4928,7 +4928,7 @@ function _adm2Detaliu(c) {
 // acțiunea îl șterge. Se scrie doar dacă acțiunea a reușit. 30 de zile.
 // ══════════════════════════════════════════════════════════════
 const REZ_CALE = 'adminJetoane/_rezolvate', REZ_ZILE = 30;
-const REZ_ACTIUNI = new Set(['mutaColeg', 'aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'blocheazaGrup', 'alerteNrRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
+const REZ_ACTIUNI = new Set(['istUita', 'mutaColeg', 'aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'blocheazaGrup', 'alerteNrRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
   'indicatoriAproba', 'indicatoriRespinge', 'raportOreInchide', 'trimiteGata']);
 const _rzT = (t, n) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, n || 140);
 async function _rezContext(env, c) {
@@ -4955,6 +4955,7 @@ async function _rezContext(env, c) {
     if (c.fa === 'muta') return { fel: 'ok', nr, ce: `mutat la ${IND_NUME[c.dep] || c.dep}${c.baza ? ' · ' + c.baza : ''} și aprobat`, citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
     return { fel: c.fa === 'aproba' ? 'ok' : 'nu', nr, ce: c.fa === 'aproba' ? 'număr în așteptare — aprobat' : 'număr în așteptare — respins', citat: [IND_NUME[x.dep] || x.dep, de].filter(Boolean).join(' · ') };
   }
+  if (a === 'istUita') return { fel: 'ok', nr: nrCurat(c.a) || '', ce: `urma ștearsă: ${nrCurat(c.b) || ''} încercat din greșeală pe același telefon` };   // [15.22]
   if (a === 'mutaColeg') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: `mutat de admin la ${IND_NUME[c.dep] || c.dep}${c.baza ? ' · ' + c.baza : ''} (după foaie)` };   // [15.15]
   if (a === 'nrCorect') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: c.fa === false ? 'scos din „numere corecte”' : 'marcat „număr corect” (nu e pe foaie)' };
   if (a === 'blocheazaGrup') { const L = (Array.isArray(c.numere) ? c.numere : []).map(nrCurat).filter(Boolean); return { fel: 'nu', nr: L[0] || '', ce: `blocate împreună (același telefon): ${L.join(', ')}` }; }
@@ -5622,6 +5623,29 @@ async function admin(request, env) {
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       await _fbPut(env, `mutaNr/${nr}`, { dep, ...(baza ? { baza } : {}), la: Date.now(), id, de: adm2 ? String(adm2.nr) : 'admin' });
       return { status: 200, corp: { ok: true, nr, id } };
+    }
+    case 'istUita': {   // [15.22] „a fost o greșeală”: telefonul a încercat din greșeală numărul altcuiva
+      const a = nrCurat(cerere.a), b = nrCurat(cerere.b);
+      if (!a || !b || a === b) return { status: 400, corp: { ok: false, eroare: 'Lipsesc numerele.' } };
+      const [ia, ib] = await Promise.all([getJSON(urlBroadcast(env, `istNr/${a}.json`)).catch(() => null), getJSON(urlBroadcast(env, `istNr/${b}.json`)).catch(() => null)]);
+      const comune = Object.keys(ia || {}).filter(k => (ib || {})[k] && /^[a-zA-Z0-9_-]{4,40}$/.test(k));
+      const sterse = [];
+      for (const k of comune) {
+        const cale = k[0] === 'd' ? `istDev/${k.slice(1)}` : `istAmp/${k}`;
+        const g = await getJSON(urlBroadcast(env, cale + '.json')).catch(() => null) || {};
+        // pe telefonul ăsta se uită numărul doar încercat (nu cel pe care a intrat)
+        const ga = g[a] || {}, gb = g[b] || {};
+        let uit = ga.s === 'intrat' && gb.s !== 'intrat' ? b : gb.s === 'intrat' && ga.s !== 'intrat' ? a : (Number(ga.p) || 0) > (Number(gb.p) || 0) ? a : b;
+        await _fbPut(env, `${cale}/${uit}`, null).catch(() => {});
+        await _fbPut(env, `istNr/${uit}/${k}`, null).catch(() => {});
+        if (k[0] === 'd') {
+          await _fbPut(env, `alerteNr/${k}/numere/${uit}`, null).catch(() => {});
+          const al = await getJSON(urlBroadcast(env, `alerteNr/${k}.json`)).catch(() => null);
+          if (al && Object.keys(al.numere || {}).length < 2 && !al.blocat) await _fbPut(env, `alerteNr/${k}`, null).catch(() => {});
+        }
+        sterse.push(uit);
+      }
+      return { status: 200, corp: { ok: true, sterse: [...new Set(sterse)] } };
     }
     case 'istTel': {   // [15.11]
       const nr = nrCurat(cerere.nr); if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul.' } };
