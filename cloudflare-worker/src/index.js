@@ -1151,9 +1151,16 @@ async function _ruleaza(env, programatLa) {
       if (marc !== now.data) {
         await _fbPut(env, 'adminJetoane/_asteptAnunt', now.data);
         const d = (await getJSON(urlBroadcast(env, `${AST}.json`))) || {}; let n = 0; const vechi = {};
+        const bl = await citesteBlocati(env).catch(() => ({})) || {};   // [15.24] numărăm ca în panou
         for (const [nr, dv] of Object.entries(d)) for (const [dev, a] of Object.entries(dv || {})) {
           if (!a || Date.now() - (Number(a.vazut) || Number(a.respins) || Number(a.la) || 0) > 60 * 864e5) { vechi[`${nr}/${dev}`] = null; continue; }
-          if (!a.respins) n++;
+          if (a.respins) continue;
+          // [15.24] rămase în urmă: telefonul e deja înregistrat pe număr → nu mai așteaptă nimic
+          const pr = await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null);
+          if (pr && _normalizeaza(pr).disp[dev]) { vechi[`${nr}/${dev}`] = null; continue; }
+          // panoul nu le arată aici: telefon blocat care încearcă alt număr (card separat) și numerele blocate
+          if (a.motiv === 'blocat' || bl[nr]) continue;
+          n++;
         }
         await _marcajeScrie(env, AST, vechi);
         if (n) { await _anuntaAdminii(env, `⏳ ${n} ${n === 1 ? 'coleg' : 'colegi'} în așteptare`, 'Numere care nu sunt pe foaie sau au alt schimb. Deschide panoul → De rezolvat.', 'asteptare').catch(() => 0); log(`În așteptare: ${n} (adminii anunțați)`); }
@@ -5740,8 +5747,10 @@ async function admin(request, env) {
         }
         const pr = await getJSON(urlBroadcast(env, `proprietar/${x.nr}.json`)).catch(() => null);
         x.tinut = Object.keys(_normalizeaza(pr).disp).length;
+        if (_normalizeaza(pr).disp[x.dev]) { x.ramas = 1; await _fbPut(env, `${AST}/${x.nr}/${x.dev}`, null).catch(() => {}); }   // [15.24] deja înregistrat: nu mai așteaptă
       }));
-      return { status: 200, corp: { ok: true, lista: lista.slice(0, 60), total: lista.length } };
+      const _l = lista.filter(x => !x.ramas);   // [15.24]
+      return { status: 200, corp: { ok: true, lista: _l.slice(0, 60), total: _l.length } };
     }
     case 'asteptareRezolva': {
       const nr = nrCurat(cerere.nr), dev = String(cerere.dev || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64);
