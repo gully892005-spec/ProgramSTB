@@ -3630,6 +3630,7 @@ async function _convAduMesajeAdmin(env, nr) {
 // ══════════════════════════════════════════════════════════════
 const CHATN = 'adminJetoane/_chatNume', CHATU = 'adminJetoane/_chatUid';
 const OBS = 'adminJetoane/_obs';   // [15.25] observațiile adminului, pe număr
+const STERSE = 'adminJetoane/_sterse';   // [15.26] cine și-a șters singur datele: când și de pe ce telefoane
 async function chatNumeLeaga(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
@@ -4495,6 +4496,12 @@ async function dateleMele(request, env) {
     let dep = '', tel = '';
     try { const st = await getJSON(urlBroadcast(env, `stats/${nr}.json`)); dep = String((st && st.depot) || ''); const d = st && st.disp && st.disp[dev]; tel = String((d && (d.platforma || '')) || ''); } catch (e) {}
     let nume = ''; try { const ag = await getJSON(urlBroadcast(env, `agenda/${nr}.json`)); nume = String((ag && (ag.nume || ag.n)) || ''); } catch (e) {}
+    // [15.26] Telefoanele de pe număr se țin minte (doar amprenta), ca adminul să-l poată bloca și după ștergere.
+    try {
+      const { disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
+      const h = {}; for (const d of [dev, ...Object.keys(disp || {})]) if (d) h[await _dispAmprenta(d)] = 1;
+      await _fbPut(env, `${STERSE}/${nr}`, { la: Date.now(), dep, tel, nume, h });
+    } catch (e) {}
     await _stergeNr(env, nr, true);
     await _rezScrie(env, { fel: 'nu', nr, cine: 'coleg', ce: 'și-a șters singur datele din cloud', citat: [nume, dep, tel].filter(Boolean).join(' · ').slice(0, 120) }).catch(() => {});
     await _anuntaAdminii(env, '🗑 Date șterse', `${nr}${nume ? ' (' + nume + ')' : ''} și-a șters singur datele din cloud`, 'date-sterse').catch(() => 0);
@@ -4616,7 +4623,18 @@ async function _blocDispNoteaza(env, nr, devs) {
 // Telefoanele înregistrate acum pe număr.
 async function _blocDispNumar(env, nr) {
   const { disp } = _normalizeaza(await getJSON(urlBroadcast(env, `proprietar/${nr}.json`)).catch(() => null));
-  const n = await _blocDispNoteaza(env, nr, Object.keys(disp || {}));
+  let n = await _blocDispNoteaza(env, nr, Object.keys(disp || {}));
+  // [15.26] Fără telefoane pe număr (și-a șters datele): blocăm telefoanele ținute minte
+  // la ștergere; dacă nu sunt, pe cele din istoricul numărului.
+  if (!n) {
+    const st = await getJSON(urlBroadcast(env, `${STERSE}/${nr}.json`)).catch(() => null);
+    let hs = Object.keys((st && st.h) || {});
+    if (!hs.length) hs = Object.keys(await getJSON(urlBroadcast(env, `istNr/${nr}.json`)).catch(() => null) || {}).filter(k => k[0] === 'd').map(k => k.slice(1));
+    for (const h of hs.slice(0, 10)) {
+      if (!/^[a-zA-Z0-9_-]{4,64}$/.test(h)) continue;
+      await _fbPut(env, `blocatiDisp/${h}`, { nr, la: Date.now() }).catch(() => {}); n++;
+    }
+  }
   if (n) await _fbPut(env, `blocati/${nr}/telefoane`, n).catch(() => {});
   return n;
 }
@@ -6545,7 +6563,7 @@ async function admin(request, env) {
       // ca la „Șterge-mi datele” din aplicație: conversația cu adminul, accesele, numele din chat, agenda, foile trimise
       try { await _stergeNr(env, nr, true); } catch (e) {}
       const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati',
-        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', OBS, `limite/autoadd`];   // [15.25] și observațiile
+        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', OBS, STERSE, `limite/autoadd`];   // [15.25] și observațiile · [15.26] și urma ștergerii
       const sterse = [];
       const esuate = [];
       await Promise.all(cai.map(async (cale) => {
@@ -6965,9 +6983,9 @@ async function admin(request, env) {
       const nr = nrSauCheie(cerere.nr);   // [14.1]
       if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
       const ia = async (cale) => { try { return await getJSON(urlBroadcast(env, cale + '.json')); } catch (e) { return null; } };
-      const [b, st, pu, prBrut, bl, ag, acc, obs] = await Promise.all([
+      const [b, st, pu, prBrut, bl, ag, acc, obs, sters] = await Promise.all([
         ia(`backup/${nr}`), ia(`stats/${nr}`), ia(`push/${nr}`), ia(`proprietar/${nr}`),
-        ia(`blocati/${nr}`), ia(`agenda/${nr}`), ia(`acces/${nr}`), ia(`${OBS}/${nr}`)   // [15.25] observațiile adminului
+        ia(`blocati/${nr}`), ia(`agenda/${nr}`), ia(`acces/${nr}`), ia(`${OBS}/${nr}`), ia(`${STERSE}/${nr}`)   // [15.25] observațiile adminului · [15.26] ștergerea singur
       ]);
       let copii = {};
       try { const u = urlBroadcast(env, `backupIstoric/${nr}.json`); copii = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true') || {}; } catch (e) {}
@@ -7034,6 +7052,7 @@ async function admin(request, env) {
       return { status: 200, corp: { ok: true, nr,
         nume: (ag && ag.nume) || '', tel: (ag && ag.tel) || '',
         obs: (obs && obs.t) ? { t: String(obs.t), la: Number(obs.la) || 0 } : null,   // [15.25]
+        sters: (sters && sters.la) ? { la: Number(sters.la), dep: sters.dep || '', tel: sters.tel || '', nume: sters.nume || '', telefoane: Object.keys(sters.h || {}).length } : null,   // [15.26]
         chat: await getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)).catch(() => null),   // [4.2] numele din chat
         exista: !!(b || st || pu || prBrut || ag),
         backup: b ? { ts: Number(b.ts) || null, updated: b.updated || null, dev: b.dev || null, depotPropriu: b.depotPropriu || null,
