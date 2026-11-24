@@ -3629,6 +3629,7 @@ async function _convAduMesajeAdmin(env, nr) {
 // ajunge doar panoul de admin.
 // ══════════════════════════════════════════════════════════════
 const CHATN = 'adminJetoane/_chatNume', CHATU = 'adminJetoane/_chatUid';
+const OBS = 'adminJetoane/_obs';   // [15.25] observațiile adminului, pe număr
 async function chatNumeLeaga(request, env) {
   if (request.method !== 'POST') return { status: 405, corp: { ok: false, eroare: 'Doar POST' } };
   let c; try { c = await request.json(); } catch (e) { return { status: 400, corp: { ok: false, eroare: 'JSON invalid' } }; }
@@ -6544,7 +6545,7 @@ async function admin(request, env) {
       // ca la „Șterge-mi datele” din aplicație: conversația cu adminul, accesele, numele din chat, agenda, foile trimise
       try { await _stergeNr(env, nr, true); } catch (e) {}
       const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati',
-        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', `limite/autoadd`];
+        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', OBS, `limite/autoadd`];   // [15.25] și observațiile
       const sterse = [];
       const esuate = [];
       await Promise.all(cai.map(async (cale) => {
@@ -6854,6 +6855,25 @@ async function admin(request, env) {
       return { status: 200, corp: { ok: true, cate: Object.keys(obiect).length } };
     }
 
+    // [15.25] Numele unui singur coleg, scris din fișa lui. Nu atinge telefonul
+    // din agendă și nici ceilalți colegi (agendaScrie înlocuiește tot).
+    case 'agendaNume': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul' } };
+      const nume = String(cerere.nume || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      await _fbPatch(env, `agenda/${nr}`, { nume });
+      return { status: 200, corp: { ok: true, nr, nume } };
+    }
+
+    // [15.25] Observațiile adminului despre un coleg: text liber, le vede doar el.
+    case 'obsScrie': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul' } };
+      const t = String(cerere.text || '').replace(/\r/g, '').trim().slice(0, 2000);
+      await _fbPut(env, `${OBS}/${nr}`, t ? { t, la: Date.now() } : null);
+      return { status: 200, corp: { ok: true, nr, gol: !t } };
+    }
+
     // ── [v16.0] Privire de ansamblu: câte telefoane ține fiecare număr ──
     // Până acum te puteai uita doar număr cu număr, ceea ce nu ajută când vrei
     // să vezi starea întregului depou — de exemplu după mutarea pe alt domeniu,
@@ -6945,9 +6965,9 @@ async function admin(request, env) {
       const nr = nrSauCheie(cerere.nr);   // [14.1]
       if (!nr) return { status: 400, corp: { ok: false, eroare: 'Număr de serviciu lipsă' } };
       const ia = async (cale) => { try { return await getJSON(urlBroadcast(env, cale + '.json')); } catch (e) { return null; } };
-      const [b, st, pu, prBrut, bl, ag, acc] = await Promise.all([
+      const [b, st, pu, prBrut, bl, ag, acc, obs] = await Promise.all([
         ia(`backup/${nr}`), ia(`stats/${nr}`), ia(`push/${nr}`), ia(`proprietar/${nr}`),
-        ia(`blocati/${nr}`), ia(`agenda/${nr}`), ia(`acces/${nr}`)
+        ia(`blocati/${nr}`), ia(`agenda/${nr}`), ia(`acces/${nr}`), ia(`${OBS}/${nr}`)   // [15.25] observațiile adminului
       ]);
       let copii = {};
       try { const u = urlBroadcast(env, `backupIstoric/${nr}.json`); copii = await getJSON(u + (u.includes('?') ? '&' : '?') + 'shallow=true') || {}; } catch (e) {}
@@ -7013,6 +7033,7 @@ async function admin(request, env) {
 
       return { status: 200, corp: { ok: true, nr,
         nume: (ag && ag.nume) || '', tel: (ag && ag.tel) || '',
+        obs: (obs && obs.t) ? { t: String(obs.t), la: Number(obs.la) || 0 } : null,   // [15.25]
         chat: await getJSON(urlBroadcast(env, `${CHATN}/${nr}.json`)).catch(() => null),   // [4.2] numele din chat
         exista: !!(b || st || pu || prBrut || ag),
         backup: b ? { ts: Number(b.ts) || null, updated: b.updated || null, dev: b.dev || null, depotPropriu: b.depotPropriu || null,
