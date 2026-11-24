@@ -6854,6 +6854,16 @@ async function admin(request, env) {
       return { status: 200, corp: { ok: true, cate: Object.keys(obiect).length } };
     }
 
+    // [15.25] Numele unui singur coleg, scris din fișa lui. Nu atinge telefonul
+    // din agendă și nici ceilalți colegi (agendaScrie înlocuiește tot).
+    case 'agendaNume': {
+      const nr = nrCurat(cerere.nr);
+      if (!nr) return { status: 400, corp: { ok: false, eroare: 'Lipsește numărul' } };
+      const nume = String(cerere.nume || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      await _fbPatch(env, `agenda/${nr}`, { nume });
+      return { status: 200, corp: { ok: true, nr, nume } };
+    }
+
     // ── [v16.0] Privire de ansamblu: câte telefoane ține fiecare număr ──
     // Până acum te puteai uita doar număr cu număr, ceea ce nu ajută când vrei
     // să vezi starea întregului depou — de exemplu după mutarea pe alt domeniu,
