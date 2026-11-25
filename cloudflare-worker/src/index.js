@@ -4643,6 +4643,8 @@ async function _dispBlocat(env, dev) {
   if (!dev) return null;
   const h = await _dispAmprenta(dev);
   const rec = await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`));
+  // [15.30] telefonul blocat singur de admin (a încercat mai multe numere): blocat orice număr ar pune
+  if (rec && rec.tel) return { fel: 'definitiv', motiv: rec.motiv || 'Telefonul ăsta a fost blocat de admin.', la: rec.la || 0, nr: String(rec.nr || ''), prinTelefon: true, doarTel: true };
   if (!rec || !rec.nr) return null;
   const b = await getJSON(urlBroadcast(env, `blocati/${nrCurat(rec.nr)}.json`));
   if (b && b.fel === 'definitiv') return Object.assign({}, b, { nr: String(rec.nr), prinTelefon: true });
@@ -5112,7 +5114,7 @@ function _adm2Detaliu(c) {
 // acțiunea îl șterge. Se scrie doar dacă acțiunea a reușit. 30 de zile.
 // ══════════════════════════════════════════════════════════════
 const REZ_CALE = 'adminJetoane/_rezolvate', REZ_ZILE = 30;
-const REZ_ACTIUNI = new Set(['istUita', 'mutaColeg', 'aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'blocheazaGrup', 'alerteNrRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
+const REZ_ACTIUNI = new Set(['blocheazaTelefon', 'istUita', 'mutaColeg', 'aprobaNumar', 'respingeNumar', 'cerereRezolva', 'asteptareRezolva', 'nrCorect', 'blocheazaGrup', 'alerteNrRezolva', 'mesajAdminCitit', 'eroareRezolvata', 'convRezolvat',
   'indicatoriAproba', 'indicatoriRespinge', 'raportOreInchide', 'trimiteGata']);
 const _rzT = (t, n) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, n || 140);
 async function _rezContext(env, c) {
@@ -5142,6 +5144,7 @@ async function _rezContext(env, c) {
   if (a === 'istUita') return { fel: 'ok', nr: nrCurat(c.a) || '', ce: `urma ștearsă: ${nrCurat(c.b) || ''} încercat din greșeală pe același telefon` };   // [15.22]
   if (a === 'mutaColeg') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: `mutat de admin la ${IND_NUME[c.dep] || c.dep}${c.baza ? ' · ' + c.baza : ''} (după foaie)` };   // [15.15]
   if (a === 'nrCorect') return { fel: 'ok', nr: nrCurat(c.nr) || '', ce: c.fa === false ? 'scos din „numere corecte”' : 'marcat „număr corect” (nu e pe foaie)' };
+  if (a === 'blocheazaTelefon') { const L = (Array.isArray(c.numere) ? c.numere : []).map(nrCurat).filter(Boolean); return { fel: 'nu', nr: L[L.length - 1] || '', ce: `telefon blocat (a încercat ${L.join(', ')})` }; }   // [15.30]
   if (a === 'blocheazaGrup') { const L = (Array.isArray(c.numere) ? c.numere : []).map(nrCurat).filter(Boolean); return { fel: 'nu', nr: L[0] || '', ce: `blocate împreună (același telefon): ${L.join(', ')}` }; }
   if (a === 'alerteNrRezolva') {
     const id = String(c.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40), x = id ? await g(`alerteNr/${id}.json`) : null; if (!x) return null;
@@ -5191,7 +5194,7 @@ async function _rezLista(env) {
   return lista.slice(0, 60);
 }
 // Acțiuni care doar citesc: nu intră în jurnal.
-const ADM2_CITIRE = new Set(['verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
+const ADM2_CITIRE = new Set(['telefoaneBlocate', 'verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
   'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste', 'convFisier',
   'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'statsToate', 'securitate', 'alerteNrLista', 'nrLegate', 'istTel', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine', 'rulareStare']);
@@ -5868,6 +5871,34 @@ async function admin(request, env) {
         await _fbPut(env, `alerteNr/${id}/blocat/ok`, acum);
       } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
       return { status: 200, corp: { ok: true } };
+    }
+    // [15.30] „📵 Blochează telefonul”: doar telefonul din avertisment, numerele rămân libere
+    case 'blocheazaTelefon': {
+      const id = String(cerere.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+      if (!/^d[a-zA-Z0-9_-]{4,40}$/.test(id)) return { status: 400, corp: { ok: false, eroare: 'Lipsește telefonul.' } };
+      const a = await getJSON(urlBroadcast(env, `alerteNr/${id}.json`)).catch(() => null) || {};
+      const numere = (Array.isArray(cerere.numere) ? cerere.numere : Object.keys(a.numere || {})).map(nrCurat).filter(Boolean).slice(0, 10);
+      const acum = Date.now();
+      await _fbPut(env, `blocatiDisp/${id.slice(1)}`, { tel: 1, nr: numere[numere.length - 1] || '', numere, la: acum,
+        motiv: String(cerere.motiv || '').trim().slice(0, 200), plat: _txt(a.plat || '', 20), de: adm2 ? String(adm2.nr) : 'admin' });
+      if (numere.length) await _fbPut(env, `alerteNr/${id}/okNumere`, [...new Set([...(a.okNumere || []), ...numere])]).catch(() => {});
+      if (a.blocat) await _fbPut(env, `alerteNr/${id}/blocat/ok`, acum).catch(() => {});
+      return { status: 200, corp: { ok: true, numere } };
+    }
+    case 'telefoaneBlocate': {   // [15.30] lista telefoanelor blocate singure
+      const d = await getJSON(urlBroadcast(env, 'blocatiDisp.json')).catch(() => null) || {};
+      const lista = Object.entries(d).filter(([, v]) => v && v.tel)
+        .map(([h, v]) => ({ h, nr: String(v.nr || ''), numere: Array.isArray(v.numere) ? v.numere : [], la: Number(v.la) || 0, motiv: v.motiv || '', plat: v.plat || '', de: v.de || '' }))
+        .sort((x, y) => y.la - x.la);
+      return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'deblocheazaTelefon': {   // [15.30]
+      const h = String(cerere.h || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+      if (!h) return { status: 400, corp: { ok: false, eroare: 'Lipsește telefonul.' } };
+      const v = await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`)).catch(() => null);
+      if (!v || !v.tel) return { status: 404, corp: { ok: false, eroare: 'Telefonul nu mai e blocat.' } };
+      await _fbPut(env, `blocatiDisp/${h}`, null);
+      return { status: 200, corp: { ok: true, nr: String(v.nr || '') } };
     }
     case 'blocheazaGrup': {   // „Blochează-le pe toate”
       const numere = (Array.isArray(cerere.numere) ? cerere.numere : []).map(nrCurat).filter(Boolean).slice(0, 10);
