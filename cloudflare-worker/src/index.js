@@ -2829,9 +2829,63 @@ async function _istNoteaza(env, nr, IST, s, T, blocat) {
   if (Object.keys(toate).length < 2 && !blocat) return;
   const cheie = 'd' + IST.hD;
   const ex = await getJSON(urlBroadcast(env, `alerteNr/${cheie}.json`)).catch(() => null) || {};
-  const nou = { la: acum, numere: toate, plat: (T && T.plat) || ex.plat || '', inst: !!(T && T.inst), okNumere: ex.okNumere || [], ...(ex.ok ? { ok: ex.ok } : {}),
+  // [15.31] 2+ numere intrate pe același telefon → telefonul se blochează singur
+  let okN = ex.okNumere || [];
+  if (!blocat) { try { const ab = await _telAutoBloc(env, IST, toate, okN, T); if (ab) okN = [...new Set([...okN, ...ab])]; } catch (e) {} }
+  const nou = { la: acum, numere: toate, plat: (T && T.plat) || ex.plat || '', inst: !!(T && T.inst), okNumere: okN, ...(IST.hA ? { hA: IST.hA } : (ex.hA ? { hA: ex.hA } : {})), ...(ex.ok ? { ok: ex.ok } : {}),
     ...(blocat ? { blocat } : (ex.blocat ? { blocat: ex.blocat } : {})) };
   await _fbPut(env, `alerteNr/${cheie}`, nou).catch(() => {});
+}
+// ══════════════════════════════════════════════════════════════
+// [15.31] TELEFON BLOCAT (fără numere) — automat sau de admin
+//   blocatiDisp/<telefon>  { tel:1, nr, numere, la, motiv, plat, de, auto, hA }
+//   telBlocNr/<nr>/<tel>   numerele folosite de telefonul blocat: alt telefon nou pe ele → așteaptă adminul
+//   blocatiAmp/<amprentă+IP> același telefon cu datele șterse / alt browser, de pe aceeași conexiune
+// Rămâne blocat până îl deblochează adminul. Ștergerea datelor din browser îi dă alt id,
+// dar numerele lui și amprenta de pe aceeași conexiune îl duc tot la admin.
+// ══════════════════════════════════════════════════════════════
+async function _telBlocheaza(env, hD, o) {
+  const numere = (o.numere || []).map(nrCurat).filter(Boolean).slice(0, 10), la = Date.now();
+  await _fbPut(env, `blocatiDisp/${hD}`, { tel: 1, nr: nrCurat(o.nr) || numere[numere.length - 1] || '', numere, la, motiv: _txt(o.motiv || '', 200),
+    plat: _txt(o.plat || '', 20), de: _txt(o.de || 'admin', 40), ...(o.auto ? { auto: 1 } : {}), ...(o.hA ? { hA: o.hA } : {}) });
+  for (const n of [...new Set([...numere, ...(o.toateNumerele || []).map(nrCurat).filter(Boolean)])].slice(0, 12)) await _fbPut(env, `telBlocNr/${n}/${hD}`, la).catch(() => {});
+  if (o.hA && /^[a-zA-Z0-9_-]{4,40}$/.test(o.hA)) await _fbPut(env, `blocatiAmp/${o.hA}`, { h: hD, nr: numere[numere.length - 1] || '', la }).catch(() => {});
+  return numere;
+}
+async function _telDeblocheaza(env, hD) {
+  const v = await getJSON(urlBroadcast(env, `blocatiDisp/${hD}.json`)).catch(() => null);
+  if (!v || !v.tel) return null;
+  await _fbPut(env, `blocatiDisp/${hD}`, null);
+  const numere = Array.isArray(v.numere) ? v.numere.map(nrCurat).filter(Boolean) : [];
+  for (const n of [...new Set([...numere, nrCurat(v.nr)].filter(Boolean))]) await _fbPut(env, `telBlocNr/${n}/${hD}`, null).catch(() => {});
+  if (v.hA) { const a = await getJSON(urlBroadcast(env, `blocatiAmp/${v.hA}.json`)).catch(() => null); if (a && a.h === hD) await _fbPut(env, `blocatiAmp/${v.hA}`, null).catch(() => {}); }
+  // numerele de până acum sunt „în regulă”: nu se mai blochează singur pentru ele
+  if (numere.length) {
+    const ok = await getJSON(urlBroadcast(env, `alerteNr/d${hD}/okNumere.json`)).catch(() => null);
+    await _fbPut(env, `alerteNr/d${hD}/okNumere`, [...new Set([...(Array.isArray(ok) ? ok : []), ...numere])]).catch(() => {});
+  }
+  return v;
+}
+// Telefonul a intrat pe 2+ numere în 30 de zile (doar el, nu și cele identice de pe aceeași conexiune)
+async function _telAutoBloc(env, IST, toate, okNumere, T) {
+  const intrate = Object.entries(toate).filter(([n, x]) => x.prin === 'tel' && x.s === 'intrat' && !okNumere.includes(n)).sort((a, b) => (a[1].u || 0) - (b[1].u || 0));
+  if (intrate.length < 2) return null;
+  const ex = await getJSON(urlBroadcast(env, `blocatiDisp/${IST.hD}.json`)).catch(() => null);
+  if (ex) return null;
+  const nums = intrate.map(([n]) => n);
+  // adminii nu se blochează (își încearcă numerele, se uită la colegi)
+  const an = await getJSON(urlBroadcast(env, 'config/adminNotif.json')).catch(() => null) || {};
+  if (nums.some(n => an[n])) return null;
+  const jet = await getJSON(urlBroadcast(env, 'adminJetoane.json')).catch(() => null) || {};
+  const adm2 = new Set(Object.entries(jet).filter(([k, v]) => !k.startsWith('_') && v && v.adm2).map(([, v]) => String(v.adm2)));
+  if (nums.some(n => adm2.has(n))) return null;
+  // schimbarea de număr aprobată de admin nu e o încercare
+  for (const n of nums) { const b = await getJSON(urlBroadcast(env, `blocati/${n}.json`)).catch(() => null); if (b && b.aprobat && nums.includes(nrCurat(b.aprobat.nr))) return null; }
+  await _telBlocheaza(env, IST.hD, { numere: nums, toateNumerele: Object.keys(toate).filter(n => toate[n].prin === 'tel'), nr: nums[nums.length - 1], auto: 1, de: 'automat', hA: IST.hA,
+    plat: (T && T.plat) || '', motiv: 'Pe telefonul ăsta s-au folosit mai multe numere de serviciu. Scrie-i adminului dacă e o greșeală.' });
+  await _rezScrie(env, { fel: 'nu', nr: nums[nums.length - 1], cine: 'automat', ce: `telefon blocat automat (a folosit ${nums.join(', ')})`, citat: _txt((T && T.plat) || '', 40) }, null).catch(() => {});
+  await _anuntaAdminii(env, '📵 Telefon blocat automat', `A folosit ${nums.join(', ')}. Îl deblochezi din Colegi blocați → Telefoane blocate.`, 'tel-blocat').catch(() => 0);
+  return nums;
 }
 // Telefonul ăsta (sau unul identic, de pe aceeași conexiune) e legat de un număr blocat definitiv?
 async function _blocatLegat(env, nr, dev, IST) {
@@ -2840,6 +2894,17 @@ async function _blocatLegat(env, nr, dev, IST) {
   const bt = await _dispBlocat(env, dev).catch(() => null);
   if (bt && bt.nr && String(bt.nr) !== nr) return { nr: String(bt.nr), prin: 'tel' };
   if (!IST) return null;
+  // [15.31] un telefon nou pe un număr folosit de un telefon blocat / același telefon (amprentă + conexiune) ca unul blocat
+  const tb = await getJSON(urlBroadcast(env, `telBlocNr/${nr}.json`)).catch(() => null);
+  for (const h of Object.keys(tb || {}).slice(0, 5)) {
+    if (h === IST.hD) continue;
+    const v = await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`)).catch(() => null);
+    if (v && v.tel) return { nr: String(v.nr || nr), prin: 'nr' };
+  }
+  if (IST.hA) {
+    const ba = await getJSON(urlBroadcast(env, `blocatiAmp/${IST.hA}.json`)).catch(() => null);
+    if (ba && ba.h && ba.h !== IST.hD) { const v = await getJSON(urlBroadcast(env, `blocatiDisp/${ba.h}.json`)).catch(() => null); if (v && v.tel) return { nr: String(v.nr || ba.nr || ''), prin: 'amp' }; }
+  }
   const cand = [..._istRecente(IST.D).map(([n]) => [n, 'tel']), ..._istRecente(IST.A).map(([n]) => [n, 'amp'])].filter(([n]) => n !== nr).slice(0, 8);
   for (const [n, prin] of cand) {
     const b = await getJSON(urlBroadcast(env, `blocati/${n}.json`)).catch(() => null);
@@ -5867,7 +5932,13 @@ async function admin(request, env) {
       } else if (cerere.fa === 'respinge' && a.blocat) {   // e tot el: numărul încercat se respinge pe telefonul ăsta
         const n = nrCurat(a.blocat.incearca), dev = String(a.blocat.dev || '');
         if (n && dev) await _fbPut(env, `${AST}/${n}/${dev}/respins`, acum).catch(() => {});
-        if (dev) await _fbPut(env, `blocatiDisp/${await _dispAmprenta(dev)}`, { nr: nrCurat(a.blocat.nr), la: acum }).catch(() => {});
+        if (dev) {
+          // [15.31] numărul nu e blocat definitiv (era blocat doar telefonul): și telefonul ăsta se blochează singur
+          const bN = await getJSON(urlBroadcast(env, `blocati/${nrCurat(a.blocat.nr)}.json`)).catch(() => null);
+          if (bN && bN.fel === 'definitiv') await _fbPut(env, `blocatiDisp/${await _dispAmprenta(dev)}`, { nr: nrCurat(a.blocat.nr), la: acum }).catch(() => {});
+          else await _telBlocheaza(env, await _dispAmprenta(dev), { numere: [n], nr: nrCurat(a.blocat.nr) || n, plat: a.plat || '', hA: a.hA || '', de: adm2 ? String(adm2.nr) : 'admin',
+            motiv: 'Pe telefonul ăsta s-au folosit mai multe numere de serviciu. Scrie-i adminului dacă e o greșeală.' }).catch(() => {});
+        }
         await _fbPut(env, `alerteNr/${id}/blocat/ok`, acum);
       } else return { status: 400, corp: { ok: false, eroare: 'Acțiune necunoscută' } };
       return { status: 200, corp: { ok: true } };
@@ -5879,8 +5950,7 @@ async function admin(request, env) {
       const a = await getJSON(urlBroadcast(env, `alerteNr/${id}.json`)).catch(() => null) || {};
       const numere = (Array.isArray(cerere.numere) ? cerere.numere : Object.keys(a.numere || {})).map(nrCurat).filter(Boolean).slice(0, 10);
       const acum = Date.now();
-      await _fbPut(env, `blocatiDisp/${id.slice(1)}`, { tel: 1, nr: numere[numere.length - 1] || '', numere, la: acum,
-        motiv: String(cerere.motiv || '').trim().slice(0, 200), plat: _txt(a.plat || '', 20), de: adm2 ? String(adm2.nr) : 'admin' });
+      await _telBlocheaza(env, id.slice(1), { numere, nr: numere[numere.length - 1] || '', motiv: cerere.motiv, plat: a.plat || '', de: adm2 ? String(adm2.nr) : 'admin', hA: a.hA || '' });   // [15.31]
       if (numere.length) await _fbPut(env, `alerteNr/${id}/okNumere`, [...new Set([...(a.okNumere || []), ...numere])]).catch(() => {});
       if (a.blocat) await _fbPut(env, `alerteNr/${id}/blocat/ok`, acum).catch(() => {});
       return { status: 200, corp: { ok: true, numere } };
@@ -5888,16 +5958,15 @@ async function admin(request, env) {
     case 'telefoaneBlocate': {   // [15.30] lista telefoanelor blocate singure
       const d = await getJSON(urlBroadcast(env, 'blocatiDisp.json')).catch(() => null) || {};
       const lista = Object.entries(d).filter(([, v]) => v && v.tel)
-        .map(([h, v]) => ({ h, nr: String(v.nr || ''), numere: Array.isArray(v.numere) ? v.numere : [], la: Number(v.la) || 0, motiv: v.motiv || '', plat: v.plat || '', de: v.de || '' }))
+        .map(([h, v]) => ({ h, nr: String(v.nr || ''), numere: Array.isArray(v.numere) ? v.numere : [], la: Number(v.la) || 0, motiv: v.motiv || '', plat: v.plat || '', de: v.de || '', auto: !!v.auto }))
         .sort((x, y) => y.la - x.la);
       return { status: 200, corp: { ok: true, lista } };
     }
     case 'deblocheazaTelefon': {   // [15.30]
       const h = String(cerere.h || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
       if (!h) return { status: 400, corp: { ok: false, eroare: 'Lipsește telefonul.' } };
-      const v = await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`)).catch(() => null);
-      if (!v || !v.tel) return { status: 404, corp: { ok: false, eroare: 'Telefonul nu mai e blocat.' } };
-      await _fbPut(env, `blocatiDisp/${h}`, null);
+      const v = await _telDeblocheaza(env, h);   // [15.31] și numerele, și amprenta
+      if (!v) return { status: 404, corp: { ok: false, eroare: 'Telefonul nu mai e blocat.' } };
       return { status: 200, corp: { ok: true, nr: String(v.nr || '') } };
     }
     case 'blocheazaGrup': {   // „Blochează-le pe toate”
@@ -6594,7 +6663,7 @@ async function admin(request, env) {
       // ca la „Șterge-mi datele” din aplicație: conversația cu adminul, accesele, numele din chat, agenda, foile trimise
       try { await _stergeNr(env, nr, true); } catch (e) {}
       const cai = ['push', 'backup', 'backupIstoric', 'stats', 'proprietar', 'blocati',
-        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', OBS, STERSE, `limite/autoadd`];   // [15.25] și observațiile · [15.26] și urma ștergerii
+        'istNr', 'istTel', 'mutaNr', AST, NRA, 'scosi', 'mutaDep', CHATN, 'agenda', OBS, STERSE, 'telBlocNr', `limite/autoadd`];   // [15.25] și observațiile · [15.26] și urma ștergerii
       const sterse = [];
       const esuate = [];
       await Promise.all(cai.map(async (cale) => {
