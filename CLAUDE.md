@@ -19,6 +19,7 @@ Site: programstb.com (GitHub Pages, ramura `main`). Totul se scrie în română,
    - crește `CACHE_NAME` în `sw.js` (ex. `stb-2026-v228` → `v229`), ca telefoanele să ia versiunea nouă;
    - comentariile din cod noi se marchează cu `// [15.11]`.
 5. Verificare înainte de commit: `node --check cloudflare-worker/src/index.js` și verificarea sintaxei scripturilor din `index.html`; pornirea paginii în Chromium (Playwright) fără erori.
+6. **Fără „lookbehind” în expresiile regulate** (`(?<=…)`, `(?<!…)`) în `index.html`: iPhone-urile cu iOS sub 16.4 nu-l cunosc și aplicația nu mai pornește deloc. Se verifică cu `grep -n "(?<[=!]" index.html` (trebuie să nu găsească nimic în cod).
 
 ## Indicatorii de ore (din poze sau PDF)
 Regulile date de autor — se aplică peste tot (tramvai și autobuz, zi de lucru și weekend):
