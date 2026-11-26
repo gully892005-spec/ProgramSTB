@@ -3626,7 +3626,9 @@ async function mesajAdmin(request, env) {
   if (text.length < 3) return { status: 400, corp: { ok: false, eroare: 'Scrie mesajul.' } };
   if (!(await _limitaZi(env, 'mesaj', _ast1504 ? 'a' + dev.slice(0, 30) : nr, _ast1504 ? 3 : 5))) return { status: 429, corp: { ok: false, eroare: `Ai trimis deja ${_ast1504 ? 3 : 5} mesaje azi. Încearcă mâine.` } };
   const id = _id12();
-  await _fbPut(env, `mesajeAdmin/${id}`, { nr, text, la: Date.now(), dep: _txt(c.dep, 20), v: _txt(c.v, 10), fel: ['problema', 'idee', 'altceva'].includes(c.fel) ? c.fel : 'altceva', ...(_ast1504 ? { ast: 1 } : {}) });
+  const _ma = { nr, text, la: Date.now(), dep: _txt(c.dep, 20), v: _txt(c.v, 10), fel: ['problema', 'idee', 'altceva'].includes(c.fel) ? c.fel : 'altceva', ...(_ast1504 ? { ast: 1 } : {}) };
+  await _fbPut(env, `mesajeAdmin/${id}`, _ma);
+  if (!_ast1504) await _convDinMesajAdmin(env, id, _ma).catch(() => {});   // [15.33] apare imediat și la Mesaje
   await _anuntaAdminii(env, '✉️ Mesaj de la ' + nr, text.slice(0, 120), 'mesaj-admin').catch(() => 0);
   return { status: 200, corp: { ok: true } };
 }
@@ -3678,6 +3680,34 @@ async function _convAdauga(env, nr, de, text, fis) {
     }
   } catch (e) {}
   return { id, la };
+}
+// [15.33] Un mesaj din „Scrie-i adminului” intră imediat și în conversația cu el (la Mesaje),
+// nu doar când adminul deschide conversația. Înainte, după „mesaj citit” dispărea de tot:
+// cardul de la Rezolvă se ștergea, iar în conversație nu ajunsese niciodată.
+async function _convDinMesajAdmin(env, id, x) {
+  const nr = nrCurat(x && x.nr); if (!nr || !x.text || x.cerere || x.ast) return;
+  const k = 'ma' + String(id).replace(/[^a-z0-9]/g, ''), la = Number(x.la) || Date.now();
+  await _fbPut(env, `${CONV}/${nr}/m/${k}`, { de: 'c', t: _convText(x.text), la });
+  const ult = Number(await getJSON(urlBroadcast(env, `${CONV}/${nr}/ultim.json`)).catch(() => 0)) || 0;
+  if (la > ult) await _fbPut(env, `${CONV}/${nr}/ultim`, la).catch(() => {});
+  const nouA = Number(await getJSON(urlBroadcast(env, `${CONV}/${nr}/nouA.json`)).catch(() => 0)) || 0;
+  if (la > nouA) await _fbPut(env, `${CONV}/${nr}/nouA`, la).catch(() => {});
+}
+// [15.33] O singură dată: mesajele citite înainte de 15.33 (au rămas doar în „Rezolvate recent”, 30 de zile) intră în conversații.
+async function _convRecupereazaCitite(env) {
+  if (await getJSON(urlBroadcast(env, 'adminJetoane/_convRecuperat1533.json')).catch(() => true)) return;
+  const d = await getJSON(urlBroadcast(env, `${REZ_CALE}.json`)).catch(() => null) || {};
+  for (const [id, x] of Object.entries(d)) {
+    if (!x || !x.nr || !x.citat || !/^mesaj/.test(String(x.ce || ''))) continue;
+    const nr = nrCurat(x.nr), k = 'mr' + String(id).replace(/[^a-z0-9]/gi, '').slice(0, 20);
+    if (!nr) continue;
+    const t = _convText(x.citat), cv = await _convIa(env, nr).catch(() => null);
+    if (_convMesaje(cv).some(m => m.de === 'c' && String(m.t || '').slice(0, 150) === t.slice(0, 150))) continue;   // era deja în conversație
+    await _fbPut(env, `${CONV}/${nr}/m/${k}`, { de: 'c', t, la: Number(x.la) || Date.now() }).catch(() => {});
+    const ult = Number(await getJSON(urlBroadcast(env, `${CONV}/${nr}/ultim.json`)).catch(() => 0)) || 0;
+    if ((Number(x.la) || 0) > ult) await _fbPut(env, `${CONV}/${nr}/ultim`, Number(x.la)).catch(() => {});
+  }
+  await _fbPut(env, 'adminJetoane/_convRecuperat1533', Date.now()).catch(() => {});
 }
 // Mesajele lui din „Scrie-i adminului” intră în fir, ca să se vadă de la ce a pornit.
 async function _convAduMesajeAdmin(env, nr) {
@@ -6006,11 +6036,16 @@ async function admin(request, env) {
     }
     case 'mesajAdminCitit': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
-      if (id) await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
+      if (id) {
+        const x = await getJSON(urlBroadcast(env, `mesajeAdmin/${id}.json`)).catch(() => null);
+        if (x) await _convDinMesajAdmin(env, id, x).catch(() => {});   // [15.33] rămâne în conversație
+        await _fbPut(env, `mesajeAdmin/${id}`, null).catch(() => {});
+      }
       return { status: 200, corp: { ok: true } };
     }
     // ── [3.8] Conversații private cu un coleg ──
     case 'convLista': {
+      await _convRecupereazaCitite(env).catch(() => {});   // [15.33]
       let d; try { d = await getJSON(urlBroadcast(env, `${CONV}.json`)); } catch (e) { return { status: 503, corp: { ok: false, eroare: 'Nu am putut citi conversațiile.' } }; }
       const prag = Date.now() - CONV_ZILE * 864e5, lista = [];
       for (const [nr, c] of Object.entries(d || {})) {
