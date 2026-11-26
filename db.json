@@ -6257,12 +6257,12 @@
         "s1": {
           "i": "04:35",
           "r": "10:49",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:29",
           "r": "21:58",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": true
         }
       },
@@ -6271,12 +6271,12 @@
         "s1": {
           "i": "06:57",
           "r": "15:45",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:45",
           "r": "23:09",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6285,12 +6285,12 @@
         "s1": {
           "i": "05:45",
           "r": "13:22",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:22",
           "r": "21:00",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6299,12 +6299,12 @@
         "s1": {
           "i": "04:45",
           "r": "11:01",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:39",
           "r": "23:19",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": true
         }
       },
@@ -6313,12 +6313,12 @@
         "s1": {
           "i": "07:09",
           "r": "14:41",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:41",
           "r": "22:15",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6327,12 +6327,12 @@
         "s1": {
           "i": "05:57",
           "r": "14:46",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:46",
           "r": "21:11",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6341,12 +6341,12 @@
         "s1": {
           "i": "04:55",
           "r": "11:13",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:49",
           "r": "23:29",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": true
         }
       },
@@ -6355,12 +6355,12 @@
         "s1": {
           "i": "07:20",
           "r": "14:51",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:51",
           "r": "22:28",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6369,12 +6369,12 @@
         "s1": {
           "i": "06:09",
           "r": "13:43",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:43",
           "r": "21:22",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6383,12 +6383,12 @@
         "s1": {
           "i": "05:05",
           "r": "11:25",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:00",
           "r": "23:39",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": true
         }
       },
@@ -6397,12 +6397,12 @@
         "s1": {
           "i": "07:30",
           "r": "15:03",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:03",
           "r": "21:29",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6411,12 +6411,12 @@
         "s1": {
           "i": "06:19",
           "r": "13:55",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:55",
           "r": "20:16",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6425,12 +6425,12 @@
         "s1": {
           "i": "05:15",
           "r": "11:37",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:12",
           "r": "22:43",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": true
         }
       },
@@ -6439,12 +6439,12 @@
         "s1": {
           "i": "06:27",
           "r": "14:00",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:00",
           "r": "21:37",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6453,12 +6453,12 @@
         "s1": {
           "i": "06:31",
           "r": "14:05",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:05",
           "r": "20:28",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6467,12 +6467,12 @@
         "s1": {
           "i": "05:23",
           "r": "11:48",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:23",
           "r": "22:51",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": true
         }
       },
@@ -6481,12 +6481,12 @@
         "s1": {
           "i": "06:37",
           "r": "14:10",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:10",
           "r": "21:47",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6495,12 +6495,12 @@
         "s1": {
           "i": "06:41",
           "r": "14:15",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:15",
           "r": "20:40",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6509,12 +6509,12 @@
         "s1": {
           "i": "05:31",
           "r": "14:20",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:20",
           "r": "23:00",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6523,12 +6523,12 @@
         "s1": {
           "i": "06:49",
           "r": "14:25",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:25",
           "r": "20:48",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       }
@@ -6651,12 +6651,12 @@
         "s1": {
           "i": "04:30",
           "r": "12:53",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "12:53",
           "r": "20:27",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6665,12 +6665,12 @@
         "s1": {
           "i": "07:53",
           "r": "15:28",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:28",
           "r": "22:42",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6679,12 +6679,12 @@
         "s1": {
           "i": "04:41",
           "r": "13:07",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:07",
           "r": "20:41",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6693,12 +6693,12 @@
         "s1": {
           "i": "06:57",
           "r": "14:28",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:28",
           "r": "22:55",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6707,12 +6707,12 @@
         "s1": {
           "i": "04:52",
           "r": "13:21",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:21",
           "r": "20:53",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6721,12 +6721,12 @@
         "s1": {
           "i": "07:09",
           "r": "14:42",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:42",
           "r": "23:08",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6735,12 +6735,12 @@
         "s1": {
           "i": "05:03",
           "r": "13:35",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:35",
           "r": "21:05",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6749,12 +6749,12 @@
         "s1": {
           "i": "07:21",
           "r": "14:56",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "14:56",
           "r": "23:21",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6763,12 +6763,12 @@
         "s1": {
           "i": "05:14",
           "r": "13:49",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "13:49",
           "r": "21:17",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6777,12 +6777,12 @@
         "s1": {
           "i": "07:33",
           "r": "15:09",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "15:09",
           "r": "23:33",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       },
@@ -6791,12 +6791,12 @@
         "s1": {
           "i": "05:25",
           "r": "12:47",
-          "c": "Piața Centrală"
+          "c": "Pasaj Colentina"
         },
         "s2": {
           "i": "12:47",
           "r": "21:31",
-          "c": "Piața Centrală",
+          "c": "Pasaj Colentina",
           "d": false
         }
       }
@@ -7006,7 +7006,7 @@
             "s1": {
               "i": "04:35",
               "r": "10:49",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             }
           },
           "2/21": {
@@ -7014,12 +7014,12 @@
             "s1": {
               "i": "06:57",
               "r": "15:43",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:43",
               "r": "23:09",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7028,12 +7028,12 @@
             "s1": {
               "i": "05:45",
               "r": "13:22",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:22",
               "r": "21:02",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7042,12 +7042,12 @@
             "s1": {
               "i": "04:45",
               "r": "11:01",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:39",
               "r": "23:24",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": true
             }
           },
@@ -7056,12 +7056,12 @@
             "s1": {
               "i": "07:09",
               "r": "14:41",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:41",
               "r": "21:12",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7070,12 +7070,12 @@
             "s1": {
               "i": "05:57",
               "r": "14:46",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:46",
               "r": "19:55",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7084,12 +7084,12 @@
             "s1": {
               "i": "04:55",
               "r": "11:13",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:49",
               "r": "22:21",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": true
             }
           },
@@ -7098,12 +7098,12 @@
             "s1": {
               "i": "07:20",
               "r": "14:51",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:51",
               "r": "21:20",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7112,12 +7112,12 @@
             "s1": {
               "i": "06:09",
               "r": "13:43",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:43",
               "r": "20:04",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7126,12 +7126,12 @@
             "s1": {
               "i": "05:05",
               "r": "11:25",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:00",
               "r": "23:39",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": true
             }
           },
@@ -7140,12 +7140,12 @@
             "s1": {
               "i": "07:30",
               "r": "15:03",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:03",
               "r": "21:29",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7154,12 +7154,12 @@
             "s1": {
               "i": "06:19",
               "r": "13:55",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:55",
               "r": "20:16",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7168,12 +7168,12 @@
             "s1": {
               "i": "05:15",
               "r": "11:37",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:12",
               "r": "22:40",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": true
             }
           },
@@ -7182,12 +7182,12 @@
             "s1": {
               "i": "06:27",
               "r": "14:00",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:00",
               "r": "21:40",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7196,12 +7196,12 @@
             "s1": {
               "i": "06:31",
               "r": "14:05",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:05",
               "r": "20:28",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7210,12 +7210,12 @@
             "s1": {
               "i": "05:23",
               "r": "11:48",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:23",
               "r": "22:50",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": true
             }
           },
@@ -7224,12 +7224,12 @@
             "s1": {
               "i": "06:37",
               "r": "14:10",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:10",
               "r": "21:52",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7238,12 +7238,12 @@
             "s1": {
               "i": "06:41",
               "r": "14:15",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:15",
               "r": "20:42",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7252,12 +7252,12 @@
             "s1": {
               "i": "05:31",
               "r": "14:20",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:20",
               "r": "23:00",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7266,12 +7266,12 @@
             "s1": {
               "i": "06:49",
               "r": "14:25",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:25",
               "r": "20:52",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           }
@@ -7380,12 +7380,12 @@
             "s1": {
               "i": "04:30",
               "r": "12:53",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "12:53",
               "r": "20:27",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7394,12 +7394,12 @@
             "s1": {
               "i": "07:53",
               "r": "15:28",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:28",
               "r": "22:42",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7408,12 +7408,12 @@
             "s1": {
               "i": "04:41",
               "r": "13:07",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:07",
               "r": "20:41",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7422,12 +7422,12 @@
             "s1": {
               "i": "06:57",
               "r": "14:28",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:28",
               "r": "22:55",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7436,12 +7436,12 @@
             "s1": {
               "i": "04:52",
               "r": "13:21",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:21",
               "r": "20:53",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7450,12 +7450,12 @@
             "s1": {
               "i": "07:09",
               "r": "14:42",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:42",
               "r": "23:08",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7464,12 +7464,12 @@
             "s1": {
               "i": "05:03",
               "r": "13:35",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:35",
               "r": "21:05",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7478,12 +7478,12 @@
             "s1": {
               "i": "07:21",
               "r": "14:56",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "14:56",
               "r": "23:21",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7492,12 +7492,12 @@
             "s1": {
               "i": "05:14",
               "r": "13:49",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "13:49",
               "r": "21:17",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7506,12 +7506,12 @@
             "s1": {
               "i": "07:33",
               "r": "15:09",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "15:09",
               "r": "23:33",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           },
@@ -7520,12 +7520,12 @@
             "s1": {
               "i": "05:25",
               "r": "12:47",
-              "c": "Piața Centrală"
+              "c": "Pasaj Colentina"
             },
             "s2": {
               "i": "12:47",
               "r": "21:31",
-              "c": "Piața Centrală",
+              "c": "Pasaj Colentina",
               "d": false
             }
           }
