@@ -5988,9 +5988,28 @@ async function admin(request, env) {
     case 'telefoaneBlocate': {   // [15.30] lista telefoanelor blocate singure
       const d = await getJSON(urlBroadcast(env, 'blocatiDisp.json')).catch(() => null) || {};
       const lista = Object.entries(d).filter(([, v]) => v && v.tel)
-        .map(([h, v]) => ({ h, nr: String(v.nr || ''), numere: Array.isArray(v.numere) ? v.numere : [], la: Number(v.la) || 0, motiv: v.motiv || '', plat: v.plat || '', de: v.de || '', auto: !!v.auto }))
+        .map(([h, v]) => ({ h, nr: String(v.nr || ''), numere: Array.isArray(v.numere) ? v.numere : [], la: Number(v.la) || 0, motiv: v.motiv || '', plat: v.plat || '', de: v.de || '', auto: !!v.auto, vazut: Number(v.vazut) || 0 }))
         .sort((x, y) => y.la - x.la);
+      // [15.35] detalii pe fiecare număr: numele din agendă, depoul, câte telefoane are acum
+      if (cerere.detalii) {
+        const ia = cale => getJSON(urlBroadcast(env, cale)).catch(() => null);
+        for (const t of lista.slice(0, 30)) {
+          t.det = [];
+          for (const n of [...new Set((t.numere.length ? t.numere : [t.nr]).map(nrCurat).filter(Boolean))].slice(0, 6)) {
+            const [ag, st, pr, bl] = await Promise.all([ia(`agenda/${n}.json`), ia(`stats/${n}.json`), ia(`proprietar/${n}.json`), ia(`blocati/${n}.json`)]);
+            const { disp } = _normalizeaza(pr);
+            t.det.push({ nr: n, nume: (ag && ag.nume) || '', dep: (st && st.depot) || '', ultima: (st && st.ultimaVizita) || '', telefoane: Object.keys(disp || {}).length, blocat: !!bl });
+          }
+        }
+      }
       return { status: 200, corp: { ok: true, lista } };
+    }
+    case 'telefonBlocatVazut': {   // [15.35] „✓ Rămâne blocat”: cardul de la Rezolvă dispare, telefonul rămâne blocat
+      const h = String(cerere.h || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+      const v = h ? await getJSON(urlBroadcast(env, `blocatiDisp/${h}.json`)).catch(() => null) : null;
+      if (!v || !v.tel) return { status: 404, corp: { ok: false, eroare: 'Telefonul nu mai e blocat.' } };
+      await _fbPut(env, `blocatiDisp/${h}/vazut`, Date.now());
+      return { status: 200, corp: { ok: true } };
     }
     case 'deblocheazaTelefon': {   // [15.30]
       const h = String(cerere.h || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
