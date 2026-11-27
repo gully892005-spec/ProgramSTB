@@ -3551,7 +3551,10 @@ async function trimiteGata(request, env) {
   return { status: 200, corp: { ok: true, id: m.id, altii } };
 }
 
-// Ce a rămas uitat: fișiere nedescărcate de 30 de zile, rapoarte de 60.
+// [15.38] Fișierele primite de la colegi și foile urcate se păstrează 60 de zile
+// (nu se mai șterg la descărcare sau la „Gata”), ca să le poți deschide din nou.
+const PASTRARE_ZILE = 60, INC_CALE = 'repIncarcate', INC_FIS = 'repIncarcateFisiere';
+// Ce a rămas uitat: fișiere mai vechi de 60 de zile, rapoarte de 60.
 async function _curataTrimiteri(env, log) {
   const azi = _aziRo();
   try {
@@ -3561,8 +3564,11 @@ async function _curataTrimiteri(env, log) {
     let n = 0;
     const sterg = {};   // [5.2] toate ștergerile într-o singură cerere, nu câte una
     for (const [id, x] of Object.entries(t)) {
-      if (x && x.la && (Date.now() - x.la > 30 * 864e5 || (x.incomplet && Date.now() - x.la > 864e5))) { sterg[`trimiteriFisiere/${id}`] = null; sterg[`trimiteri/${id}`] = null; n++; }
+      if (x && x.la && (Date.now() - x.la > PASTRARE_ZILE * 864e5 || (x.incomplet && Date.now() - x.la > 864e5))) { sterg[`trimiteriFisiere/${id}`] = null; sterg[`trimiteri/${id}`] = null; n++; }
     }
+    // [15.38] foile urcate (PDF / JSON), păstrate tot PASTRARE_ZILE
+    const inc = await getJSON(urlBroadcast(env, `${INC_CALE}.json`)).catch(() => null) || {};
+    for (const [id, x] of Object.entries(inc)) if (!x || !x.la || Date.now() - x.la > PASTRARE_ZILE * 864e5) { sterg[`${INC_CALE}/${id}`] = null; sterg[`${INC_FIS}/${id}`] = null; n++; }
     const r = await getJSON(urlBroadcast(env, 'raportOre.json')) || {};
     for (const [id, x] of Object.entries(r)) {
       if (x && x.la && Date.now() - x.la > 60 * 864e5) { sterg[`raportOre/${id}`] = null; sterg[`raportOrePoza/${id}`] = null; n++; }
@@ -5290,7 +5296,7 @@ async function _rezLista(env) {
 }
 // Acțiuni care doar citesc: nu intră în jurnal.
 const ADM2_CITIRE = new Set(['telefoaneBlocate', 'verifica', 'cineSunt', 'jetoane', 'indicatoriLista', 'indicatoriMele', 'repStare', 'anunturiCitite',
-  'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste', 'convFisier',
+  'raportOreLista', 'raportOrePoza', 'trimiteriLista', 'trimiteFisier', 'repIncarcateLista', 'repIncarcatFisier', 'colegiNoi', 'eroriLista', 'mesajeAdminLista', 'convLista', 'convCiteste', 'convFisier',
   'repartitori', 'programeLuni', 'asteptareLista', 'nrAprobate', 'statsToate', 'securitate', 'alerteNrLista', 'nrLegate', 'istTel', 'adminNotif', 'adminNotifProba', 'utilizatori', 'rezumatBaza', 'copiiBackup',
   'dispozitive', 'arhive', 'agenda', 'toateDispozitivele', 'cauta', 'fisa', 'programBrut', 'blocati', 'depouriStraine', 'convStare', 'rezolvateLista', 'chatCine', 'rulareStare']);
 // Doar adminul principal.
@@ -5370,7 +5376,7 @@ async function admin(request, env) {
       if (!rep.drepturi.ind) return { status: 403, corp: { ok: false, eroare: 'Codul tău nu are drept la indicatori.' } };
       return await indicatoriActiune(env, cerere, { rep });
     }
-    if (cerere.actiune !== 'repartizare' || !rep.drepturi.rep) {
+    if ((cerere.actiune !== 'repartizare' && cerere.actiune !== 'repFisierSalveaza') || !rep.drepturi.rep) {   // [15.38] + păstrarea foii urcate
       return { status: 403, corp: { ok: false, eroare: 'Cu codul tău nu ai voie la asta.' } };
     }
     const dep = String(cerere.depou || '').trim().toLowerCase();
@@ -5757,10 +5763,53 @@ async function admin(request, env) {
       for (const [nr, x] of anunt) trimise += await _pushLa(env, nr, '✓ Ora a fost corectată', `L${x.linie} T${x.tur}${x.sch ? ' sch ' + x.sch : ''} — mulțumim că ai anunțat!`, 'raport-ore');
       return { status: 200, corp: { ok: true, trimise } };
     }
+    // ── [15.38] Foile urcate (PDF / JSON), păstrate ca să le poți deschide din nou ──
+    case 'repFisierSalveaza': {
+      const luna = /^\d{4}-\d{2}$/.test(cerere.luna || '') ? cerere.luna : '';
+      const depou = String(cerere.depou || '').trim().toLowerCase();
+      if (!luna || !DEPOURI.includes(depou)) return { status: 400, corp: { ok: false, eroare: 'Trebuie luna și depoul.' } };
+      if (typeof cerere.date !== 'string' || cerere.date.length < 20) return { status: 400, corp: { ok: false, eroare: 'Fișier gol.' } };
+      if (cerere.date.length > TRIMITE_MAX_FISIER) return { status: 413, corp: { ok: false, eroare: 'Fișierul e prea mare ca să-l păstrez (cel mult 7 MB).' } };
+      const tip = /^(application\/pdf|application\/json)$/.test(cerere.tip) ? cerere.tip : 'application/octet-stream';
+      const nume = _txt(cerere.nume, 100) || (tip === 'application/pdf' ? 'foaie.pdf' : 'foaie.json');
+      const marime = Math.round(cerere.date.length * 0.75);
+      const baze = (cerere.baze && typeof cerere.baze === 'object') ? Object.keys(cerere.baze).filter(k => BAZA_RE.test(k)).slice(0, 12) : [];
+      // același fișier urcat de două ori: îl păstrez o singură dată (cu data nouă)
+      const tot = await getJSON(urlBroadcast(env, `${INC_CALE}.json`)).catch(() => null) || {};
+      const vechi = Object.entries(tot).find(([, x]) => x && x.nume === nume && x.marime === marime && x.depou === depou && x.luna === luna);
+      const id = vechi ? vechi[0] : _id12();
+      const meta = { la: Date.now(), nume, tip, marime, luna, depou, oameni: Math.max(0, Math.min(9999, Number(cerere.oameni) || 0)), de: String(cerere._urcatDe || 'admin').slice(0, 40) };
+      if (baze.length) meta.baze = baze;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(cerere.zi || '')) meta.zi = cerere.zi;
+      try {
+        if (!vechi) await _fbPut(env, `${INC_FIS}/${id}`, cerere.date);
+        await _fbPut(env, `${INC_CALE}/${id}`, meta);
+      } catch (e) { return { status: 502, corp: { ok: false, eroare: 'Nu s-a putut păstra fișierul. (' + e.message + ')' } }; }
+      return { status: 200, corp: { ok: true, id, acelasi: !!vechi } };
+    }
+    case 'repIncarcateLista': {
+      const d = await getJSON(urlBroadcast(env, `${INC_CALE}.json`)).catch(() => null) || {};
+      return { status: 200, corp: { ok: true, pastrare: PASTRARE_ZILE, lista: Object.entries(d).filter(([, x]) => x).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => b.la - a.la) } };
+    }
+    case 'repIncarcatFisier': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+      const date = id ? await getJSON(urlBroadcast(env, `${INC_FIS}/${id}.json`)).catch(() => null) : null;
+      if (!date) return { status: 404, corp: { ok: false, eroare: 'Fișierul nu mai există (a expirat sau a fost șters).' } };
+      return { status: 200, corp: { ok: true, date } };
+    }
+    case 'repIncarcatSterge': {
+      const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+      if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      await _fbPatch(env, '', { [`${INC_CALE}/${id}`]: null, [`${INC_FIS}/${id}`]: null });
+      return { status: 200, corp: { ok: true } };
+    }
     // ── [1.2] Foi și poze trimise de colegi ──
     case 'trimiteriLista': {
       const d = await getJSON(urlBroadcast(env, 'trimiteri.json')).catch(() => null) || {};
-      return { status: 200, corp: { ok: true, lista: Object.entries(d).filter(([id, x]) => x && !x.incomplet).map(([id, x]) => { const o = Object.assign({ id }, x); delete o.tok; return o; }).sort((a, b) => b.la - a.la) } };
+      // [15.38] care mai au fișierele pe server (cele descărcate înainte de 15.38 nu le mai au)
+      const uf = urlBroadcast(env, 'trimiteriFisiere.json');
+      const are = await getJSON(uf + (uf.includes('?') ? '&' : '?') + 'shallow=true').catch(() => null) || {};
+      return { status: 200, corp: { ok: true, pastrare: PASTRARE_ZILE, lista: Object.entries(d).filter(([id, x]) => x && !x.incomplet).map(([id, x]) => { const o = Object.assign({ id, areFisiere: !!are[id] }, x); delete o.tok; return o; }).sort((a, b) => b.la - a.la) } };
     }
     case 'trimiteFisier': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20), k = Number(cerere.k) || 0;
@@ -5771,9 +5820,16 @@ async function admin(request, env) {
     case 'trimiteDescarcat': {
       const id = String(cerere.id || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
       if (!id) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
-      await _fbPut(env, `trimiteriFisiere/${id}`, null);
+      // [15.38] fișierele rămân pe server (se șterg singure după PASTRARE_ZILE sau cu „🗑”)
       await _fbPut(env, `trimiteri/${id}/descarcat`, Date.now()).catch(() => {});
       return { status: 200, corp: { ok: true } };
+    }
+    case 'trimiteSterge': {   // [15.38] ștergere de mână, din „Primite”
+      const ids = (Array.isArray(cerere.ids) ? cerere.ids : [cerere.id]).map(x => String(x || '').replace(/[^a-z0-9]/g, '').slice(0, 20)).filter(Boolean).slice(0, 50);
+      if (!ids.length) return { status: 400, corp: { ok: false, eroare: 'Lipsește id-ul' } };
+      const sterg = {}; for (const id of ids) { sterg[`trimiteriFisiere/${id}`] = null; sterg[`trimiteri/${id}`] = null; }
+      await _fbPatch(env, '', sterg);
+      return { status: 200, corp: { ok: true, sterse: ids.length } };
     }
     case 'trimiteGata': {
       const ids = (Array.isArray(cerere.ids) ? cerere.ids : []).map(x => String(x).replace(/[^a-z0-9]/g, '').slice(0, 20)).filter(Boolean).slice(0, 50);
@@ -5781,8 +5837,8 @@ async function admin(request, env) {
       const anunt = new Map();
       for (const id of ids) {
         const x = d[id]; if (x && cerere.anunta !== false) anunt.set(x.nr, x);
-        await _fbPut(env, `trimiteriFisiere/${id}`, null).catch(() => {});
-        await _fbPut(env, `trimiteri/${id}`, null).catch(() => {});
+        // [15.38] nu se mai șterge: trece în „Primite — păstrate”
+        if (x) await _fbPut(env, `trimiteri/${id}/gata`, Date.now()).catch(() => {});
       }
       let trimise = 0;
       for (const [nr, x] of anunt) trimise += await _pushLa(env, nr, x.tip === 'ind' ? '✓ Indicatorii au fost actualizați' : '✓ Foaia a fost urcată',
